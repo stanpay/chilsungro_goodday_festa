@@ -42,7 +42,11 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
-.cursor
+
+# Cursor · 내부 문서 (앱 실행·배포 불필요)
+# 이미 git에 올라간 항목은 `git rm -r --cached <경로>` 로 인덱스에서만 제거해야 함
+.cursor/
+docs/
 
 # 캐시·분석·임시 (소스/빌드 설정과 무관)
 .cache
