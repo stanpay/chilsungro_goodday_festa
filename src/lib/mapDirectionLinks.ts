@@ -1,0 +1,48 @@
+/**
+ * 네이버 지도 웹에서 매장 위치 열기 (좌표가 있으면 해당 지점 중심, 없으면 매장명 검색).
+ * v5 지도 중심 `c` 값은 EPSG:3857(미터) 좌표를 사용합니다.
+ */
+export type MapDirectionInput = {
+  name: string;
+  address?: string;
+  lat?: number;
+  lon?: number;
+};
+
+const EARTH_RADIUS_M = 6378137;
+
+function hasValidCoords(lat?: number, lon?: number): boolean {
+  return (
+    typeof lat === "number" &&
+    typeof lon === "number" &&
+    !Number.isNaN(lat) &&
+    !Number.isNaN(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
+}
+
+/** WGS84(위도·경도) → Web Mercator(EPSG:3857), 단위 m */
+function wgs84ToWebMercator(lon: number, lat: number): { x: number; y: number } {
+  const x = (EARTH_RADIUS_M * lon * Math.PI) / 180;
+  const latRad = (lat * Math.PI) / 180;
+  const y = EARTH_RADIUS_M * Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+  return { x, y };
+}
+
+/**
+ * 카드 등에서 네이버 지도를 열 때 사용.
+ * - lat/lon 있음: 해당 좌표를 지도 중심으로 이동(주소 검색 아님).
+ * - 없음: 매장명만으로 통합 검색(정밀 좌표 없을 때 대비).
+ */
+export function buildNaverMapOpenUrl(input: MapDirectionInput): string {
+  const { name, lat, lon } = input;
+  if (hasValidCoords(lat, lon) && lat != null && lon != null) {
+    const { x, y } = wgs84ToWebMercator(lon, lat);
+    return `https://map.naver.com/v5/?c=${x},${y},18,0,0,0,dh`;
+  }
+  const q = name.trim();
+  return `https://map.naver.com/v5/search/${encodeURIComponent(q)}`;
+}

@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 270 10% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 270 10% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 10% 15%;
+
+    --primary: 270 70% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 20% 96%;
+    --secondary-foreground: 270 10% 15%;
+
+    --muted: 270 10% 96%;
+    --muted-foreground: 270 8% 45%;
+
+    --accent: 270 70% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 270 10% 90%;
+    --input: 270 10% 90%;
+    --ring: 270 70% 55%;
+
+    --radius: 1rem;
+
+    --shadow-card: 0 2px 8px -2px hsl(270 70% 55% / 0.08);
+    --shadow-card-hover: 0 8px 16px -4px hsl(270 70% 55% / 0.12);
+  }
+
+  .dark {
+    --background: 270 20% 10%;
+    --foreground: 270 5% 95%;
+
+    --card: 270 15% 15%;
+    --card-foreground: 270 5% 95%;
+
+    --popover: 270 15% 15%;
+    --popover-foreground: 270 5% 95%;
+
+    --primary: 270 70% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 10% 20%;
+    --secondary-foreground: 270 5% 95%;
+
+    --muted: 270 10% 20%;
+    --muted-foreground: 270 5% 60%;
+
+    --accent: 270 70% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 270 5% 95%;
+
+    --border: 270 10% 25%;
+    --input: 270 10% 25%;
+    --ring: 270 70% 60%;
+
+    --shadow-card: 0 2px 8px -2px hsl(270 70% 60% / 0.15);
+    --shadow-card-hover: 0 8px 16px -4px hsl(270 70% 60% / 0.25);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-variation-settings: normal;
+  }
+
+  /* Prevent passive event listener warnings */
+  button, 
+  a,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+  }
+
+  img {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
