@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import StoreCard from "@/components/StoreCard";
 import MapViewBottomSheet from "@/components/MapViewBottomSheet";
+import MainPromoBanner from "@/components/MainPromoBanner";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -1906,7 +1907,7 @@ const Main = () => {
       {/* Header — 지도뷰에서는 숨기고 지도 위 FAB로 위치만 조정 */}
       {!isMapView && (
         <header className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95">
-          <div className="max-w-md mx-auto px-4 py-4">
+          <div className="max-w-md mx-auto px-4 py-3">
             <div className="flex items-center gap-2 w-full">
               <Button 
                 variant="outline" 
@@ -1948,7 +1949,7 @@ const Main = () => {
           "mx-auto max-w-md w-full",
           isMapView
             ? "relative flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none px-0 pb-0 pt-[max(0.5rem,env(safe-area-inset-top))]"
-            : "px-4 py-6"
+            : "px-4 pt-3 pb-6"
         )}
       >
         {showMapFillLayer && (
@@ -1956,6 +1957,7 @@ const Main = () => {
             <div ref={mapContainerRef} className="h-full w-full overflow-hidden" />
           </div>
         )}
+        {!isMapView && <MainPromoBanner locale={locale} />}
         <div className={cn("mb-4 flex items-center gap-2", isMapView && "relative z-20 px-4")}>
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -1972,12 +1974,12 @@ const Main = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 shrink-0 gap-1 rounded-xl border-border/50 px-3 hover:border-primary/50 transition-colors sm:min-w-[5.5rem]"
+                className="h-12 min-w-[7rem] shrink-0 gap-1.5 rounded-xl border-border/50 px-4 hover:border-primary/50 transition-colors"
                 aria-label={t.languageMenuAria}
                 title={LOCALE_MENU_LABELS[locale]}
               >
                 <Languages className="h-4 w-4 shrink-0" />
-                <span className="hidden max-w-[4.5rem] truncate text-xs font-medium sm:inline">
+                <span className="max-w-[5.5rem] truncate text-xs font-medium">
                   {LOCALE_MENU_LABELS[locale]}
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />

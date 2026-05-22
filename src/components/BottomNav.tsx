@@ -61,9 +61,7 @@ const BottomNav = ({ mapViewControl }: BottomNavProps) => {
             <Map
               className={cn("w-6 h-6 mb-1", mapViewControl.active && "fill-current")}
             />
-            <span className="text-xs font-medium">
-              {mapViewControl.active ? nav.bottomNavListView : nav.bottomNavMapView}
-            </span>
+            <span className="text-xs font-medium">{nav.bottomNavMapView}</span>
           </button>
         ) : (
           <Link
