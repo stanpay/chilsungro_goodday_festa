@@ -2,7 +2,7 @@ export type AppLocale = "ko" | "en" | "zh" | "ja";
 
 export const LOCALE_STORAGE_KEY = "app_locale";
 
-export const APP_LOCALES: AppLocale[] = ["ko", "en", "zh", "ja"];
+export const APP_LOCALES: AppLocale[] = ["ko", "zh", "en", "ja"];
 
 export function isAppLocale(value: string | null | undefined): value is AppLocale {
   return value === "ko" || value === "en" || value === "zh" || value === "ja";

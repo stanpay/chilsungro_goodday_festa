@@ -1985,7 +1985,7 @@ const Main = () => {
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-52 p-1.5">
               <DropdownMenuRadioGroup
                 value={locale}
                 onValueChange={(value) => {
@@ -1994,7 +1994,11 @@ const Main = () => {
                 }}
               >
                 {APP_LOCALES.map((code) => (
-                  <DropdownMenuRadioItem key={code} value={code}>
+                  <DropdownMenuRadioItem
+                    key={code}
+                    value={code}
+                    className="rounded-lg py-3 pl-10 pr-3 text-base font-medium [&>span]:left-3 [&>span]:h-4 [&>span]:w-4 [&>span_svg]:h-2.5 [&>span_svg]:w-2.5"
+                  >
                     {LOCALE_MENU_LABELS[code]}
                   </DropdownMenuRadioItem>
                 ))}
