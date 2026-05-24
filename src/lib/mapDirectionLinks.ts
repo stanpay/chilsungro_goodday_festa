@@ -46,3 +46,66 @@ export function buildNaverMapOpenUrl(input: MapDirectionInput): string {
   const q = name.trim();
   return `https://map.naver.com/v5/search/${encodeURIComponent(q)}`;
 }
+
+const NAVER_MAP_IOS_STORE = "https://apps.apple.com/kr/app/naver-map-navigation/id311867728";
+const NAVER_MAP_ANDROID_STORE = "https://play.google.com/store/apps/details?id=com.nhn.android.nmap";
+
+/**
+ * 네이버지도 앱 딥링크로 매장 위치를 열어준다.
+ * - Android: Intent URI 사용 → 앱 미설치 시 Play Store 자동 이동
+ * - iOS: nmap:// 스킴 시도 후 1.5s 대기 → 앱 미설치 시 App Store 이동
+ * - 데스크탑/기타: 웹 네이버지도 새 탭
+ */
+export function openNaverMapsApp(input: MapDirectionInput): void {
+  const { name, lat, lon } = input;
+  const ua = navigator.userAgent.toLowerCase();
+  const isIOS = /iphone|ipad|ipod/.test(ua);
+  const isAndroid = /android/.test(ua);
+
+  if (!hasValidCoords(lat, lon) || lat == null || lon == null) {
+    window.open(
+      `https://map.naver.com/v5/search/${encodeURIComponent(name.trim())}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+    return;
+  }
+
+  if (isAndroid) {
+    // Intent URI: 앱 설치 시 Naver Maps 앱, 미설치 시 Play Store 자동 이동
+    window.location.href =
+      `intent://map?lat=${lat}&lng=${lon}&zoom=16&appname=com.stan.app` +
+      `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
+      `category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;end`;
+    return;
+  }
+
+  if (isIOS) {
+    const appUrl = `nmap://map?lat=${lat}&lng=${lon}&zoom=16&appname=com.stan.app`;
+    let appOpened = false;
+
+    const onHide = () => {
+      appOpened = true;
+      document.removeEventListener("visibilitychange", onHide);
+    };
+    document.addEventListener("visibilitychange", onHide);
+
+    window.location.href = appUrl;
+
+    setTimeout(() => {
+      document.removeEventListener("visibilitychange", onHide);
+      if (!appOpened) {
+        window.open(NAVER_MAP_IOS_STORE, "_blank", "noopener,noreferrer");
+      }
+    }, 1500);
+    return;
+  }
+
+  // 데스크탑
+  const { x, y } = wgs84ToWebMercator(lon, lat);
+  window.open(
+    `https://map.naver.com/v5/?c=${x},${y},18,0,0,0,dh`,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}

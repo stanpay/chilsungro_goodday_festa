@@ -23,7 +23,12 @@ import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { paymentHistoryApi } from "@/api/paymentHistory";
+import { storesApi } from "@/api/stores";
+import { gifticonsApi } from "@/api/gifticons";
+import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
+import { getAddressFromCoords } from "@/lib/geocoding";
 import { Skeleton } from "@/components/ui/skeleton";
 import TutorialModal from "@/components/TutorialModal";
 import { shouldShowTutorial } from "@/lib/tutorial";
@@ -148,7 +153,7 @@ const Main = () => {
   const [sortBy, setSortBy] = useState<"distance" | "discount">("distance");
   const [currentLocation, setCurrentLocation] = useState("위치 가져오는 중...");
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { isLoggedIn } = useAuth();
   const [isManualLocation, setIsManualLocation] = useState(false);
 
   interface StoreData {
@@ -171,6 +176,10 @@ const Main = () => {
     categoryGroupCode?: string;
     categoryName?: string;
     hasGifticonDiscount?: boolean;
+    isOpen?: boolean;
+    todayHours?: DayHours | null;
+    photos?: string[];
+    closedDayNote?: string;
   }
 
   const [stores, setStores] = useState<StoreData[]>([]);
@@ -187,8 +196,10 @@ const Main = () => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const storeOverlaysRef = useRef<{ id: string; overlay: any }[]>([]);
+  const clusterOverlaysRef = useRef<any[]>([]);
   const selectStoreOnMapRef = useRef<(id: string) => void>(() => {});
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null);
+  const [showResearchButton, setShowResearchButton] = useState(false);
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
 
@@ -240,114 +251,12 @@ const Main = () => {
   };
 
   useEffect(() => {
-    if (!isMapView) setSelectedMapStoreId(null);
+    if (!isMapView) {
+      setSelectedMapStoreId(null);
+      setShowResearchButton(false);
+    }
   }, [isMapView]);
 
-  const getAddressFromCoords = async (latitude: number, longitude: number) => {
-    try {
-      console.log("🏠 [주소 변환] 시작:", { latitude, longitude });
-      
-      // Kakao Maps SDK 로드 보장
-      const { loadKakaoMaps } = await import("@/lib/kakao");
-      await loadKakaoMaps();
-      
-      const kakao = (window as any).kakao;
-      if (!kakao?.maps?.services) {
-        console.error("❌ [주소 변환] Kakao Maps services를 찾을 수 없습니다");
-        return "위치를 확인할 수 없음";
-      }
-
-      // Geocoder 서비스 사용 (JavaScript 키로 가능)
-      const geocoder = new kakao.maps.services.Geocoder();
-      
-      return new Promise<string>((resolve) => {
-        // 10초 타임아웃 설정
-        const timeoutId = setTimeout(() => {
-          console.error("⏱️ [주소 변환] Timeout - Geocoder 응답이 10초 내에 오지 않음");
-          resolve("위치를 확인할 수 없음");
-        }, 10000);
-        
-        const coord = new kakao.maps.LatLng(latitude, longitude);
-        const callback = (result: any, status: any) => {
-          clearTimeout(timeoutId); // 타임아웃 해제
-          
-          if (status === kakao.maps.services.Status.OK) {
-            console.log("✅ [주소 변환] Kakao Geocoder 응답:", result);
-            
-            if (result.length > 0) {
-              // 지번 주소 우선, 없으면 도로명 주소 사용
-              const address = result[0].address || result[0].road_address;
-              
-              if (address) {
-                console.log("주소 데이터:", address);
-                
-                // 시/군 단위 추출 (예: 제주시, 서울특별시 -> 서울시)
-                let cityName = "";
-                
-                // region_2depth_name에 시/군/구 정보가 있음 (예: 제주시, 강남구)
-                if (address.region_2depth_name) {
-                  cityName = address.region_2depth_name;
-                  
-                  // 서울특별시, 부산광역시 같은 경우 region_1depth_name 사용
-                  if (address.region_1depth_name && 
-                      (address.region_1depth_name.includes('특별시') || 
-                       address.region_1depth_name.includes('광역시'))) {
-                    // 서울특별시 -> 서울시, 부산광역시 -> 부산시
-                    cityName = address.region_1depth_name
-                      .replace(/특별시$/, '시')
-                      .replace(/광역시$/, '시');
-                  }
-                } else if (address.region_1depth_name) {
-                  // region_2depth_name이 없는 경우 (특별자치도 등)
-                  cityName = address.region_1depth_name
-                    .replace(/특별자치도$/, '')
-                    .replace(/도$/, '')
-                    .replace(/특별시$/, '시')
-                    .replace(/광역시$/, '시');
-                }
-                
-                // 동/읍/면 단위 추출 (예: 연동)
-                let districtName = "";
-                if (address.region_3depth_name) {
-                  districtName = address.region_3depth_name;
-                } else if (address.region_3depth_h_name) {
-                  // 행정동이 있는 경우
-                  districtName = address.region_3depth_h_name;
-                }
-                
-                // 결과 조합: "제주시 연동" 형식 (시/동 또는 읍/면까지)
-                if (cityName && districtName) {
-                  const formattedAddress = `${cityName} ${districtName}`;
-                  console.log("✅ [주소 변환] 최종 주소:", formattedAddress);
-                  resolve(formattedAddress);
-                  return;
-                } else if (cityName) {
-                  console.log("✅ [주소 변환] 최종 주소:", cityName);
-                  resolve(cityName);
-                  return;
-                }
-              }
-            }
-          } else {
-            console.error("❌ [주소 변환] Geocoder 상태:", status);
-          }
-          
-          resolve("위치를 확인할 수 없음");
-        };
-        
-        try {
-          geocoder.coord2Address(coord.getLng(), coord.getLat(), callback);
-        } catch (error) {
-          clearTimeout(timeoutId);
-          console.error("❌ [주소 변환] coord2Address 호출 실패:", error);
-          resolve("위치를 확인할 수 없음");
-        }
-      });
-    } catch (error) {
-      console.error("❌ [주소 변환] 실패:", error);
-      return "위치를 확인할 수 없음";
-    }
-  };
 
   useEffect(() => {
     // 이전 로그인 상태를 추적하기 위한 ref 사용
@@ -356,25 +265,17 @@ const Main = () => {
     const checkAuthAndInitLocation = async () => {
       console.log("🔐 [인증 확인] 시작");
       
-      // 로그인 상태 확인
-      const { data: { session } } = await supabase.auth.getSession();
-      const loggedIn = !!session;
-      setIsLoggedIn(loggedIn);
-      console.log(`🔐 [인증 상태] ${loggedIn ? '로그인됨' : '로그인 안됨'}`);
-      
-      // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
-      prevSessionRef.current = session;
-      
-      // 튜토리얼 모달 표시 여부 확인 (로그인된 경우에만, 결제 이력 없고 완료 안 한 경우)
-      if (session) {
-        try {
-          const { data: paymentHistory, error: paymentError } = await supabase
-            .from('payment_history')
-            .select('id')
-            .eq('user_id', session.user.id)
-            .limit(1);
+      // 로그인 상태 확인 (AuthContext에서 관리)
+      console.log(`🔐 [인증 상태] ${isLoggedIn ? '로그인됨' : '로그인 안됨'}`);
 
-          const paymentHistoryExists = !paymentError && paymentHistory && paymentHistory.length > 0;
+      // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
+      prevSessionRef.current = isLoggedIn ? { user: { id: "user-001" } } : null;
+
+      // 튜토리얼 모달 표시 여부 확인
+      if (isLoggedIn) {
+        try {
+          const count = await paymentHistoryApi.getCount("user-001");
+          const paymentHistoryExists = count > 0;
           const needTutorial = await shouldShowTutorial(paymentHistoryExists);
           if (needTutorial) {
             setShowTutorialModal(true);
@@ -758,64 +659,17 @@ const Main = () => {
 
     checkAuthAndInitLocation();
 
-    // 세션 만료 감지 및 처리
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔐 [인증 상태 변경]", event, session ? "세션 있음" : "세션 없음");
-      
-      const wasLoggedIn = !!prevSessionRef.current;
-      const isNowLoggedIn = !!session;
-      
-      if (event === "INITIAL_SESSION" && !session && wasLoggedIn) {
-        setIsLoggedIn(false);
-        prevSessionRef.current = null;
-        return;
-      }
-
-      if (event === "SIGNED_OUT" || (!session && wasLoggedIn)) {
-        setIsLoggedIn(false);
-        localStorage.removeItem("lastLocationFetchTime");
-      } else if (event === "SIGNED_IN" || (session && isNowLoggedIn)) {
-        // 로그인되거나 토큰이 갱신된 경우
-        console.log("✅ [세션 유지/갱신] 로그인 상태 유지");
-        setIsLoggedIn(true);
-        
-        // onAuthStateChange에서는 위치를 조회하지 않음
-        // 위치 조회는 checkAuthAndInitLocation에서만 수행됨 (앱 실행 시에만)
-        // 단, 저장된 위치 정보가 있으면 상태만 업데이트
-        const savedLocation = localStorage.getItem("selectedLocation");
-        const savedCoordinates = localStorage.getItem("currentCoordinates");
-        const isManualLocationValue = localStorage.getItem("isManualLocation") === "true";
-        
-        if (savedLocation || savedCoordinates) {
-          setIsManualLocation(isManualLocationValue);
-          if (savedLocation) {
-            setCurrentLocation(savedLocation);
-          }
-          if (savedCoordinates) {
-            try {
-              const coords = JSON.parse(savedCoordinates);
-              const { latitude, longitude } = coords;
-              if (typeof latitude === 'number' && typeof longitude === 'number' && 
-                  !isNaN(latitude) && !isNaN(longitude) &&
-                  latitude >= -90 && latitude <= 90 &&
-                  longitude >= -180 && longitude <= 180) {
-                setCurrentCoords({ latitude, longitude });
-              }
-            } catch (error) {
-              console.error("❌ [세션 갱신] 저장된 좌표 파싱 오류:", error);
-            }
-          }
-        }
-      }
-      
-      // 현재 세션 상태 저장
-      prevSessionRef.current = session;
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => {};
   }, [toast, navigate]);
+
+  const handleResearch = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const kakao = (window as any).kakao;
+    if (!kakao?.maps) return;
+    const center = map.getCenter();
+    void fetchNearbyStores(center.getLat(), center.getLng());
+  };
 
   const handleRefreshLocation = async () => {
     console.log("🔄🔄🔄 [수동 새로고침] 위치 재조회 시작 🔄🔄🔄");
@@ -923,6 +777,7 @@ const Main = () => {
   const fetchNearbyStores = async (latitude: number, longitude: number) => {
     try {
       setIsLoadingStores(true);
+      setShowResearchButton(false);
       console.log("🏪 [매장 검색] 시작:", { latitude, longitude });
 
       // Kakao SDK 로드 보장
@@ -974,6 +829,7 @@ const Main = () => {
             parseFloat(place.y),
             parseFloat(place.x)
           ) * 1000;
+        const { isOpen, todayHours, photos, closedDayNote } = getStoreOpenStatus(image);
         return {
           id: place.id,
           name: place.place_name,
@@ -991,6 +847,10 @@ const Main = () => {
           address: place.road_address_name || place.address_name,
           categoryGroupCode: place.category_group_code || "",
           categoryName: place.category_name || "",
+          isOpen,
+          todayHours,
+          photos,
+          closedDayNote,
         };
       };
 
@@ -1128,13 +988,8 @@ const Main = () => {
           // 프랜차이즈 정보 조회
           let franchiseData: any = null;
           try {
-            const { data: franchise, error: franchiseError } = await supabase
-              .from('franchises' as any)
-              .select('id')
-              .eq('name', brandName)
-              .single();
-            
-            if (!franchiseError && franchise) {
+            const franchise = await storesApi.getFranchiseByName(brandName);
+            if (franchise) {
               franchiseData = franchise;
             }
           } catch (e) {
@@ -1145,11 +1000,8 @@ const Main = () => {
           let franchiseDiscountRate = 0;
           if (franchiseData) {
             try {
-              const { data: paymentMethods, error: paymentMethodsError } = await supabase
-                .from('franchise_payment_methods' as any)
-                .select('method_name, method_type, rate')
-                .eq('franchise_id', franchiseData.id);
-
+              const paymentMethods = await storesApi.getPaymentMethods(franchiseData.id);
+              const paymentMethodsError = null;
               if (!paymentMethodsError && paymentMethods && paymentMethods.length > 0) {
                 // 파스쿠찌: 해피포인트 적립 (5%)
                 if (store.image === 'pascucci') {
@@ -1180,26 +1032,15 @@ const Main = () => {
 
             if (isNumeric && franchiseData) {
               // kakao_place_id로 조회 시도
-              const { data, error } = await supabase
-                .from('stores' as any)
-                .select('local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size, gifticon_available')
-                .eq('kakao_place_id', store.id)
-                .single();
-              
+              const data = await storesApi.getStoreByKakaoPlaceId(store.id);
               storeData = data;
-              storeError = error;
+              storeError = data ? null : new Error("not found");
             }
 
             // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
             if (storeError && franchiseData) {
-              const { data, error } = await supabase
-                .from('stores' as any)
-                .select('local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size, gifticon_available')
-                .eq('franchise_id', franchiseData.id)
-                .limit(1)
-                .single();
-              
-              if (!error && data) {
+              const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
+              if (data) {
                 storeData = data;
               }
             }
@@ -1243,11 +1084,8 @@ const Main = () => {
                   };
 
                   // 모든 판매중 기프티콘 조회
-                  const { data: gifticonsData, error: gifticonsError } = await supabase
-                    .from('used_gifticons' as any)
-                    .select('original_price, sale_price, expiry_date')
-                    .eq('available_at', brandName)
-                    .eq('status', '판매중');
+                  const gifticonsData = await gifticonsApi.getUsedGifticons(brandName);
+                  const gifticonsError = null;
 
                   if (!gifticonsError && gifticonsData && gifticonsData.length > 0) {
                     // 할인효율 기준으로 정렬
@@ -1379,13 +1217,8 @@ const Main = () => {
             // 프랜차이즈 정보 조회
             let franchiseData: any = null;
             try {
-              const { data: franchise, error: franchiseError } = await supabase
-                .from('franchises' as any)
-                .select('id')
-                .eq('name', brandName)
-                .single();
-              
-              if (!franchiseError && franchise) {
+              const franchise = await storesApi.getFranchiseByName(brandName);
+              if (franchise) {
                 franchiseData = franchise;
               }
             } catch (e) {
@@ -1396,15 +1229,12 @@ const Main = () => {
             let franchiseDiscountRate = 0;
             if (franchiseData) {
               try {
-                const { data: paymentMethods, error: paymentMethodsError } = await supabase
-                  .from('franchise_payment_methods' as any)
-                  .select('method_name, method_type, rate')
-                  .eq('franchise_id', franchiseData.id);
-
+                const paymentMethods = await storesApi.getPaymentMethods(franchiseData.id);
+                const paymentMethodsError = null;
                 if (!paymentMethodsError && paymentMethods && paymentMethods.length > 0) {
                   // 파스쿠찌: 해피포인트 적립 (5%)
                   if (store.image === 'pascucci') {
-                    const happyPoint = paymentMethods.find((pm: any) => 
+                    const happyPoint = paymentMethods.find((pm: any) =>
                       pm.method_name === '해피포인트' && (pm.method_type === '적립' || pm.method_type === 'accumulation')
                     );
                     if (happyPoint && (happyPoint as any).rate) {
@@ -1421,7 +1251,7 @@ const Main = () => {
             let localCurrencyDiscount = 0;
             let maxGifticonDiscount = 0;
             let storeData: any = null;
-            
+
             try {
               // storeId가 숫자인지 확인 (카카오 플레이스 ID)
               const isNumeric = /^\d+$/.test(store.id);
@@ -1429,26 +1259,15 @@ const Main = () => {
 
               if (isNumeric && franchiseData) {
                 // kakao_place_id로 조회 시도
-                const { data, error } = await supabase
-                  .from('stores' as any)
-                  .select('local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size, gifticon_available')
-                  .eq('kakao_place_id', store.id)
-                  .single();
-                
+                const data = await storesApi.getStoreByKakaoPlaceId(store.id);
                 storeData = data;
-                storeError = error;
+                storeError = data ? null : new Error("not found");
               }
 
               // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
               if (storeError && franchiseData) {
-                const { data, error } = await supabase
-                  .from('stores' as any)
-                  .select('local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size, gifticon_available')
-                  .eq('franchise_id', franchiseData.id)
-                  .limit(1)
-                  .single();
-                
-                if (!error && data) {
+                const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
+                if (data) {
                   storeData = data;
                 }
               }
@@ -1492,11 +1311,8 @@ const Main = () => {
                     };
 
                     // 모든 판매중 기프티콘 조회
-                    const { data: gifticonsData, error: gifticonsError } = await supabase
-                      .from('used_gifticons' as any)
-                      .select('original_price, sale_price, expiry_date')
-                      .eq('available_at', brandName)
-                      .eq('status', '판매중');
+                    const gifticonsData = await gifticonsApi.getUsedGifticons(brandName);
+                    const gifticonsError = null;
 
                     if (!gifticonsError && gifticonsData && gifticonsData.length > 0) {
                       // 할인효율 기준으로 정렬
@@ -1672,7 +1488,10 @@ const Main = () => {
     storeMatchesChipFilters(store, storeFilterChips)
   );
 
-  const storesWithLogoImage = chipFilteredStores.filter((store) =>
+  // 영업 종료 매장 자동 필터 (isOpen이 명시적으로 false인 경우만 제외)
+  const openStores = chipFilteredStores.filter((store) => store.isOpen !== false);
+
+  const storesWithLogoImage = openStores.filter((store) =>
     STORE_CARD_LOGO_IMAGE_KEYS.has(store.image)
   );
 
@@ -1684,15 +1503,19 @@ const Main = () => {
     }
   });
 
-  const storesWithCoords = sortedStores.filter(
-    (store) => typeof store.lat === "number" && typeof store.lon === "number"
-  );
+  const storesWithCoords = [...openStores]
+    .filter((store) => typeof store.lat === "number" && typeof store.lon === "number")
+    .sort((a, b) =>
+      sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
+    );
 
   useEffect(() => {
     if (!isMapView || !mapContainerRef.current) return;
 
     let isCancelled = false;
     const overlays: any[] = [];
+    let mapReady = false;
+    let readyTimer: ReturnType<typeof setTimeout> | null = null;
 
     const buildStorePin = (store: StoreData, kakao: any) => {
       const root = document.createElement("div");
@@ -1735,6 +1558,19 @@ const Main = () => {
         "width:13px;height:13px;margin-top:-6.5px;border-radius:9999px;background:#22c55e;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);";
       root.appendChild(dot);
       return root;
+    };
+
+    const buildClusterPin = (count: number) => {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "display:flex;align-items:center;justify-content:center;" +
+        "width:36px;height:36px;border-radius:9999px;" +
+        "background:#2D8CFF;border:2.5px solid #fff;" +
+        "box-shadow:0 2px 8px rgba(0,0,0,.32);" +
+        "font-size:13px;font-weight:700;color:#fff;" +
+        "cursor:pointer;user-select:none;";
+      el.textContent = String(count);
+      return el;
     };
 
     const initializeMap = async () => {
@@ -1816,6 +1652,93 @@ const Main = () => {
             }
           });
         }
+
+        const updateClusters = () => {
+          if (isCancelled) return;
+
+          clusterOverlaysRef.current.forEach((o) => {
+            try { o.setMap(null); } catch {}
+          });
+          clusterOverlaysRef.current = [];
+
+          const allPins = storeOverlaysRef.current;
+          if (!allPins.length) return;
+
+          const proj = map.getProjection();
+          const CLUSTER_DISTANCE_PX = 45;
+
+          const pins = allPins.map(({ id, overlay }) => {
+            const pos = overlay.getPosition();
+            let px = 0, py = 0;
+            try {
+              const pt = proj.containerPointFromCoords(pos);
+              px = pt.x;
+              py = pt.y;
+            } catch {}
+            return { id, overlay, pos, px, py };
+          });
+
+          const assigned = new Set<string>();
+          const clusters: (typeof pins)[] = [];
+
+          for (const pin of pins) {
+            if (assigned.has(pin.id)) continue;
+            const cluster = [pin];
+            assigned.add(pin.id);
+            for (const other of pins) {
+              if (assigned.has(other.id)) continue;
+              const dx = pin.px - other.px;
+              const dy = pin.py - other.py;
+              if (Math.sqrt(dx * dx + dy * dy) < CLUSTER_DISTANCE_PX) {
+                cluster.push(other);
+                assigned.add(other.id);
+              }
+            }
+            clusters.push(cluster);
+          }
+
+          clusters.forEach((cluster) => {
+            if (cluster.length === 1) {
+              cluster[0].overlay.setMap(map);
+            } else {
+              cluster.forEach(({ overlay }) => overlay.setMap(null));
+              const avgLat = cluster.reduce((s, p) => s + p.pos.getLat(), 0) / cluster.length;
+              const avgLng = cluster.reduce((s, p) => s + p.pos.getLng(), 0) / cluster.length;
+              const centroid = new kakao.maps.LatLng(avgLat, avgLng);
+              const el = buildClusterPin(cluster.length);
+              const clusterOverlay = new kakao.maps.CustomOverlay({
+                map,
+                position: centroid,
+                content: el,
+                xAnchor: 0.5,
+                yAnchor: 0.5,
+                zIndex: 20,
+                clickable: true,
+              });
+              clusterOverlaysRef.current.push(clusterOverlay);
+              el.addEventListener("click", (ev) => {
+                ev.stopPropagation();
+                if (typeof kakao.maps.event?.preventMap === "function") {
+                  kakao.maps.event.preventMap();
+                }
+                const currentLevel = map.getLevel();
+                if (currentLevel > 1) {
+                  map.setLevel(Math.max(1, currentLevel - 2), { anchor: centroid });
+                }
+              });
+            }
+          });
+        };
+
+        kakao.maps.event.addListener(map, "idle", updateClusters);
+        setTimeout(() => { if (!isCancelled) updateClusters(); }, 400);
+
+        // 초기 setBounds 완료 후 600ms 지나면 사용자 이동 감지 시작
+        readyTimer = setTimeout(() => { mapReady = true; }, 600);
+        kakao.maps.event.addListener(map, "idle", () => {
+          if (!mapReady || isCancelled) return;
+          setShowResearchButton(true);
+        });
       } catch (error) {
         console.error("❌ [지도뷰] 초기화 실패:", error);
       }
@@ -1825,9 +1748,15 @@ const Main = () => {
 
     return () => {
       isCancelled = true;
+      if (readyTimer !== null) clearTimeout(readyTimer);
       mapInstanceRef.current = null;
       storeOverlaysRef.current = [];
+      clusterOverlaysRef.current.forEach((o) => { try { o.setMap(null); } catch {} });
+      clusterOverlaysRef.current = [];
       overlays.forEach((o) => o.setMap(null));
+      if (mapContainerRef.current) {
+        mapContainerRef.current.innerHTML = "";
+      }
     };
   }, [isMapView, storesWithCoords, currentCoords]);
 
@@ -2011,15 +1940,17 @@ const Main = () => {
             <div className="min-w-0">
               <h2 className="text-2xl font-bold">{t.storesHeading}</h2>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSortBy(sortBy === "distance" ? "discount" : "distance")}
-              className="flex shrink-0 items-center gap-2"
-            >
-              <ArrowUpDown className="w-4 h-4" />
-              {sortBy === "distance" ? t.sortDistance : t.sortDiscount}
-            </Button>
+            {!isMapView && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSortBy(sortBy === "distance" ? "discount" : "distance")}
+                className="flex shrink-0 items-center gap-2"
+              >
+                <ArrowUpDown className="w-4 h-4" />
+                {sortBy === "distance" ? t.sortDistance : t.sortDiscount}
+              </Button>
+            )}
           </div>
           {!isMapView &&
             renderFilterChipRow(
@@ -2029,6 +1960,19 @@ const Main = () => {
             renderFilterChipRow(
               "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             )}
+          {isMapView && showResearchButton && (
+            <div className="flex justify-center pt-0.5">
+              <button
+                type="button"
+                onClick={handleResearch}
+                disabled={isLoadingStores}
+                className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/95 px-4 py-2 text-sm font-medium shadow-md backdrop-blur-sm transition-all hover:bg-muted active:scale-95 disabled:opacity-50 animate-in fade-in zoom-in-95 duration-200"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                이 위치에서 재검색
+              </button>
+            </div>
+          )}
         </div>
 
         {isLoadingStores ? (
@@ -2064,6 +2008,10 @@ const Main = () => {
               onSelectStore={setSelectedMapStoreId}
               title={t.mapSheetTitle}
               dragHint={t.mapSheetDragHint}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              sortDistanceLabel={t.sortDistance}
+              sortDiscountLabel={t.sortDiscount}
             />
           </div>
         ) : sortedStores.length > 0 ? (

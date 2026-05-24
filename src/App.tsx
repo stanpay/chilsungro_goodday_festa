@@ -22,14 +22,24 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFail from "./pages/PaymentFail";
 import NotFound from "./pages/NotFound";
 import ChatSupport from "./components/ChatSupport";
+import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import MembershipManagement from "./pages/MembershipManagement";
 import LandingPage from "./pages/Landing/LandingPage";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 1000 * 60,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <AuthProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -66,9 +76,11 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         <ChatSupport />
+        <PwaInstallPrompt />
       </BrowserRouter>
       </AppLocaleProvider>
     </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

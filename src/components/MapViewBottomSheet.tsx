@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GripHorizontal } from "lucide-react";
+import { GripHorizontal, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
 
@@ -26,6 +26,10 @@ export type MapSheetStore = {
   parking_available?: boolean;
   free_parking?: boolean;
   parking_size?: string | null;
+  isOpen?: boolean;
+  todayHours?: { open: string; close: string } | null;
+  photos?: string[];
+  closedDayNote?: string;
 };
 
 type MapViewBottomSheetProps = {
@@ -34,6 +38,10 @@ type MapViewBottomSheetProps = {
   onSelectStore: (id: string) => void;
   title: string;
   dragHint: string;
+  sortBy: "distance" | "discount";
+  onSortChange: (sort: "distance" | "discount") => void;
+  sortDistanceLabel: string;
+  sortDiscountLabel: string;
   className?: string;
 };
 
@@ -43,6 +51,10 @@ const MapViewBottomSheet = ({
   onSelectStore,
   title,
   dragHint,
+  sortBy,
+  onSortChange,
+  sortDistanceLabel,
+  sortDiscountLabel,
   className,
 }: MapViewBottomSheetProps) => {
   const expandedCap = useCallback(() => {
@@ -79,6 +91,16 @@ const MapViewBottomSheet = ({
   }, [expandedCap]);
 
   const showContent = panelHeight > PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
+
+  useEffect(() => {
+    if (!selectedStoreId) return;
+    // 핀 클릭 시 바텀시트가 접혀 있으면 자동으로 펼치기
+    const cap = expandedCap();
+    if (panelHeightRef.current < PEEK_HEIGHT + CONTENT_REVEAL_EXTRA) {
+      panelHeightRef.current = cap;
+      setPanelHeight(cap);
+    }
+  }, [selectedStoreId, expandedCap]);
 
   useEffect(() => {
     if (!selectedStoreId || !showContent) return;
@@ -290,7 +312,17 @@ const MapViewBottomSheet = ({
         <>
           <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-1">
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            <span className="text-xs text-muted-foreground">{stores.length}</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onSortChange(sortBy === "distance" ? "discount" : "distance")}
+                className="flex items-center gap-1 rounded-full border border-border/60 bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted active:scale-95"
+              >
+                <ArrowUpDown className="h-3 w-3" />
+                {sortBy === "distance" ? sortDistanceLabel : sortDiscountLabel}
+              </button>
+              <span className="text-xs text-muted-foreground">{stores.length}</span>
+            </div>
           </div>
 
           <div

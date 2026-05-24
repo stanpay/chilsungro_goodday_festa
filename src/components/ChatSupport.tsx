@@ -5,9 +5,9 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { useSendSupportMessage } from "@/hooks/use-support";
 
 interface Message {
   id: number;
@@ -33,6 +33,8 @@ const ChatSupport = () => {
   const [inputValue, setInputValue] = useState("");
   const [includeCurrentPage, setIncludeCurrentPage] = useState(true);
 
+  const sendMessage = useSendSupportMessage();
+
   const getPageName = (path: string) => {
     const pageNames: Record<string, string> = {
       "/": "메인",
@@ -45,7 +47,6 @@ const ChatSupport = () => {
       "/history": "결제 내역",
       "/payment-methods": "결제 수단",
     };
-    
     const basePath = "/" + path.split("/")[1];
     return pageNames[basePath] || pageNames[path] || "기타";
   };
@@ -58,20 +59,11 @@ const ChatSupport = () => {
         setIsOpen(false);
       }
     };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  // 관리자 페이지나 튜토리얼 모드에서는 채팅 지원 표시하지 않음
-  if (location.pathname.startsWith("/admin") || isTutorial) {
-    return null;
-  }
+  if (location.pathname.startsWith("/admin") || isTutorial) return null;
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;
@@ -88,43 +80,31 @@ const ChatSupport = () => {
     setInputValue("");
 
     try {
-      // Save message to database
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { error } = await supabase.from("support_messages").insert({
-        user_id: user?.id || null, // null if not logged in
-        page_name: currentPageName,
-        page_path: location.pathname,
+      await sendMessage.mutateAsync({
         message: messageText,
+        pageName: includeCurrentPage ? currentPageName : "기타",
+        pagePath: location.pathname,
       });
-
-      if (error) {
-        console.error("Error saving message:", error);
-        toast({
-          title: "메시지 저장 실패",
-          description: "메시지 저장 중 오류가 발생했습니다.",
-          variant: "destructive",
-        });
-      }
     } catch (error) {
       console.error("Error:", error);
+      toast({ title: "메시지 저장 실패", description: "메시지 저장 중 오류가 발생했습니다.", variant: "destructive" });
     }
 
-    // 자동 응답 시뮬레이션
     setTimeout(() => {
-      const autoReply: Message = {
-        id: messages.length + 2,
-        text: "문의해주셔서 감사합니다. 담당자가 확인 후 빠른 시일 내에 답변드리겠습니다.",
-        sender: "support",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, autoReply]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: prev.length + 1,
+          text: "문의해주셔서 감사합니다. 담당자가 확인 후 빠른 시일 내에 답변드리겠습니다.",
+          sender: "support",
+          timestamp: new Date(),
+        },
+      ]);
     }, 1000);
   };
 
   return (
     <>
-      {/* Floating Button */}
       {!isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
@@ -135,13 +115,11 @@ const ChatSupport = () => {
         </Button>
       )}
 
-      {/* Chat Popup */}
       {isOpen && (
         <Card
           ref={chatRef}
           className="fixed bottom-[calc(4rem+30px-1.75rem)] left-4 right-4 z-50 flex h-[500px] max-w-md flex-col animate-scale-in shadow-2xl md:right-6 md:left-auto md:w-96"
         >
-          {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
@@ -150,39 +128,19 @@ const ChatSupport = () => {
                 <p className="text-xs opacity-90">스탠 고객지원팀</p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="text-primary-foreground hover:bg-primary-foreground/20"
-            >
+            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-primary-foreground hover:bg-primary-foreground/20">
               <X className="h-5 w-5" />
             </Button>
           </div>
 
-          {/* Messages */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
               {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.sender === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
-                      message.sender === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
-                    }`}
-                  >
+                <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] rounded-lg p-3 ${message.sender === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
                     <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                     <p className="text-xs opacity-70 mt-1">
-                      {message.timestamp.toLocaleTimeString("ko-KR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {message.timestamp.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                 </div>
@@ -190,33 +148,22 @@ const ChatSupport = () => {
             </div>
           </ScrollArea>
 
-          {/* Current Page Toggle */}
           <div className="px-4 py-2 border-t border-border">
-            <Badge
-              variant={includeCurrentPage ? "default" : "outline"}
-              className="cursor-pointer"
-              onClick={() => setIncludeCurrentPage(!includeCurrentPage)}
-            >
+            <Badge variant={includeCurrentPage ? "default" : "outline"} className="cursor-pointer" onClick={() => setIncludeCurrentPage(!includeCurrentPage)}>
               {currentPageName} 페이지 {includeCurrentPage ? "✓" : ""}
             </Badge>
           </div>
 
-          {/* Input */}
           <div className="p-4 border-t border-border">
             <div className="flex gap-2">
               <Textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
+                onKeyPress={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="메시지를 입력하세요..."
                 className="flex-1 min-h-[80px] resize-none"
               />
-              <Button onClick={handleSend} size="icon">
+              <Button onClick={handleSend} size="icon" disabled={sendMessage.isPending}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>

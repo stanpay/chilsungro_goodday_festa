@@ -5,26 +5,30 @@ import { cn } from "@/lib/utils";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
-import { buildNaverMapOpenUrl } from "@/lib/mapDirectionLinks";
+import { openNaverMapsApp } from "@/lib/mapDirectionLinks";
 
 interface StoreCardProps {
   id: string;
   name: string;
   distance: string;
   image: string;
-  maxDiscount: string | null; // 할인율이 없으면 null
-  maxDiscountPercent?: number | null; // 표시용 % (있으면 언어별 배지 문구 생성)
+  maxDiscount: string | null;
+  maxDiscountPercent?: number | null;
   address?: string;
   lat?: number;
   lon?: number;
-  local_currency_available?: boolean; // 지역화폐 사용가능 여부
-  local_currency_discount_rate?: number | null; // 지역화폐 할인율
-  parking_available?: boolean; // 주차가능 여부
-  free_parking?: boolean; // 무료주차 여부
-  parking_size?: string | null; // 주차장 규모 ('넓음', '보통', '좁음')
-  tutorialMode?: boolean; // 튜토리얼 모드 여부
-  isHighlighted?: boolean; // 강조 표시 여부
-  disabled?: boolean; // 비활성화 여부
+  local_currency_available?: boolean;
+  local_currency_discount_rate?: number | null;
+  parking_available?: boolean;
+  free_parking?: boolean;
+  parking_size?: string | null;
+  isOpen?: boolean;
+  todayHours?: { open: string; close: string } | null;
+  photos?: string[];
+  closedDayNote?: string;
+  tutorialMode?: boolean;
+  isHighlighted?: boolean;
+  disabled?: boolean;
 }
 
 const brandLogos: Record<string, string> = {
@@ -35,11 +39,11 @@ const brandLogos: Record<string, string> = {
   twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
 };
 
-const StoreCard = ({ 
-  id, 
-  name, 
-  distance, 
-  image, 
+const StoreCard = ({
+  id,
+  name,
+  distance,
+  image,
   maxDiscount,
   maxDiscountPercent = null,
   address,
@@ -50,6 +54,10 @@ const StoreCard = ({
   parking_available = false,
   free_parking = false,
   parking_size = null,
+  isOpen,
+  todayHours,
+  photos,
+  closedDayNote,
   tutorialMode = false,
   isHighlighted = false,
   disabled = false,
@@ -78,12 +86,7 @@ const StoreCard = ({
       return;
     }
 
-    const url = buildNaverMapOpenUrl({ name, address, lat, lon });
-    const a = document.createElement("a");
-    a.href = url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.click();
+    openNaverMapsApp({ name, address, lat, lon });
   };
 
   // 지역화폐 칩 표시 여부
@@ -136,20 +139,37 @@ const StoreCard = ({
           </>
         )}
         <div className="flex flex-col">
-          <div className="flex-1 bg-primary/10 flex items-center justify-center p-4 relative">
+          <div className="flex-1 bg-primary/10 flex items-center justify-center p-4 relative overflow-hidden" style={{ minHeight: 96 }}>
+            {/* 비브랜드 매장: 더미 사진 배경 */}
+            {!brandLogoUrl && photos && photos.length > 0 && (
+              <img
+                src={photos[0]}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 h-full w-full object-cover"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+            {/* 사진 위 오버레이 */}
+            {!brandLogoUrl && photos && photos.length > 0 && (
+              <div className="absolute inset-0 bg-black/25" aria-hidden />
+            )}
+
+            {/* 로고 / 아이콘 */}
             {brandLogoUrl ? (
               <img
                 src={brandLogoUrl}
                 alt={displayName}
-                className="w-20 h-20 object-contain"
+                className="relative z-10 w-20 h-20 object-contain"
               />
             ) : image === "shopping" ? (
-              <ShoppingBag className="h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
+              <ShoppingBag className="relative z-10 h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
             ) : image === "restaurant" ? (
-              <UtensilsCrossed className="h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
+              <UtensilsCrossed className="relative z-10 h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
             ) : (
-              <Coffee className="h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
+              <Coffee className="relative z-10 h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
             )}
+
             {discountBadgeText && (
               <div className="absolute top-2 right-2 z-20 flex flex-col items-end gap-1.5">
                 <div className="bg-destructive text-destructive-foreground px-2 py-1 rounded-lg text-xs font-bold shadow-sm">
@@ -160,10 +180,29 @@ const StoreCard = ({
           </div>
           <div className="p-3 bg-card">
             <h3 className={`font-bold mb-1 whitespace-nowrap ${getFontSizeClass()}`}>{displayName}</h3>
-            <div className="flex items-center text-xs text-muted-foreground mb-2">
+            <div className="flex items-center text-xs text-muted-foreground mb-1.5">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <span className="break-words">{distance}</span>
             </div>
+            {isOpen !== undefined && (
+              <div className="flex items-center gap-1 text-xs mb-1.5">
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full shrink-0",
+                    isOpen ? "bg-green-500" : "bg-muted-foreground/50"
+                  )}
+                />
+                {isOpen ? (
+                  <span className="text-green-600 dark:text-green-400 font-medium">
+                    {todayHours ? `${todayHours.close}까지` : "영업중"}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}
+                  </span>
+                )}
+              </div>
+            )}
             {(showLocalCurrencyChip || showParkingChip) && (
               <div className="flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide">
                 {showLocalCurrencyChip && local_currency_discount_rate != null && (

@@ -10,7 +10,75 @@ import { Link, useParams, useNavigate, useSearchParams, useLocation } from "reac
 import { toast } from "sonner";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  DUMMY_FRANCHISES,
+  DUMMY_FRANCHISE_PAYMENT_METHODS,
+  DUMMY_STORES,
+  DUMMY_PAYMENT_HISTORY,
+  DUMMY_USED_GIFTICONS,
+} from "@/api/dummyData";
+
+const _MS = { user: { id: "user-001", email: "test@jejuone.com", user_metadata: {} } };
+class _QB {
+  private _t: string; private _eq: Record<string,any> = {}; private _in: Record<string,any[]> = {};
+  private _lim = Infinity; private _sngl = false; private _write = false;
+  constructor(t: string) { this._t = t; }
+  select() { return this; }
+  update(_d?: any) { this._write = true; return this; }
+  insert(_d?: any) { this._write = true; return this; }
+  upsert(_d?: any) { this._write = true; return this; }
+  eq(c: string, v: any) { this._eq[c] = v; return this; }
+  in(c: string, v: any[]) { this._in[c] = v; return this; }
+  order() { return this; }
+  limit(n: number) { this._lim = n; return this; }
+  async single() { this._sngl = true; return this._exec(); }
+  then(res: (v: any) => any, rej?: (e: any) => any) { return this._exec().then(res, rej); }
+  private async _exec() {
+    if (this._write) return { data: null, error: null };
+    let rows = this._rows();
+    if (this._lim < Infinity) rows = rows.slice(0, this._lim);
+    if (this._sngl) return rows[0] ? { data: rows[0], error: null } : { data: null, error: { code: "PGRST116" } };
+    return { data: rows, error: null };
+  }
+  private _rows(): any[] {
+    switch (this._t) {
+      case "franchises": {
+        const all = Object.values(DUMMY_FRANCHISES);
+        return this._eq["name"] ? all.filter((f) => f.name === this._eq["name"]) : all;
+      }
+      case "franchise_payment_methods": {
+        const fid = this._eq["franchise_id"];
+        return fid ? DUMMY_FRANCHISE_PAYMENT_METHODS.filter((m) => m.franchise_id === fid) : [...DUMMY_FRANCHISE_PAYMENT_METHODS];
+      }
+      case "stores": {
+        if (this._eq["id"]) return DUMMY_STORES.filter((s) => s.id === this._eq["id"]);
+        if (this._eq["franchise_id"]) return DUMMY_STORES.filter((s) => s.franchise_id === this._eq["franchise_id"]);
+        return [...DUMMY_STORES];
+      }
+      case "payment_history": {
+        const uid = this._eq["user_id"];
+        return uid ? DUMMY_PAYMENT_HISTORY.filter((p) => p.user_id === uid) : [...DUMMY_PAYMENT_HISTORY];
+      }
+      case "used_gifticons": {
+        let r = [...DUMMY_USED_GIFTICONS];
+        if (this._eq["available_at"]) r = r.filter((g) => g.available_at === this._eq["available_at"]);
+        if (this._eq["status"]) r = r.filter((g) => g.status === this._eq["status"]);
+        if (this._eq["reserved_by"]) r = r.filter((g) => (g as any).reserved_by === this._eq["reserved_by"]);
+        if (this._in["id"]) r = r.filter((g) => this._in["id"].includes(g.id));
+        return r;
+      }
+      default: return [];
+    }
+  }
+}
+const supabase = {
+  auth: {
+    getSession: async () => ({ data: { session: _MS }, error: null }),
+    onAuthStateChange: (_cb: any) => ({ data: { subscription: { unsubscribe: () => {} } } }),
+  },
+  from: (t: string) => new _QB(t),
+} as any;
+
 import JsBarcode from "jsbarcode";
 import { initPaymentWidget, generateOrderId } from "@/lib/tossPayments";
 import { cn } from "@/lib/utils";

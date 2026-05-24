@@ -5,8 +5,8 @@ import { ArrowLeft, MapPin, Search, Loader2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { searchAddress, KakaoSearchResult } from "@/lib/kakao";
+import { getAddressFromCoords } from "@/lib/geocoding";
 
 interface RecentLocation {
   name: string;
@@ -118,11 +118,11 @@ const Location = () => {
 
   const handleCurrentLocation = () => {
     const isReactNative = (window as any).isReactNative === true;
-    
+
     if (!navigator.geolocation) {
       toast({
         title: "위치 서비스 미지원",
-        description: isReactNative 
+        description: isReactNative
           ? "앱이 위치 서비스를 지원하지 않습니다."
           : "브라우저가 위치 서비스를 지원하지 않습니다.",
         variant: "destructive",
@@ -133,46 +133,49 @@ const Location = () => {
     setIsLoadingLocation(true);
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude } = position.coords;
-        
-        // 좌표를 저장
+
+        // 좌표 → 실제 주소 변환
+        const address = await getAddressFromCoords(latitude, longitude);
+        const displayName = address !== "위치를 확인할 수 없음" ? address : "현재 위치";
+
         localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-        localStorage.setItem("selectedLocation", "현재 위치");
-        
+        localStorage.setItem("selectedLocation", displayName);
+        localStorage.removeItem("isManualLocation");
+
         setIsLoadingLocation(false);
         toast({
           title: "위치 설정 완료",
-          description: "현재 위치로 설정되었습니다.",
+          description: `${displayName}(으)로 설정되었습니다.`,
         });
         navigate("/main");
       },
       (error) => {
         setIsLoadingLocation(false);
         let errorMessage = "위치를 가져올 수 없습니다.";
-        
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
-          case 1: // PERMISSION_DENIED
+          case 1:
             errorMessage = isReactNative
               ? "위치 권한이 거부되었습니다. 앱 설정에서 위치 권한을 허용해주세요."
               : "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.";
-            // 사용자가 의도적으로 거부한 경우이므로 콘솔 에러를 출력하지 않음
             break;
           case error.POSITION_UNAVAILABLE:
-          case 2: // POSITION_UNAVAILABLE
+          case 2:
             errorMessage = "위치 정보를 사용할 수 없습니다.";
             console.error("❌ [위치 정보] 위치 정보를 사용할 수 없음:", error);
             break;
           case error.TIMEOUT:
-          case 3: // TIMEOUT
+          case 3:
             errorMessage = "위치 요청 시간이 초과되었습니다.";
             console.error("❌ [위치 정보] 위치 요청 시간 초과:", error);
             break;
           default:
             console.error("❌ [위치 정보] 위치 가져오기 실패:", error);
         }
-        
+
         toast({
           title: "위치 가져오기 실패",
           description: errorMessage,
