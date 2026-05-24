@@ -1903,12 +1903,12 @@ const Main = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 min-w-[7rem] shrink-0 gap-1.5 rounded-xl border-border/50 px-4 hover:border-primary/50 transition-colors"
+                className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border-border/50 px-3 hover:border-primary/50 transition-colors"
                 aria-label={t.languageMenuAria}
                 title={LOCALE_MENU_LABELS[locale]}
               >
                 <Languages className="h-4 w-4 shrink-0" />
-                <span className="max-w-[5.5rem] truncate text-xs font-medium">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-left">
                   {LOCALE_MENU_LABELS[locale]}
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
