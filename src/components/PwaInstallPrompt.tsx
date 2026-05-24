@@ -112,13 +112,13 @@ const PwaInstallPrompt = () => {
     return (
       <div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 px-4">
         <div className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5 animate-in slide-in-from-bottom-4 duration-300">
-          {/* 오늘 하루 보지 않기 */}
+          {/* 오늘하루 보지 않기 */}
           <button
             onClick={handleDismissToday}
             className="absolute right-4 top-4 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="오늘 하루 보지 않기"
+            aria-label="오늘하루 보지 않기"
           >
-            오늘 하루 보지 않기
+            오늘하루 보지 않기
             <X className="h-3.5 w-3.5" />
           </button>
 
@@ -130,9 +130,9 @@ const PwaInstallPrompt = () => {
               className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
             />
             <div className="min-w-0">
-              <p className="font-bold text-base text-foreground">홈 화면에 추가</p>
+              <p className="font-bold text-base text-foreground">홈 화면 추가</p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                홈 화면에 추가하면 앱처럼<br />빠르게 이용할 수 있어요
+                홈 화면에 추가 하시면 앱처럼<br />빠르게 이용할 수 있어요
               </p>
             </div>
           </div>
@@ -149,7 +149,7 @@ const PwaInstallPrompt = () => {
               onClick={handleYes}
               className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
             >
-              예
+              홈 화면에 추가
             </button>
           </div>
         </div>
