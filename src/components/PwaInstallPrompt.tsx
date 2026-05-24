@@ -130,7 +130,7 @@ const PwaInstallPrompt = () => {
               className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
             />
             <div className="min-w-0">
-              <p className="font-bold text-base text-foreground">스탠 앱 설치</p>
+              <p className="font-bold text-base text-foreground">홈 화면에 추가</p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 홈 화면에 추가하면 앱처럼<br />빠르게 이용할 수 있어요
               </p>
