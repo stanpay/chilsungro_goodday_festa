@@ -1515,12 +1515,12 @@ const Main = () => {
   );
 
   const storesWithCoords = useMemo(() =>
-    [...openStores]
+    [...chipFilteredStores]
       .filter((store) => typeof store.lat === "number" && typeof store.lon === "number")
       .sort((a, b) =>
         sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
       ),
-    [openStores, sortBy]
+    [chipFilteredStores, sortBy]
   );
 
   useEffect(() => {
@@ -1691,6 +1691,13 @@ const Main = () => {
             } catch {}
             return { id, overlay, pos, px, py };
           });
+
+          // projection이 아직 준비 안 된 경우(모두 0,0) 클러스터링 스킵
+          const projectionReady = pins.some((p) => p.px !== 0 || p.py !== 0);
+          if (!projectionReady) {
+            allPins.forEach(({ overlay }) => { try { overlay.setMap(map); } catch {} });
+            return;
+          }
 
           const assigned = new Set<string>();
           const clusters: (typeof pins)[] = [];
