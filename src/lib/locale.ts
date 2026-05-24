@@ -331,7 +331,6 @@ type ChatSupportCopy = {
   greeting: string;
   autoReply: string;
   inputPlaceholder: string;
-  pageSuffix: string;
   sendErrorTitle: string;
   sendErrorDesc: string;
   pageNames: Record<string, string>;
@@ -344,7 +343,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
     greeting: "안녕하세요! 스탠 고객지원팀입니다. 무엇을 도와드릴까요?",
     autoReply: "문의해주셔서 감사합니다. 담당자가 확인 후 빠른 시일 내에 답변드리겠습니다.",
     inputPlaceholder: "메시지를 입력하세요...",
-    pageSuffix: "페이지",
     sendErrorTitle: "메시지 저장 실패",
     sendErrorDesc: "메시지 저장 중 오류가 발생했습니다.",
     pageNames: {
@@ -365,7 +363,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
     greeting: "Hello! This is the Stan support team. How can we help you?",
     autoReply: "Thank you for your inquiry. Our team will review it and get back to you as soon as possible.",
     inputPlaceholder: "Type a message...",
-    pageSuffix: "page",
     sendErrorTitle: "Failed to send message",
     sendErrorDesc: "An error occurred while sending your message.",
     pageNames: {
@@ -386,7 +383,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
     greeting: "您好！这里是斯坦客服团队，请问有什么可以帮您？",
     autoReply: "感谢您的咨询。我们的团队将尽快确认并回复您。",
     inputPlaceholder: "请输入消息...",
-    pageSuffix: "页面",
     sendErrorTitle: "消息发送失败",
     sendErrorDesc: "发送消息时发生错误。",
     pageNames: {
@@ -407,7 +403,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
     greeting: "こんにちは！スタンサポートチームです。どのようなご用件でしょうか？",
     autoReply: "お問い合わせありがとうございます。担当者が確認後、できる限り早くご回答いたします。",
     inputPlaceholder: "メッセージを入力してください...",
-    pageSuffix: "ページ",
     sendErrorTitle: "メッセージ送信失敗",
     sendErrorDesc: "メッセージの送信中にエラーが発生しました。",
     pageNames: {

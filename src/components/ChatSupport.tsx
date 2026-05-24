@@ -3,7 +3,6 @@ import { MessageCircle, X, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { useLocation } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,7 +27,6 @@ const ChatSupport = () => {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [includeCurrentPage, setIncludeCurrentPage] = useState(true);
 
   const sendMessage = useSendSupportMessage();
 
@@ -80,7 +78,7 @@ const ChatSupport = () => {
     try {
       await sendMessage.mutateAsync({
         message: messageText,
-        pageName: includeCurrentPage ? currentPageName : "기타",
+        pageName: currentPageName,
         pagePath: location.pathname,
       });
     } catch (error) {
@@ -145,16 +143,6 @@ const ChatSupport = () => {
               ))}
             </div>
           </ScrollArea>
-
-          <div className="px-4 py-2 border-t border-border">
-            <Badge
-              variant={includeCurrentPage ? "default" : "outline"}
-              className="cursor-pointer"
-              onClick={() => setIncludeCurrentPage(!includeCurrentPage)}
-            >
-              {currentPageName} {t.pageSuffix} {includeCurrentPage ? "✓" : ""}
-            </Badge>
-          </div>
 
           <div className="p-4 border-t border-border">
             <div className="flex gap-2">
