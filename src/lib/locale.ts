@@ -34,7 +34,7 @@ type MainCopy = {
   chipLocalCurrency: string;
   chipRestaurant: string;
   chipCafe: string;
-  chipShopping: string;
+  chipOther: string;
   storeFilterToolbarAria: string;
   sortByDistance: string;
   sortByDiscount: string;
@@ -61,7 +61,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "지역화폐",
     chipRestaurant: "음식점",
     chipCafe: "카페",
-    chipShopping: "쇼핑",
+    chipOther: "기타",
     storeFilterToolbarAria: "매장 유형 필터",
     sortByDistance: "거리 순으로 정렬됩니다",
     sortByDiscount: "최대 할인율 순으로 정렬됩니다",
@@ -86,7 +86,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "Local currency",
     chipRestaurant: "Restaurant",
     chipCafe: "Cafe",
-    chipShopping: "Shopping",
+    chipOther: "Other",
     storeFilterToolbarAria: "Store type filters",
     sortByDistance: "Sorted by distance",
     sortByDiscount: "Sorted by max discount",
@@ -111,7 +111,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "地区货币",
     chipRestaurant: "餐厅",
     chipCafe: "咖啡厅",
-    chipShopping: "购物",
+    chipOther: "其他",
     storeFilterToolbarAria: "门店类型筛选",
     sortByDistance: "按距离排序",
     sortByDiscount: "按最高折扣排序",
@@ -136,7 +136,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "地域通貨",
     chipRestaurant: "飲食店",
     chipCafe: "カフェ",
-    chipShopping: "ショッピング",
+    chipOther: "その他",
     storeFilterToolbarAria: "店舗タイプの絞り込み",
     sortByDistance: "距離順に並びます",
     sortByDiscount: "最大割引率順に並びます",

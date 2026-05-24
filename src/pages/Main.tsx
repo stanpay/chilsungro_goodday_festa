@@ -50,7 +50,7 @@ type StoreFilterChipId =
   | "localCurrency"
   | "restaurant"
   | "cafe"
-  | "shopping";
+  | "other";
 
 const STORE_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
   "all",
@@ -58,7 +58,7 @@ const STORE_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
   "localCurrency",
   "restaurant",
   "cafe",
-  "shopping",
+  "other",
 ];
 
 function inferChainImageFromPlaceName(placeName: string): string | null {
@@ -123,6 +123,10 @@ function storeHasChilsungroCoupon(store: StoreLikeForChip): boolean {
   return store.hasGifticonDiscount === true;
 }
 
+function storeChipIsOther(store: StoreLikeForChip): boolean {
+  return !storeChipIsRestaurant(store) && !storeChipIsCafe(store);
+}
+
 function storeMatchesChipFilters(
   store: StoreLikeForChip,
   chips: ReadonlySet<StoreFilterChipId>
@@ -133,7 +137,7 @@ function storeMatchesChipFilters(
   if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
   if (chips.has("restaurant")) parts.push(storeChipIsRestaurant(store));
   if (chips.has("cafe")) parts.push(storeChipIsCafe(store));
-  if (chips.has("shopping")) parts.push(storeChipIsShopping(store));
+  if (chips.has("other")) parts.push(storeChipIsOther(store));
   return parts.length > 0 && parts.some(Boolean);
 }
 
@@ -1431,7 +1435,7 @@ const Main = () => {
     localCurrency: t.chipLocalCurrency,
     restaurant: t.chipRestaurant,
     cafe: t.chipCafe,
-    shopping: t.chipShopping,
+    other: t.chipOther,
   };
 
   const toggleStoreFilterChip = (id: StoreFilterChipId) => {
