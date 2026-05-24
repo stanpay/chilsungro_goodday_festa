@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { TouchEvent } from "react";
 import { X, Share } from "lucide-react";
 
 const SESSION_KEY = "pwa-prompt-shown";
@@ -32,6 +33,7 @@ const PwaInstallPrompt = () => {
   const [step, setStep] = useState<Step>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIos, setIsIos] = useState(false);
+  const iosGuideTouchStartY = useRef<number | null>(null);
 
   useEffect(() => {
     if (isInStandaloneMode()) return;
@@ -76,10 +78,29 @@ const PwaInstallPrompt = () => {
     if (outcome === "accepted") setStep(null);
   };
 
+  const handleIosGuideTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    iosGuideTouchStartY.current = event.touches[0]?.clientY ?? null;
+  };
+
+  const handleIosGuideTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const startY = iosGuideTouchStartY.current;
+    iosGuideTouchStartY.current = null;
+    if (startY === null) return;
+
+    const endY = event.changedTouches[0]?.clientY;
+    if (endY !== undefined && endY - startY > 48) {
+      setStep(null);
+    }
+  };
+
   if (step === "ios-guide") {
     return (
       <div className="fixed bottom-20 left-0 right-0 z-[200] mx-auto max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
-        <div className="rounded-2xl border border-border bg-card shadow-xl p-4">
+        <div
+          className="rounded-2xl border border-border bg-card shadow-xl p-4"
+          onTouchStart={handleIosGuideTouchStart}
+          onTouchEnd={handleIosGuideTouchEnd}
+        >
           <div className="flex items-start gap-3">
             <img
               src="/favicon.png"
@@ -89,7 +110,6 @@ const PwaInstallPrompt = () => {
             <div className="flex-1 min-w-0">
               <p className="font-bold text-sm text-foreground">홈 화면에 추가하기</p>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                하단의{" "}
                 <Share className="inline h-3.5 w-3.5 mx-0.5 align-text-bottom" />{" "}
                 공유 버튼 →{" "}
                 <strong>"홈 화면에 추가"</strong> 선택
@@ -101,6 +121,14 @@ const PwaInstallPrompt = () => {
               aria-label="닫기"
             >
               <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={handleDismissToday}
+              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              오늘 하루 보지 않기
             </button>
           </div>
         </div>
