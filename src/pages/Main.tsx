@@ -7,6 +7,7 @@ import {
   Languages,
   ChevronDown,
   LocateFixed,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -191,6 +192,7 @@ const Main = () => {
   const [isLoadingMoreStores, setIsLoadingMoreStores] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [storeFilterChips, setStoreFilterChips] = useState<Set<StoreFilterChipId>>(
     () => new Set<StoreFilterChipId>(["all"])
   );
@@ -1910,14 +1912,32 @@ const Main = () => {
         {!isMapView && <MainPromoBanner locale={locale} />}
         <div className={cn("mb-4 flex items-center gap-2", isMapView && "relative z-20 px-4")}>
           <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <button
+              type="button"
+              onClick={() => setSearchQuery(searchInput)}
+              className="absolute left-3 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={t.searchPlaceholder}
+            >
+              <Search className="w-5 h-5" />
+            </button>
             <input
               type="text"
               placeholder={t.searchPlaceholder}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-12 pl-10 pr-4 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") setSearchQuery(searchInput); }}
+              className="w-full h-12 pl-10 pr-10 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
             />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => { setSearchInput(""); setSearchQuery(""); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="검색어 지우기"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

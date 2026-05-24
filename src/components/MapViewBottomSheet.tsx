@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useLayoutEffect } from "react";
 import { GripHorizontal, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
@@ -35,7 +35,7 @@ export type MapSheetStore = {
 type MapViewBottomSheetProps = {
   stores: MapSheetStore[];
   selectedStoreId: string | null;
-  onSelectStore: (id: string) => void;
+  onSelectStore: (id: string | null) => void;
   title: string;
   dragHint: string;
   sortBy: "distance" | "discount";
@@ -75,6 +75,7 @@ const MapViewBottomSheet = ({
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const maxHeightRef = useRef(0);
+  const clearSelectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   panelHeightRef.current = panelHeight;
 
@@ -232,6 +233,8 @@ const MapViewBottomSheet = ({
 
   /** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
   const SLIGHT_EXPAND_FROM_PEEK_PX = 10;
+  /** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 */
+  const COLLAPSE_FROM_EXPANDED_PX = 80;
 
   const endDrag = () => {
     const d = dragRef.current;
@@ -245,6 +248,13 @@ const MapViewBottomSheet = ({
     if (startedPeek && h >= startH + SLIGHT_EXPAND_FROM_PEEK_PX) {
       panelHeightRef.current = maxHeight;
       setPanelHeight(maxHeight);
+      return;
+    }
+    // 펼쳐진 상태에서 80px 이상 내렸으면 바로 접기
+    const startedExpanded = startH >= maxHeight - 2;
+    if (startedExpanded && startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
+      panelHeightRef.current = PEEK_HEIGHT;
+      setPanelHeight(PEEK_HEIGHT);
       return;
     }
     const mid = (PEEK_HEIGHT + maxHeight) / 2;
@@ -329,7 +339,7 @@ const MapViewBottomSheet = ({
             ref={scrollBodyRef}
             className="touch-pan-y flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none px-3 pb-3"
           >
-            <div className="grid grid-cols-2 gap-3 pb-1">
+            <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
               {stores.map((store) => (
                 <div
                   key={store.id}
@@ -337,9 +347,13 @@ const MapViewBottomSheet = ({
                     if (node) cardWrapRefs.current.set(store.id, node);
                     else cardWrapRefs.current.delete(store.id);
                   }}
-                  onClick={() => onSelectStore(store.id)}
+                  onClick={() => {
+                    onSelectStore(store.id);
+                    if (clearSelectTimerRef.current) clearTimeout(clearSelectTimerRef.current);
+                    clearSelectTimerRef.current = setTimeout(() => onSelectStore(null), 1200);
+                  }}
                   className={cn(
-                    "rounded-lg transition-[box-shadow,transform]",
+                    "h-full rounded-lg transition-[box-shadow,transform]",
                     selectedStoreId === store.id && "ring-2 ring-primary ring-offset-2 ring-offset-card"
                   )}
                 >

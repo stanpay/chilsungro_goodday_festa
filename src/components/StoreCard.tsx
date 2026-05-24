@@ -111,17 +111,17 @@ const StoreCard = ({
       : maxDiscount;
   
   return (
-    <div 
+    <div
       onClick={handleClick}
       className={cn(
-        "relative",
+        "relative h-full",
         disabled && "opacity-50 cursor-not-allowed",
         isHighlighted && "animate-pulse"
       )}
     >
-      <Card 
+      <Card
         className={cn(
-          "relative overflow-hidden transition-all duration-300 bg-card border-border/50",
+          "relative h-full overflow-hidden transition-all duration-300 bg-card border-border/50",
           !disabled && "cursor-pointer hover:shadow-lg hover:-translate-y-1",
           isHighlighted && "border-4 border-primary shadow-[0_0_20px_rgba(var(--primary),0.5)]"
         )}
