@@ -210,6 +210,8 @@ const Main = () => {
   const [showResearchButton, setShowResearchButton] = useState(false);
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
+  const storesWithCoordsRef = useRef<any[]>([]);
+  const rebuildStoreOverlaysRef = useRef<(() => void) | null>(null);
 
   const mapPinTranslationKey = useMemo(
     () =>
@@ -1668,13 +1670,16 @@ const Main = () => {
           map.setBounds(bounds, 48, 48, 48, 120);
         }
 
-        storeOverlaysRef.current.forEach(({ id, overlay }) => {
-          const root = overlay.getContent() as HTMLElement | undefined;
-          const el = root?.querySelector("[data-store-label]") as HTMLElement | null;
-          if (!el) return;
-          el.textContent =
-            mapPinLabelsRef.current[id] ?? storesWithCoords.find((s) => s.id === id)?.name ?? "";
-        });
+        const updateStoreLabels = () => {
+          storeOverlaysRef.current.forEach(({ id, overlay }) => {
+            const root = overlay.getContent() as HTMLElement | undefined;
+            const el = root?.querySelector("[data-store-label]") as HTMLElement | null;
+            if (!el) return;
+            el.textContent =
+              mapPinLabelsRef.current[id] ?? storesWithCoordsRef.current.find((s: any) => s.id === id)?.name ?? "";
+          });
+        };
+        updateStoreLabels();
 
         if (typeof map.relayout === "function") {
           requestAnimationFrame(() => {
@@ -1770,6 +1775,31 @@ const Main = () => {
           });
         };
 
+        // 매장 목록만 바뀔 때(검색 등) 지도 재생성 없이 핀만 교체
+        rebuildStoreOverlaysRef.current = () => {
+          if (isCancelled) return;
+          storeOverlaysRef.current.forEach(({ overlay }) => { try { overlay.setMap(null); } catch {} });
+          storeOverlaysRef.current = [];
+          clusterOverlaysRef.current.forEach((o) => { try { o.setMap(null); } catch {} });
+          clusterOverlaysRef.current = [];
+          storesWithCoordsRef.current.forEach((store: any) => {
+            const position = new kakao.maps.LatLng(store.lat, store.lon);
+            const content = buildStorePin(store, kakao);
+            const overlay = new kakao.maps.CustomOverlay({
+              map,
+              position,
+              content,
+              xAnchor: 0.5,
+              yAnchor: 0,
+              zIndex: 10,
+              clickable: true,
+            });
+            storeOverlaysRef.current.push({ id: store.id, overlay });
+          });
+          updateStoreLabels();
+          setTimeout(() => { if (!isCancelled) updateClusters(); }, 100);
+        };
+
         kakao.maps.event.addListener(map, "idle", updateClusters);
         setTimeout(() => { if (!isCancelled) updateClusters(); }, 400);
 
@@ -1788,17 +1818,27 @@ const Main = () => {
 
     return () => {
       isCancelled = true;
+      rebuildStoreOverlaysRef.current = null;
       if (readyTimer !== null) clearTimeout(readyTimer);
       mapInstanceRef.current = null;
+      storeOverlaysRef.current.forEach(({ overlay }) => { try { overlay.setMap(null); } catch {} });
       storeOverlaysRef.current = [];
       clusterOverlaysRef.current.forEach((o) => { try { o.setMap(null); } catch {} });
       clusterOverlaysRef.current = [];
-      overlays.forEach((o) => o.setMap(null));
+      overlays.forEach((o) => { try { o.setMap(null); } catch {} });
       if (mapContainerRef.current) {
         mapContainerRef.current.innerHTML = "";
       }
     };
-  }, [isMapView, storesWithCoords, currentCoords]);
+  }, [isMapView, currentCoords]);
+
+  // storesWithCoords 변경 시 ref 업데이트 + 지도 핀 교체 (지도 재생성 없음)
+  useEffect(() => {
+    storesWithCoordsRef.current = storesWithCoords;
+    if (isMapView && mapInstanceRef.current) {
+      rebuildStoreOverlaysRef.current?.();
+    }
+  }, [isMapView, storesWithCoords]);
 
   useEffect(() => {
     if (!isMapView) return;
