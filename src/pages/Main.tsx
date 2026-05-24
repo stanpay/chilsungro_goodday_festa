@@ -51,7 +51,8 @@ type StoreFilterChipId =
   | "localCurrency"
   | "restaurant"
   | "cafe"
-  | "other";
+  | "other"
+  | "openNow";
 
 const STORE_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
   "all",
@@ -60,6 +61,7 @@ const STORE_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
   "restaurant",
   "cafe",
   "other",
+  "openNow",
 ];
 
 function inferChainImageFromPlaceName(placeName: string): string | null {
@@ -194,7 +196,7 @@ const Main = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [storeFilterChips, setStoreFilterChips] = useState<Set<StoreFilterChipId>>(
-    () => new Set<StoreFilterChipId>(["all"])
+    () => new Set<StoreFilterChipId>(["all", "openNow"])
   );
   const { locale, setLocale } = useAppLocale();
   const [showTutorialModal, setShowTutorialModal] = useState(false);
@@ -1438,13 +1440,23 @@ const Main = () => {
     restaurant: t.chipRestaurant,
     cafe: t.chipCafe,
     other: t.chipOther,
+    openNow: t.chipOpenNow,
   };
 
   const toggleStoreFilterChip = (id: StoreFilterChipId) => {
     setStoreFilterChips((prev) => {
       const next = new Set(prev);
+      // openNow는 카테고리 칩과 독립적으로 토글
+      if (id === "openNow") {
+        if (next.has("openNow")) next.delete("openNow");
+        else next.add("openNow");
+        return next;
+      }
       if (id === "all") {
-        return new Set<StoreFilterChipId>(["all"]);
+        next.delete("all");
+        next.add("all");
+        // openNow 유지
+        return next;
       }
       next.delete("all");
       if (next.has(id)) {
@@ -1452,9 +1464,9 @@ const Main = () => {
       } else {
         next.add(id);
       }
-      if (next.size === 0) {
-        return new Set<StoreFilterChipId>(["all"]);
-      }
+      // 카테고리 칩이 하나도 없으면 "all"로 복귀 (openNow는 제외하고 계산)
+      const categoryChips = new Set([...next].filter((c) => c !== "openNow"));
+      if (categoryChips.size === 0) next.add("all");
       return next;
     });
   };
@@ -1476,6 +1488,9 @@ const Main = () => {
                 : "border-border bg-card text-foreground hover:bg-muted/80"
             )}
           >
+            {id === "openNow" && (
+              <span className={cn("mr-1 inline-block h-1.5 w-1.5 rounded-full", active ? "bg-green-300" : "bg-green-500")} />
+            )}
             {chipLabelMap[id]}
           </button>
         );
@@ -1498,10 +1513,12 @@ const Main = () => {
     [filteredStores, storeFilterChips]
   );
 
-  // 영업 종료 매장 자동 필터 (isOpen이 명시적으로 false인 경우만 제외)
+  // openNow 칩이 켜진 경우에만 영업중 필터 적용
   const openStores = useMemo(() =>
-    chipFilteredStores.filter((store) => store.isOpen !== false),
-    [chipFilteredStores]
+    storeFilterChips.has("openNow")
+      ? chipFilteredStores.filter((store) => store.isOpen !== false)
+      : chipFilteredStores,
+    [chipFilteredStores, storeFilterChips]
   );
 
   const storesWithLogoImage = useMemo(() =>
@@ -1517,12 +1534,12 @@ const Main = () => {
   );
 
   const storesWithCoords = useMemo(() =>
-    [...chipFilteredStores]
+    [...openStores]
       .filter((store) => typeof store.lat === "number" && typeof store.lon === "number")
       .sort((a, b) =>
         sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
       ),
-    [chipFilteredStores, sortBy]
+    [openStores, sortBy]
   );
 
   useEffect(() => {
