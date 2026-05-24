@@ -23,6 +23,7 @@ import MainPromoBanner from "@/components/MainPromoBanner";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useRef, useMemo } from "react";
+import type { CSSProperties } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { paymentHistoryApi } from "@/api/paymentHistory";
@@ -1434,6 +1435,35 @@ const Main = () => {
   const t = mainStrings(locale);
   const h = headerStrings(locale);
   const headerLocationLine = useTranslatedAddressLine(currentLocation, locale);
+  const headerLocationText = isLoadingLocation
+    ? h.checkingLocation
+    : `${isManualLocation ? h.manualLocationLabel : h.currentLocationLabel}: ${headerLocationLine}`;
+  const headerLocationTextContainerRef = useRef<HTMLSpanElement>(null);
+  const headerLocationTextRef = useRef<HTMLSpanElement>(null);
+  const [headerLocationMarqueeDistance, setHeaderLocationMarqueeDistance] = useState(0);
+
+  useEffect(() => {
+    const container = headerLocationTextContainerRef.current;
+    const text = headerLocationTextRef.current;
+    if (!container || !text) return;
+
+    const updateMarqueeDistance = () => {
+      setHeaderLocationMarqueeDistance(Math.max(0, text.scrollWidth - container.clientWidth));
+    };
+
+    updateMarqueeDistance();
+
+    if (!("ResizeObserver" in window)) {
+      window.addEventListener("resize", updateMarqueeDistance);
+      return () => window.removeEventListener("resize", updateMarqueeDistance);
+    }
+
+    const observer = new ResizeObserver(updateMarqueeDistance);
+    observer.observe(container);
+    observer.observe(text);
+
+    return () => observer.disconnect();
+  }, [headerLocationText]);
 
   const chipLabelMap: Record<StoreFilterChipId, string> = {
     all: t.chipAll,
@@ -1920,20 +1950,36 @@ const Main = () => {
             <div className="flex items-center gap-2 w-full">
               <Button 
                 variant="outline" 
-                className="group flex-1 justify-start h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
+                className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border-border/50 hover:border-primary/50 transition-colors"
                 disabled={isLoadingLocation}
                 onClick={() => navigate('/location')}
               >
-                <div className="flex min-w-0 items-center overflow-hidden">
+                <div className="flex w-full min-w-0 items-center overflow-hidden">
                   {isLoadingLocation ? (
                     <Loader2 className="w-5 h-5 mr-2 shrink-0 text-primary animate-spin" />
                   ) : (
                     <MapPin className="w-5 h-5 mr-2 shrink-0 text-primary group-hover:text-white transition-colors" />
                   )}
-                  <span className="truncate font-medium">
-                    {isLoadingLocation
-                      ? h.checkingLocation
-                      : `${isManualLocation ? h.manualLocationLabel : h.currentLocationLabel}: ${headerLocationLine}`}
+                  <span
+                    ref={headerLocationTextContainerRef}
+                    className="block min-w-0 overflow-hidden font-medium"
+                  >
+                    <span
+                      ref={headerLocationTextRef}
+                      className={cn(
+                        "block whitespace-nowrap",
+                        headerLocationMarqueeDistance > 0 ? "marquee-on-overflow" : "truncate"
+                      )}
+                      style={
+                        headerLocationMarqueeDistance > 0
+                          ? ({
+                              "--marquee-distance": `${headerLocationMarqueeDistance}px`,
+                            } as CSSProperties)
+                          : undefined
+                      }
+                    >
+                      {headerLocationText}
+                    </span>
                   </span>
                 </div>
               </Button>

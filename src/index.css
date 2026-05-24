@@ -10,6 +10,26 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .marquee-on-overflow {
+    display: inline-block;
+    white-space: nowrap;
+    animation: marquee-x 9s ease-in-out infinite;
+  }
+}
+
+@keyframes marquee-x {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+  72%,
+  82% {
+    transform: translateX(calc(-1 * var(--marquee-distance, 0px)));
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
@@ -89,6 +109,7 @@ All colors MUST be HSL.
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -96,6 +117,18 @@ All colors MUST be HSL.
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     font-variation-settings: normal;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
   }
 
   /* Prevent passive event listener warnings */
@@ -113,6 +146,11 @@ All colors MUST be HSL.
     pointer-events: none;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  a {
+    -webkit-user-drag: none;
   }
 }
 

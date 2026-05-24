@@ -139,11 +139,11 @@ const PwaInstallPrompt = () => {
   if (step === "popup") {
     return (
       <div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 px-4">
-        <div className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5 animate-in slide-in-from-bottom-4 duration-300">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5 animate-in slide-in-from-bottom-4 duration-300">
           {/* 오늘하루 보지 않기 */}
           <button
             onClick={handleDismissToday}
-            className="absolute right-4 top-4 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            className="ml-auto mb-4 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
             aria-label="오늘하루 보지 않기"
           >
             오늘하루 보지 않기
@@ -151,7 +151,7 @@ const PwaInstallPrompt = () => {
           </button>
 
           {/* 앱 정보 */}
-          <div className="flex items-center gap-3 mb-4 pr-28">
+          <div className="mb-4 flex items-center gap-3">
             <img
               src="/favicon.png"
               alt="스탠"
@@ -160,7 +160,7 @@ const PwaInstallPrompt = () => {
             <div className="min-w-0">
               <p className="font-bold text-base text-foreground">홈 화면 추가</p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                홈 화면에 추가 하시면 앱처럼<br />빠르게 이용할 수 있어요
+                홈 화면에 추가하시면 앱처럼 빠르게 이용할 수 있어요
               </p>
             </div>
           </div>

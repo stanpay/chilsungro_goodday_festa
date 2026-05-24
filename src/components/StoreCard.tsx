@@ -115,29 +115,15 @@ const StoreCard = ({
       onClick={handleClick}
       className={cn(
         "relative h-full",
-        disabled && "opacity-50 cursor-not-allowed",
-        isHighlighted && "animate-pulse"
+        disabled && "opacity-50 cursor-not-allowed"
       )}
     >
       <Card
         className={cn(
-          "relative h-full overflow-hidden transition-all duration-300 bg-card border-border/50",
-          !disabled && "cursor-pointer hover:shadow-lg hover:-translate-y-1",
-          isHighlighted && "border-4 border-primary shadow-[0_0_20px_rgba(var(--primary),0.5)]"
+          "relative h-full overflow-hidden bg-card border-border/50",
+          !disabled && "cursor-pointer"
         )}
       >
-        {isHighlighted && (
-          <>
-            <div
-              className="absolute inset-0 bg-primary/20 animate-pulse pointer-events-none rounded-lg"
-              aria-hidden="true"
-            />
-            {/* 터치 유도 회색 동그라미 - 카드의 펄스(밝기 변화)와 별도로 동작하도록 타이밍 조절 */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 translate-x-12">
-              <div className="w-8 h-8 bg-gray-600/60 rounded-full animate-[pulse_1.5s_infinite_500ms] backdrop-blur-sm border-2 border-white/40 shadow-inner" />
-            </div>
-          </>
-        )}
         <div className="flex flex-col">
           <div className="flex-1 bg-primary/10 flex items-center justify-center p-4 relative overflow-hidden" style={{ minHeight: 96 }}>
             {/* 비브랜드 매장: 더미 사진 배경 */}
@@ -194,7 +180,7 @@ const StoreCard = ({
                 />
                 {isOpen ? (
                   <span className="text-green-600 dark:text-green-400 font-medium">
-                    {todayHours ? `${todayHours.close}까지` : "영업중"}
+                    영업중
                   </span>
                 ) : (
                   <span className="text-muted-foreground">
