@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { X, Share, Download } from "lucide-react";
+import { X, Share } from "lucide-react";
+
+const SESSION_KEY = "pwa-prompt-shown";
+const DISMISS_KEY = "pwa-prompt-dismissed-until";
 
 function isInStandaloneMode() {
   return (
@@ -13,83 +16,148 @@ function isIosSafari() {
   return /iphone|ipad|ipod/i.test(ua) && /safari/i.test(ua) && !/crios|fxios/i.test(ua);
 }
 
+function isDismissedToday(): boolean {
+  const until = localStorage.getItem(DISMISS_KEY);
+  if (!until) return false;
+  return Date.now() < parseInt(until, 10);
+}
+
+function dismissForToday() {
+  localStorage.setItem(DISMISS_KEY, String(Date.now() + 24 * 60 * 60 * 1000));
+}
+
+type Step = "popup" | "ios-guide" | null;
+
 const PwaInstallPrompt = () => {
-  const [showIos, setShowIos] = useState(false);
+  const [step, setStep] = useState<Step>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showChromium, setShowChromium] = useState(false);
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
     if (isInStandaloneMode()) return;
+    if (isDismissedToday()) return;
+    if (sessionStorage.getItem(SESSION_KEY)) return;
 
     if (isIosSafari()) {
-      setShowIos(true);
+      setIsIos(true);
+      setStep("popup");
+      sessionStorage.setItem(SESSION_KEY, "1");
       return;
     }
 
-    // Chromium 계열: beforeinstallprompt 캡처 → 커스텀 배너 표시
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShowChromium(true);
+      setStep("popup");
+      sessionStorage.setItem(SESSION_KEY, "1");
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  const handleInstall = async () => {
+  const handleDismissToday = () => {
+    dismissForToday();
+    setStep(null);
+  };
+
+  const handleNo = () => {
+    setStep(null);
+  };
+
+  const handleYes = async () => {
+    if (isIos) {
+      setStep("ios-guide");
+      return;
+    }
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     setDeferredPrompt(null);
-    if (outcome === "accepted") setShowChromium(false);
+    if (outcome === "accepted") setStep(null);
   };
 
-  if (!showIos && !showChromium) return null;
-
-  return (
-    <div className="fixed bottom-20 left-0 right-0 z-[200] mx-auto max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
-      <div className="rounded-2xl border border-border bg-card shadow-xl p-4">
-        <div className="flex items-start gap-3">
-          <img
-            src="/favicon.png"
-            alt="스탠"
-            className="h-12 w-12 rounded-xl shrink-0 object-contain border border-border/40"
-          />
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm text-foreground">스탠 앱 설치</p>
-            {showIos ? (
+  if (step === "ios-guide") {
+    return (
+      <div className="fixed bottom-20 left-0 right-0 z-[200] mx-auto max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
+        <div className="rounded-2xl border border-border bg-card shadow-xl p-4">
+          <div className="flex items-start gap-3">
+            <img
+              src="/favicon.png"
+              alt="스탠"
+              className="h-10 w-10 rounded-xl shrink-0 object-contain border border-border/40"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-foreground">홈 화면에 추가하기</p>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                 하단의{" "}
                 <Share className="inline h-3.5 w-3.5 mx-0.5 align-text-bottom" />{" "}
-                공유 버튼을 누른 후{" "}
-                <strong>"홈 화면에 추가"</strong>를 선택하세요.
+                공유 버튼 →{" "}
+                <strong>"홈 화면에 추가"</strong> 선택
               </p>
-            ) : (
-              <p className="text-xs text-muted-foreground mt-1">
-                홈 화면에 추가하면 더 빠르게 사용할 수 있어요
-              </p>
-            )}
+            </div>
+            <button
+              onClick={() => setStep(null)}
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={() => { setShowIos(false); setShowChromium(false); }}
-            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="닫기"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
-        {showChromium && (
-          <button
-            onClick={handleInstall}
-            className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
-          >
-            <Download className="h-4 w-4" />
-            설치하기
-          </button>
-        )}
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (step === "popup") {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 px-4">
+        <div className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5 animate-in slide-in-from-bottom-4 duration-300">
+          {/* 오늘 하루 보지 않기 */}
+          <button
+            onClick={handleDismissToday}
+            className="absolute right-4 top-4 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="오늘 하루 보지 않기"
+          >
+            오늘 하루 보지 않기
+            <X className="h-3.5 w-3.5" />
+          </button>
+
+          {/* 앱 정보 */}
+          <div className="flex items-center gap-3 mb-4 pr-28">
+            <img
+              src="/favicon.png"
+              alt="스탠"
+              className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
+            />
+            <div className="min-w-0">
+              <p className="font-bold text-base text-foreground">스탠 앱 설치</p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                홈 화면에 추가하면 앱처럼<br />빠르게 이용할 수 있어요
+              </p>
+            </div>
+          </div>
+
+          {/* 버튼 */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleNo}
+              className="flex-1 rounded-xl border border-border bg-muted/60 py-2.5 text-sm font-medium text-foreground hover:bg-muted active:opacity-70 transition-opacity"
+            >
+              아니오
+            </button>
+            <button
+              onClick={handleYes}
+              className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
+            >
+              예
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 };
 
 export default PwaInstallPrompt;
