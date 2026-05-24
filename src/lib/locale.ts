@@ -82,7 +82,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     searchPlaceholder: "Search stores...",
     storesHeading: "Stores you can pay at",
     chipAll: "All",
-    chipChilsungro: "Old town coupon",
+    chipChilsungro: "Jeju Old Town coupon",
     chipLocalCurrency: "Local currency",
     chipRestaurant: "Restaurant",
     chipCafe: "Cafe",
@@ -107,7 +107,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     searchPlaceholder: "搜索门店...",
     storesHeading: "可付款门店",
     chipAll: "全部",
-    chipChilsungro: "原都心优惠券",
+    chipChilsungro: "济州旧城区优惠券",
     chipLocalCurrency: "地区货币",
     chipRestaurant: "餐厅",
     chipCafe: "咖啡厅",
@@ -132,7 +132,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     searchPlaceholder: "店舗を検索...",
     storesHeading: "支払い可能な店舗",
     chipAll: "すべて",
-    chipChilsungro: "旧市街クーポン",
+    chipChilsungro: "済州旧市街クーポン",
     chipLocalCurrency: "地域通貨",
     chipRestaurant: "飲食店",
     chipCafe: "カフェ",
@@ -323,4 +323,107 @@ const PARKING_SIZE: Record<string, Record<AppLocale, string>> = {
 
 export function parkingSizeLabel(locale: AppLocale, size: string): string {
   return PARKING_SIZE[size]?.[locale] ?? size;
+}
+
+type ChatSupportCopy = {
+  title: string;
+  subtitle: string;
+  greeting: string;
+  autoReply: string;
+  inputPlaceholder: string;
+  pageSuffix: string;
+  sendErrorTitle: string;
+  sendErrorDesc: string;
+  pageNames: Record<string, string>;
+};
+
+const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
+  ko: {
+    title: "1:1 상담",
+    subtitle: "스탠 고객지원팀",
+    greeting: "안녕하세요! 스탠 고객지원팀입니다. 무엇을 도와드릴까요?",
+    autoReply: "문의해주셔서 감사합니다. 담당자가 확인 후 빠른 시일 내에 답변드리겠습니다.",
+    inputPlaceholder: "메시지를 입력하세요...",
+    pageSuffix: "페이지",
+    sendErrorTitle: "메시지 저장 실패",
+    sendErrorDesc: "메시지 저장 중 오류가 발생했습니다.",
+    pageNames: {
+      "/": "메인",
+      "/main": "메인",
+      "/location": "위치 설정",
+      "/sell": "판매하기",
+      "/payment": "결제",
+      "/mypage": "마이페이지",
+      "/my-gifticons": "내 기프티콘",
+      "/history": "결제 내역",
+      "/payment-methods": "결제 수단",
+    },
+  },
+  en: {
+    title: "1:1 Support",
+    subtitle: "Stan Support Team",
+    greeting: "Hello! This is the Stan support team. How can we help you?",
+    autoReply: "Thank you for your inquiry. Our team will review it and get back to you as soon as possible.",
+    inputPlaceholder: "Type a message...",
+    pageSuffix: "page",
+    sendErrorTitle: "Failed to send message",
+    sendErrorDesc: "An error occurred while sending your message.",
+    pageNames: {
+      "/": "Main",
+      "/main": "Main",
+      "/location": "Location",
+      "/sell": "Sell",
+      "/payment": "Payment",
+      "/mypage": "My Page",
+      "/my-gifticons": "My Gifticons",
+      "/history": "History",
+      "/payment-methods": "Payment Methods",
+    },
+  },
+  zh: {
+    title: "1:1 客服",
+    subtitle: "斯坦客服团队",
+    greeting: "您好！这里是斯坦客服团队，请问有什么可以帮您？",
+    autoReply: "感谢您的咨询。我们的团队将尽快确认并回复您。",
+    inputPlaceholder: "请输入消息...",
+    pageSuffix: "页面",
+    sendErrorTitle: "消息发送失败",
+    sendErrorDesc: "发送消息时发生错误。",
+    pageNames: {
+      "/": "主页",
+      "/main": "主页",
+      "/location": "位置设置",
+      "/sell": "出售",
+      "/payment": "付款",
+      "/mypage": "我的主页",
+      "/my-gifticons": "我的礼品券",
+      "/history": "付款记录",
+      "/payment-methods": "付款方式",
+    },
+  },
+  ja: {
+    title: "1:1 サポート",
+    subtitle: "スタンサポートチーム",
+    greeting: "こんにちは！スタンサポートチームです。どのようなご用件でしょうか？",
+    autoReply: "お問い合わせありがとうございます。担当者が確認後、できる限り早くご回答いたします。",
+    inputPlaceholder: "メッセージを入力してください...",
+    pageSuffix: "ページ",
+    sendErrorTitle: "メッセージ送信失敗",
+    sendErrorDesc: "メッセージの送信中にエラーが発生しました。",
+    pageNames: {
+      "/": "メイン",
+      "/main": "メイン",
+      "/location": "位置設定",
+      "/sell": "売る",
+      "/payment": "決済",
+      "/mypage": "マイページ",
+      "/my-gifticons": "マイギフティコン",
+      "/history": "決済履歴",
+      "/payment-methods": "決済手段",
+    },
+  },
+};
+
+export function chatSupportStrings(locale: AppLocale): ChatSupportCopy {
+  return CHAT_SUPPORT_COPY[locale];
 }

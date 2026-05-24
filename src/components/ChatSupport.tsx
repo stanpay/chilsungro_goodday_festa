@@ -8,6 +8,8 @@ import { useLocation } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendSupportMessage } from "@/hooks/use-support";
+import { useAppLocale } from "@/contexts/AppLocaleContext";
+import { chatSupportStrings } from "@/lib/locale";
 
 interface Message {
   id: number;
@@ -21,34 +23,30 @@ const ChatSupport = () => {
   const chatRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const isTutorial = location.pathname.includes("/tutorial");
+  const { locale } = useAppLocale();
+  const t = chatSupportStrings(locale);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      text: "안녕하세요! 스탠 고객지원팀입니다. 무엇을 도와드릴까요?\n\n문제 발생 시 010-8767-5708로 연락주세요",
-      sender: "support",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [includeCurrentPage, setIncludeCurrentPage] = useState(true);
 
   const sendMessage = useSendSupportMessage();
 
+  // 언어가 바뀌면 초기 메시지도 해당 언어로 갱신
+  useEffect(() => {
+    setMessages([
+      {
+        id: 1,
+        text: t.greeting,
+        sender: "support",
+        timestamp: new Date(),
+      },
+    ]);
+  }, [locale]);
+
   const getPageName = (path: string) => {
-    const pageNames: Record<string, string> = {
-      "/": "메인",
-      "/main": "메인",
-      "/location": "위치 설정",
-      "/sell": "판매하기",
-      "/payment": "결제",
-      "/mypage": "마이페이지",
-      "/my-gifticons": "내 기프티콘",
-      "/history": "결제 내역",
-      "/payment-methods": "결제 수단",
-    };
     const basePath = "/" + path.split("/")[1];
-    return pageNames[basePath] || pageNames[path] || "기타";
+    return t.pageNames[basePath] ?? t.pageNames[path] ?? t.pageNames["/"]?.replace(/.*/, "") ?? "기타";
   };
 
   const currentPageName = getPageName(location.pathname);
@@ -87,7 +85,7 @@ const ChatSupport = () => {
       });
     } catch (error) {
       console.error("Error:", error);
-      toast({ title: "메시지 저장 실패", description: "메시지 저장 중 오류가 발생했습니다.", variant: "destructive" });
+      toast({ title: t.sendErrorTitle, description: t.sendErrorDesc, variant: "destructive" });
     }
 
     setTimeout(() => {
@@ -95,7 +93,7 @@ const ChatSupport = () => {
         ...prev,
         {
           id: prev.length + 1,
-          text: "문의해주셔서 감사합니다. 담당자가 확인 후 빠른 시일 내에 답변드리겠습니다.",
+          text: t.autoReply,
           sender: "support",
           timestamp: new Date(),
         },
@@ -124,8 +122,8 @@ const ChatSupport = () => {
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
               <div>
-                <h3 className="font-semibold">1:1 상담</h3>
-                <p className="text-xs opacity-90">스탠 고객지원팀</p>
+                <h3 className="font-semibold">{t.title}</h3>
+                <p className="text-xs opacity-90">{t.subtitle}</p>
               </div>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-primary-foreground hover:bg-primary-foreground/20">
@@ -140,7 +138,7 @@ const ChatSupport = () => {
                   <div className={`max-w-[80%] rounded-lg p-3 ${message.sender === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
                     <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                     <p className="text-xs opacity-70 mt-1">
-                      {message.timestamp.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                      {message.timestamp.toLocaleTimeString(locale === "ko" ? "ko-KR" : locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                 </div>
@@ -149,8 +147,12 @@ const ChatSupport = () => {
           </ScrollArea>
 
           <div className="px-4 py-2 border-t border-border">
-            <Badge variant={includeCurrentPage ? "default" : "outline"} className="cursor-pointer" onClick={() => setIncludeCurrentPage(!includeCurrentPage)}>
-              {currentPageName} 페이지 {includeCurrentPage ? "✓" : ""}
+            <Badge
+              variant={includeCurrentPage ? "default" : "outline"}
+              className="cursor-pointer"
+              onClick={() => setIncludeCurrentPage(!includeCurrentPage)}
+            >
+              {currentPageName} {t.pageSuffix} {includeCurrentPage ? "✓" : ""}
             </Badge>
           </div>
 
@@ -160,7 +162,7 @@ const ChatSupport = () => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="메시지를 입력하세요..."
+                placeholder={t.inputPlaceholder}
                 className="flex-1 min-h-[80px] resize-none"
               />
               <Button onClick={handleSend} size="icon" disabled={sendMessage.isPending}>
