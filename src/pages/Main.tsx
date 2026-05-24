@@ -1482,36 +1482,46 @@ const Main = () => {
   );
 
   // 검색어로 필터링
-  const filteredStores = searchQuery.trim()
-    ? stores.filter(store => 
-        store.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : stores;
+  const filteredStores = useMemo(() =>
+    searchQuery.trim()
+      ? stores.filter(store =>
+          store.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : stores,
+    [stores, searchQuery]
+  );
 
-  const chipFilteredStores = filteredStores.filter((store) =>
-    storeMatchesChipFilters(store, storeFilterChips)
+  const chipFilteredStores = useMemo(() =>
+    filteredStores.filter((store) => storeMatchesChipFilters(store, storeFilterChips)),
+    [filteredStores, storeFilterChips]
   );
 
   // 영업 종료 매장 자동 필터 (isOpen이 명시적으로 false인 경우만 제외)
-  const openStores = chipFilteredStores.filter((store) => store.isOpen !== false);
-
-  const storesWithLogoImage = openStores.filter((store) =>
-    STORE_CARD_LOGO_IMAGE_KEYS.has(store.image)
+  const openStores = useMemo(() =>
+    chipFilteredStores.filter((store) => store.isOpen !== false),
+    [chipFilteredStores]
   );
 
-  const sortedStores = [...storesWithLogoImage].sort((a, b) => {
-    if (sortBy === "distance") {
-      return a.distanceNum - b.distanceNum;
-    } else {
-      return b.discountNum - a.discountNum;
-    }
-  });
+  const storesWithLogoImage = useMemo(() =>
+    openStores.filter((store) => STORE_CARD_LOGO_IMAGE_KEYS.has(store.image)),
+    [openStores]
+  );
 
-  const storesWithCoords = [...openStores]
-    .filter((store) => typeof store.lat === "number" && typeof store.lon === "number")
-    .sort((a, b) =>
+  const sortedStores = useMemo(() =>
+    [...storesWithLogoImage].sort((a, b) =>
       sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
-    );
+    ),
+    [storesWithLogoImage, sortBy]
+  );
+
+  const storesWithCoords = useMemo(() =>
+    [...openStores]
+      .filter((store) => typeof store.lat === "number" && typeof store.lon === "number")
+      .sort((a, b) =>
+        sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
+      ),
+    [openStores, sortBy]
+  );
 
   useEffect(() => {
     if (!isMapView || !mapContainerRef.current) return;
