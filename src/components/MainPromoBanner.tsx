@@ -35,14 +35,22 @@ function BannerSlide({
   const title = getBannerText(banner.title, locale);
   const description = getBannerText(banner.description, locale);
   const imageAlt = getBannerText(banner.imageAlt, locale) || title;
+  const imageCtaLabel = getBannerText(banner.imageCtaLabel, locale) || "길찾기";
 
   const content = banner.imageUrl ? (
-    <img
-      src={banner.imageUrl}
-      alt={imageAlt}
-      className="h-full w-full object-cover"
-      loading="lazy"
-    />
+    <div className="relative h-full w-full bg-card">
+      <img
+        src={banner.imageUrl}
+        alt={imageAlt}
+        className="h-full w-full object-cover"
+        loading="lazy"
+      />
+      {banner.href ? (
+        <span className="absolute bottom-2 right-2 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg">
+          {imageCtaLabel}
+        </span>
+      ) : null}
+    </div>
   ) : (
     <div
       className={cn(
@@ -113,7 +121,7 @@ export default function MainPromoBanner({
 
   if (banners.length === 1) {
     return (
-      <div className={cn("mb-4 aspect-[3.2/1] w-full overflow-hidden", className)}>
+      <div className={cn("mb-4 aspect-[2.39/1] w-full overflow-hidden", className)}>
         <BannerSlide banner={banners[0]} locale={locale} />
       </div>
     );
@@ -129,7 +137,7 @@ export default function MainPromoBanner({
         <CarouselContent className="-ml-0">
           {banners.map((banner) => (
             <CarouselItem key={banner.id} className="basis-full pl-0">
-              <div className="aspect-[3.2/1] w-full overflow-hidden">
+              <div className="aspect-[2.39/1] w-full overflow-hidden">
                 <BannerSlide banner={banner} locale={locale} />
               </div>
             </CarouselItem>
