@@ -2096,6 +2096,7 @@ const Main = () => {
                 size="sm"
                 onClick={() => setSortBy(sortBy === "distance" ? "discount" : "distance")}
                 className="flex shrink-0 items-center gap-2"
+                style={{backgroundColor:"white", color:"#26222A"}}
               >
                 <ArrowUpDown className="w-4 h-4" />
                 {sortBy === "distance" ? t.sortDistance : t.sortDiscount}
