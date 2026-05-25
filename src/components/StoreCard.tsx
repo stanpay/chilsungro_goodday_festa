@@ -163,16 +163,16 @@ const StoreCard = ({
             <AutoFitMarquee
               as="h3"
               text={displayName}
-              className="mb-1"
-              textClassName="font-bold"
-              fontSizeClasses={["text-base", "text-sm", "text-xs"]}
+              className="mb-1 h-6"
+              textClassName="font-bold !leading-6"
+              fontSizeClasses={["text-base", "text-sm"]}
             />
-            <div className="flex items-center text-xs text-muted-foreground mb-1.5">
+            <div className="mb-1.5 flex h-4 items-center text-xs text-muted-foreground">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <AutoFitMarquee
                 text={distance}
                 className="flex-1"
-                textClassName="text-muted-foreground"
+                textClassName="text-muted-foreground !leading-4"
                 fontSizeClasses={["text-xs"]}
               />
             </div>
