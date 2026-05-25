@@ -111,10 +111,17 @@ const StoreCard = ({
       }
 
       const smallWidth = measure("text-sm");
-      const smallOverflow = smallWidth - containerWidth;
-      setNameFontSizeClass("text-sm");
+      if (smallWidth <= containerWidth + NAME_MARQUEE_TOLERANCE_PX) {
+        setNameFontSizeClass("text-sm");
+        setNameMarqueeDistance(0);
+        return;
+      }
+
+      const extraSmallWidth = measure("text-xs");
+      const extraSmallOverflow = extraSmallWidth - containerWidth;
+      setNameFontSizeClass("text-xs");
       setNameMarqueeDistance(
-        smallOverflow > NAME_MARQUEE_TOLERANCE_PX ? smallOverflow : 0
+        extraSmallOverflow > NAME_MARQUEE_TOLERANCE_PX ? extraSmallOverflow : 0
       );
     };
 
