@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { TouchEvent } from "react";
 import { X, Share } from "lucide-react";
+import { useAppLocale } from "@/contexts/AppLocaleContext";
+import { pwaInstallStrings } from "@/lib/locale";
 
 const PROMPT_STORAGE_PREFIX = `pwa-prompt:${__APP_BUILD_ID__}`;
 const SESSION_KEY = `${PROMPT_STORAGE_PREFIX}:shown`;
@@ -35,6 +37,8 @@ function dismissForToday() {
 type Step = "popup" | "ios-guide" | null;
 
 const PwaInstallPrompt = () => {
+  const { locale } = useAppLocale();
+  const t = pwaInstallStrings(locale);
   const [step, setStep] = useState<Step>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIos, setIsIos] = useState(false);
@@ -120,21 +124,21 @@ const PwaInstallPrompt = () => {
           <div className="flex items-start gap-3">
             <img
               src="/favicon.png"
-              alt="스탠"
+              alt={t.appNameAlt}
               className="h-10 w-10 rounded-xl shrink-0 object-contain border border-border/40"
             />
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-foreground">홈 화면에 추가하기</p>
+              <p className="font-bold text-sm text-foreground">{t.iosGuideTitle}</p>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                 <Share className="inline h-3.5 w-3.5 mx-0.5 align-text-bottom" />{" "}
-                공유 버튼 →{" "}
-                <strong>"홈 화면에 추가"</strong> 선택
+                {t.iosGuideShareLabel} →{" "}
+                <strong>"{t.iosGuideMenuItem}"</strong> {t.iosGuideSelectAction}
               </p>
             </div>
             <button
               onClick={() => setStep(null)}
               className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="닫기"
+              aria-label={t.closeAria}
             >
               <X className="h-4 w-4" />
             </button>
@@ -144,7 +148,7 @@ const PwaInstallPrompt = () => {
               onClick={handleDismissToday}
               className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
             >
-              오늘 하루 보지 않기
+              {t.dismissToday}
             </button>
           </div>
         </div>
@@ -162,23 +166,23 @@ const PwaInstallPrompt = () => {
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <img
                   src="/favicon.png"
-                  alt="스탠"
+                  alt={t.appNameAlt}
                   className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
                 />
-                <p className="font-bold text-base text-foreground">홈 화면 추가</p>
+                <p className="font-bold text-base text-foreground">{t.popupTitle}</p>
               </div>
               <button
                 onClick={handleDismissToday}
                 className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                aria-label="오늘 하루 보지 않기"
+                aria-label={t.dismissToday}
               >
-                오늘 하루 보지 않기
+                {t.dismissToday}
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-              <span className="block whitespace-nowrap">홈 화면에 추가하시면 앱처럼</span>
-              <span className="block whitespace-nowrap">빠르게 이용할 수 있어요</span>
+              <span className="block whitespace-nowrap">{t.popupDescriptionLine1}</span>
+              <span className="block whitespace-nowrap">{t.popupDescriptionLine2}</span>
             </p>
           </div>
 
@@ -188,13 +192,13 @@ const PwaInstallPrompt = () => {
               onClick={handleNo}
               className="flex-1 rounded-xl border border-border bg-muted/60 py-2.5 text-sm font-medium text-foreground hover:bg-muted active:opacity-70 transition-opacity"
             >
-              아니오
+              {t.noButton}
             </button>
             <button
               onClick={handleYes}
               className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
             >
-              홈 화면에 추가
+              {t.addButton}
             </button>
           </div>
         </div>

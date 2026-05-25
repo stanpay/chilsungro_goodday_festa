@@ -70,6 +70,7 @@ type MainCopy = {
   chipLocalCurrency: string;
   chipRestaurant: string;
   chipCafe: string;
+  chipShopping: string;
   chipOther: string;
   chipOpenNow: string;
   storeFilterToolbarAria: string;
@@ -99,6 +100,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "지역화폐",
     chipRestaurant: "음식점",
     chipCafe: "카페",
+    chipShopping: "쇼핑",
     chipOther: "기타",
     chipOpenNow: "영업중",
     storeFilterToolbarAria: "매장 유형 필터",
@@ -126,6 +128,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "Local currency",
     chipRestaurant: "Restaurant",
     chipCafe: "Cafe",
+    chipShopping: "Shopping",
     chipOther: "Other",
     chipOpenNow: "Open now",
     storeFilterToolbarAria: "Store type filters",
@@ -153,6 +156,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "地区货币",
     chipRestaurant: "餐厅",
     chipCafe: "咖啡厅",
+    chipShopping: "购物",
     chipOther: "其他",
     chipOpenNow: "营业中",
     storeFilterToolbarAria: "门店类型筛选",
@@ -181,6 +185,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipLocalCurrency: "地域通貨",
     chipRestaurant: "飲食店",
     chipCafe: "カフェ",
+    chipShopping: "ショッピング",
     chipOther: "その他",
     chipOpenNow: "営業中",
     storeFilterToolbarAria: "店舗タイプの絞り込み",
@@ -474,4 +479,82 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
 
 export function chatSupportStrings(locale: AppLocale): ChatSupportCopy {
   return CHAT_SUPPORT_COPY[locale];
+}
+
+type PwaInstallCopy = {
+  appNameAlt: string;
+  popupTitle: string;
+  popupDescriptionLine1: string;
+  popupDescriptionLine2: string;
+  dismissToday: string;
+  closeAria: string;
+  noButton: string;
+  addButton: string;
+  iosGuideTitle: string;
+  iosGuideShareLabel: string;
+  iosGuideMenuItem: string;
+  iosGuideSelectAction: string;
+};
+
+const PWA_INSTALL_COPY: Record<AppLocale, PwaInstallCopy> = {
+  ko: {
+    appNameAlt: "스탠",
+    popupTitle: "홈 화면 추가",
+    popupDescriptionLine1: "홈 화면에 추가하시면 앱처럼",
+    popupDescriptionLine2: "빠르게 이용할 수 있어요",
+    dismissToday: "오늘 하루 보지 않기",
+    closeAria: "닫기",
+    noButton: "아니오",
+    addButton: "홈 화면에 추가",
+    iosGuideTitle: "홈 화면에 추가하기",
+    iosGuideShareLabel: "공유 버튼",
+    iosGuideMenuItem: "홈 화면에 추가",
+    iosGuideSelectAction: "선택",
+  },
+  en: {
+    appNameAlt: "Stan",
+    popupTitle: "Add to Home Screen",
+    popupDescriptionLine1: "Add to your home screen for",
+    popupDescriptionLine2: "a fast, app-like experience",
+    dismissToday: "Don't show today",
+    closeAria: "Close",
+    noButton: "No",
+    addButton: "Add to Home Screen",
+    iosGuideTitle: "Add to Home Screen",
+    iosGuideShareLabel: "Share button",
+    iosGuideMenuItem: "Add to Home Screen",
+    iosGuideSelectAction: "select",
+  },
+  zh: {
+    appNameAlt: "斯坦",
+    popupTitle: "添加到主屏幕",
+    popupDescriptionLine1: "添加到主屏幕后",
+    popupDescriptionLine2: "即可像应用一样快速使用",
+    dismissToday: "今天不再显示",
+    closeAria: "关闭",
+    noButton: "否",
+    addButton: "添加到主屏幕",
+    iosGuideTitle: "添加到主屏幕",
+    iosGuideShareLabel: "分享按钮",
+    iosGuideMenuItem: "添加到主屏幕",
+    iosGuideSelectAction: "选择",
+  },
+  ja: {
+    appNameAlt: "スタン",
+    popupTitle: "ホーム画面に追加",
+    popupDescriptionLine1: "ホーム画面に追加すると",
+    popupDescriptionLine2: "アプリのように素早く利用できます",
+    dismissToday: "今日は表示しない",
+    closeAria: "閉じる",
+    noButton: "いいえ",
+    addButton: "ホーム画面に追加",
+    iosGuideTitle: "ホーム画面に追加",
+    iosGuideShareLabel: "共有ボタン",
+    iosGuideMenuItem: "ホーム画面に追加",
+    iosGuideSelectAction: "を選択",
+  },
+};
+
+export function pwaInstallStrings(locale: AppLocale): PwaInstallCopy {
+  return PWA_INSTALL_COPY[locale];
 }

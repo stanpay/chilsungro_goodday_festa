@@ -1503,7 +1503,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   highOilSupport: t.chipHighOilSupport,
   restaurant: t.chipRestaurant,
   cafe: t.chipCafe,
-  shopping: (t as any).chipShopping ?? "쇼핑",
+  shopping: t.chipShopping,
   other: t.chipOther,
   openNow: t.chipOpenNow,
 };
