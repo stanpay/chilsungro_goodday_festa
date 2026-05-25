@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ElementType } from "react";
 import { cn } from "@/lib/utils";
 
@@ -21,42 +21,38 @@ export function AutoFitMarquee({
   fontSizeClasses = DEFAULT_FONT_SIZE_CLASSES,
 }: AutoFitMarqueeProps) {
   const containerRef = useRef<HTMLElement>(null);
-  const [fontSizeClass, setFontSizeClass] = useState(fontSizeClasses[0]);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const fontSizeKey = fontSizeClasses.join("|");
+  const [fontSizeIndex, setFontSizeIndex] = useState(0);
   const [marqueeDistance, setMarqueeDistance] = useState(0);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    setFontSizeIndex(0);
+    setMarqueeDistance(0);
+  }, [fontSizeKey, text, textClassName]);
 
-    const measureTextWidth = (candidateFontSizeClass: string) => {
-      const probe = document.createElement("span");
-      probe.className = cn("whitespace-nowrap", textClassName, candidateFontSizeClass);
-      probe.textContent = text;
-      probe.style.position = "absolute";
-      probe.style.visibility = "hidden";
-      probe.style.pointerEvents = "none";
-      document.body.appendChild(probe);
-      const width = probe.scrollWidth;
-      probe.remove();
-      return width;
-    };
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const textEl = textRef.current;
+    if (!container || !textEl) return;
 
     const updateLayout = () => {
       const containerWidth = container.clientWidth;
       if (containerWidth <= 0) return;
 
-      const measured = fontSizeClasses.map((candidateFontSizeClass) => ({
-        fontSizeClass: candidateFontSizeClass,
-        width: measureTextWidth(candidateFontSizeClass),
-      }));
-      const fitting = measured.find(({ width }) => width <= containerWidth + OVERFLOW_TOLERANCE_PX);
-      const selected = fitting ?? measured[measured.length - 1];
-      const overflowDistance = selected.width - containerWidth;
+      const overflowDistance = textEl.scrollWidth - containerWidth;
+      if (overflowDistance <= OVERFLOW_TOLERANCE_PX) {
+        setMarqueeDistance(0);
+        return;
+      }
 
-      setFontSizeClass(selected.fontSizeClass);
-      setMarqueeDistance(
-        fitting || overflowDistance <= OVERFLOW_TOLERANCE_PX ? 0 : overflowDistance
-      );
+      if (fontSizeIndex < fontSizeClasses.length - 1) {
+        setMarqueeDistance(0);
+        setFontSizeIndex((index) => Math.min(index + 1, fontSizeClasses.length - 1));
+        return;
+      }
+
+      setMarqueeDistance(overflowDistance);
     };
 
     updateLayout();
@@ -71,11 +67,14 @@ export function AutoFitMarquee({
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [fontSizeClasses, text, textClassName]);
+  }, [fontSizeIndex, fontSizeKey, text, textClassName]);
+
+  const fontSizeClass = fontSizeClasses[fontSizeIndex] ?? fontSizeClasses[0];
 
   return (
     <Tag ref={containerRef} className={cn("block min-w-0 overflow-hidden", className)}>
       <span
+        ref={textRef}
         className={cn(
           "block whitespace-nowrap text-left",
           textClassName,
