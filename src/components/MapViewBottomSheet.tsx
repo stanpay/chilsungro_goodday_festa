@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GripHorizontal, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
@@ -234,12 +234,20 @@ const MapViewBottomSheet = ({
   const moveDrag = (clientY: number) => {
     const d = dragRef.current;
     if (!d?.dragging) return;
-    const delta = d.startY - clientY;
-    const next = Math.round(
-      Math.min(maxHeight, Math.max(PEEK_HEIGHT, d.startH + delta))
-    );
+    const delta = d.startY - clientY; // 양수 = 위로
+    const rawNext = d.startH + delta;
+    const next = Math.round(Math.min(maxHeight, Math.max(PEEK_HEIGHT, rawNext)));
     panelHeightRef.current = next;
     setPanelHeight(next);
+
+    // 피크에서 시작한 드래그: maxHeight 초과분을 스크롤에 직접 반영
+    // (이 시점엔 showContent가 true이므로 scrollBodyRef가 DOM에 존재)
+    if (d.startH <= PEEK_HEIGHT + 2) {
+      const inner = scrollBodyRef.current;
+      if (inner) {
+        inner.scrollTop = Math.max(0, rawNext - maxHeight);
+      }
+    }
   };
 
   /** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
@@ -273,20 +281,6 @@ const MapViewBottomSheet = ({
     panelHeightRef.current = snapped;
     setPanelHeight(snapped);
   };
-
-  // 드래그 중 렌더 직후 스크롤 동기화 (scrollBodyRef가 DOM에 있을 때만 접근 가능)
-  useLayoutEffect(() => {
-    if (!isDragging) return;
-    const inner = scrollBodyRef.current;
-    if (!inner) return;
-    const revealStart = PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
-    if (panelHeight <= revealStart) return;
-    const progress = Math.min(1, (panelHeight - revealStart) / (maxHeight - revealStart));
-    const maxScroll = inner.scrollHeight - inner.clientHeight;
-    if (maxScroll > 0) {
-      inner.scrollTop = progress * Math.min(maxScroll, 120);
-    }
-  }, [panelHeight, isDragging, maxHeight]);
 
   const onPointerDownHandle = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
