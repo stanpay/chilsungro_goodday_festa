@@ -43,7 +43,31 @@ const PwaInstallPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIos, setIsIos] = useState(false);
   const [isSamsung, setIsSamsung] = useState(false);
-  const iosGuideTouchStartY = useRef<number | null>(null);
+  const swipeStartY = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!step) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverscroll = html.style.overscrollBehaviorY;
+    const prevBodyOverscroll = body.style.overscrollBehaviorY;
+    html.style.overscrollBehaviorY = "none";
+    body.style.overscrollBehaviorY = "none";
+
+    const blockPullRefresh = (event: globalThis.TouchEvent) => {
+      if (event.touches.length !== 1 || window.scrollY > 0) return;
+      event.preventDefault();
+    };
+
+    document.addEventListener("touchmove", blockPullRefresh, { passive: false });
+
+    return () => {
+      html.style.overscrollBehaviorY = prevHtmlOverscroll;
+      body.style.overscrollBehaviorY = prevBodyOverscroll;
+      document.removeEventListener("touchmove", blockPullRefresh);
+    };
+  }, [step]);
 
   useEffect(() => {
     if (isInStandaloneMode()) return;
@@ -81,6 +105,10 @@ const PwaInstallPrompt = () => {
     setStep(null);
   };
 
+  const handleClose = () => {
+    setStep(null);
+  };
+
   const handleNo = () => {
     sessionStorage.removeItem(SESSION_KEY);
     setStep(null);
@@ -98,18 +126,28 @@ const PwaInstallPrompt = () => {
     if (outcome === "accepted") setStep(null);
   };
 
-  const handleIosGuideTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    iosGuideTouchStartY.current = event.touches[0]?.clientY ?? null;
+  const handleSwipeStart = (event: TouchEvent<HTMLDivElement>) => {
+    swipeStartY.current = event.touches[0]?.clientY ?? null;
   };
 
-  const handleIosGuideTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
-    const startY = iosGuideTouchStartY.current;
-    iosGuideTouchStartY.current = null;
+  const handleSwipeMove = (event: TouchEvent<HTMLDivElement>) => {
+    const startY = swipeStartY.current;
+    if (startY === null) return;
+
+    const currentY = event.touches[0]?.clientY;
+    if (currentY !== undefined && currentY - startY > 10) {
+      event.preventDefault();
+    }
+  };
+
+  const handleSwipeEnd = (event: TouchEvent<HTMLDivElement>, onDismiss: () => void) => {
+    const startY = swipeStartY.current;
+    swipeStartY.current = null;
     if (startY === null) return;
 
     const endY = event.changedTouches[0]?.clientY;
     if (endY !== undefined && endY - startY > 48) {
-      setStep(null);
+      onDismiss();
     }
   };
 
@@ -117,9 +155,10 @@ const PwaInstallPrompt = () => {
     return (
       <div className="fixed bottom-20 left-0 right-0 z-[200] mx-auto max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
         <div
-          className="rounded-2xl border border-border bg-card shadow-xl p-4"
-          onTouchStart={handleIosGuideTouchStart}
-          onTouchEnd={handleIosGuideTouchEnd}
+          className="touch-none rounded-2xl border border-border bg-card shadow-xl p-4"
+          onTouchStart={handleSwipeStart}
+          onTouchMove={handleSwipeMove}
+          onTouchEnd={(event) => handleSwipeEnd(event, handleClose)}
         >
           <div className="flex items-start gap-3">
             <img
@@ -136,7 +175,7 @@ const PwaInstallPrompt = () => {
               </p>
             </div>
             <button
-              onClick={() => setStep(null)}
+              onClick={handleClose}
               className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
               aria-label={t.closeAria}
             >
@@ -158,8 +197,13 @@ const PwaInstallPrompt = () => {
 
   if (step === "popup") {
     return (
-      <div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 px-4">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl py-3 px-5 animate-in slide-in-from-bottom-4 duration-300">
+      <div className="fixed inset-0 z-[200] flex items-end justify-center overscroll-none pb-24 px-4 touch-none">
+        <div
+          className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl py-3 px-5 animate-in slide-in-from-bottom-4 duration-300"
+          onTouchStart={handleSwipeStart}
+          onTouchMove={handleSwipeMove}
+          onTouchEnd={(event) => handleSwipeEnd(event, handleNo)}
+        >
           {/* 앱 정보 + 오늘 하루 보지 않기 */}
           <div className="mb-4">
             <div className="flex items-start justify-between gap-3">
