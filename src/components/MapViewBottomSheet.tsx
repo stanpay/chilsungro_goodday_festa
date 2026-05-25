@@ -253,7 +253,7 @@ const MapViewBottomSheet = ({
   /** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
   const SLIGHT_EXPAND_FROM_PEEK_PX = 10;
   /** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 */
-  const COLLAPSE_FROM_EXPANDED_PX = 80;
+  const COLLAPSE_FROM_EXPANDED_PX = 30;
 
   const endDrag = () => {
     const d = dragRef.current;
