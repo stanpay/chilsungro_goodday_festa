@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { searchAddress, KakaoSearchResult } from "@/lib/kakao";
 import { getAddressFromCoords } from "@/lib/geocoding";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 interface RecentLocation {
   name: string;
@@ -272,10 +273,13 @@ const Location = () => {
                       <div className="flex items-start">
                         <MapPin className="w-4 h-4 mr-3 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="break-words font-medium">{result.place_name}</p>
-                          <p className="break-words text-sm text-muted-foreground">
-                            {result.road_address_name || result.address_name}
-                          </p>
+                          <AutoFitMarquee text={result.place_name} textClassName="font-medium" />
+                          <AutoFitMarquee
+                            as="p"
+                            text={result.road_address_name || result.address_name}
+                            textClassName="text-muted-foreground"
+                            fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                          />
                           {result.category_name && (
                             <p className="text-xs text-muted-foreground mt-1">
                               {result.category_name}
@@ -309,11 +313,14 @@ const Location = () => {
                   <div className="flex items-start">
                     <MapPin className="w-4 h-4 mr-3 mt-1 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="break-words font-medium">{location.name}</p>
+                      <AutoFitMarquee text={location.name} textClassName="font-medium" />
                       {location.address && location.address !== location.name && (
-                        <p className="break-words text-sm text-muted-foreground">
-                          {location.address}
-                        </p>
+                        <AutoFitMarquee
+                          as="p"
+                          text={location.address}
+                          textClassName="text-muted-foreground"
+                          fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                        />
                       )}
                     </div>
                   </div>

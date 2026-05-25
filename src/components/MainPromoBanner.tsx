@@ -13,6 +13,7 @@ import {
 } from "@/lib/mainBanners";
 import type { AppLocale } from "@/lib/locale";
 import { cn } from "@/lib/utils";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 const VARIANT_CLASS: Record<NonNullable<MainBanner["variant"]>, string> = {
   primary: "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground",
@@ -96,9 +97,21 @@ function BannerSlide({
         <Megaphone className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        {title ? <p className="break-words text-sm font-semibold leading-snug">{title}</p> : null}
+        {title ? (
+          <AutoFitMarquee
+            as="p"
+            text={title}
+            textClassName="font-semibold"
+            fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+          />
+        ) : null}
         {description ? (
-          <p className="break-words text-xs leading-snug opacity-90">{description}</p>
+          <AutoFitMarquee
+            as="p"
+            text={description}
+            textClassName="opacity-90"
+            fontSizeClasses={["text-xs", "text-[0.65rem]"]}
+          />
         ) : null}
       </div>
     </div>
@@ -110,7 +123,7 @@ function BannerSlide({
         // href={banner.href}
         // target="_blank"
         // rel="noopener noreferrer"
-        className="block h-full w-full overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="block min-h-full w-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-label={title || imageAlt}
         onClick={openNaverMap}
       >
@@ -119,7 +132,7 @@ function BannerSlide({
     );
   }
 
-  return <div className="h-full w-full overflow-hidden rounded-xl">{content}</div>;
+  return <div className="min-h-full w-full rounded-xl">{content}</div>;
 }
 
 export default function MainPromoBanner({

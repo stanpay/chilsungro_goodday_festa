@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { GripHorizontal, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 const BOTTOM_NAV_PX = 64;
 /** 상단(노치·패딩) 최소 여백 — 시트를 최대로 올려도 이 정도는 남김 */
@@ -460,9 +461,13 @@ useEffect(() => {
       >
         <div className="mb-0.5 h-1 w-10 rounded-full bg-muted-foreground/35" />
         <GripHorizontal className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden />
-        <p className="mt-0.5 break-words text-center text-[10px] leading-tight text-muted-foreground">
-          {dragHint}
-        </p>
+        <AutoFitMarquee
+          as="p"
+          text={dragHint}
+          className="mt-0.5 w-full"
+          textClassName="text-center text-muted-foreground"
+          fontSizeClasses={["text-[10px]", "text-[9px]", "text-[8px]"]}
+        />
       </div>
 
       {showContent && (

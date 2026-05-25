@@ -6,8 +6,7 @@ import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
 import { openNaverMapsApp } from "@/lib/mapDirectionLinks";
-import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 interface StoreCardProps {
   id: string;
@@ -42,9 +41,6 @@ const brandLogos: Record<string, string> = {
   twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
 };
 
-const STORE_NAME_FONT_CLASSES = ["text-base", "text-sm", "text-xs", "text-[0.65rem]"];
-const STORE_NAME_MARQUEE_TOLERANCE_PX = 2;
-
 const StoreCard = ({
   id,
   name,
@@ -76,65 +72,6 @@ const StoreCard = ({
   const location = useLocation();
   const isTutorial = location.pathname.includes("/tutorial");
   const brandLogoUrl = brandLogos[image as keyof typeof brandLogos];
-  const nameContainerRef = useRef<HTMLHeadingElement>(null);
-  const nameTextRef = useRef<HTMLSpanElement>(null);
-  const [nameFontSizeClass, setNameFontSizeClass] = useState(STORE_NAME_FONT_CLASSES[0]);
-  const [nameMarqueeDistance, setNameMarqueeDistance] = useState(0);
-
-  useEffect(() => {
-    const container = nameContainerRef.current;
-    if (!container) return;
-
-    const measureTextWidth = (fontSizeClass: string) => {
-      const probe = document.createElement("span");
-      probe.className = `${fontSizeClass} font-bold`;
-      probe.textContent = displayName;
-      probe.style.position = "absolute";
-      probe.style.visibility = "hidden";
-      probe.style.whiteSpace = "nowrap";
-      probe.style.pointerEvents = "none";
-      document.body.appendChild(probe);
-      const width = probe.scrollWidth;
-      probe.remove();
-      return width;
-    };
-
-    const updateNameLayout = () => {
-      const containerWidth = container.clientWidth;
-      if (containerWidth <= 0) return;
-
-      const measuredWidths = STORE_NAME_FONT_CLASSES.map((fontSizeClass) => ({
-        fontSizeClass,
-        width: measureTextWidth(fontSizeClass),
-      }));
-      const fittingSize = measuredWidths.find(
-        ({ width }) => width <= containerWidth + STORE_NAME_MARQUEE_TOLERANCE_PX
-      );
-      const selected = fittingSize ?? measuredWidths[measuredWidths.length - 1];
-      const overflowDistance = selected.width - containerWidth;
-
-      setNameFontSizeClass(selected.fontSizeClass);
-      setNameMarqueeDistance(
-        fittingSize || overflowDistance <= STORE_NAME_MARQUEE_TOLERANCE_PX
-          ? 0
-          : overflowDistance
-      );
-    };
-
-    updateNameLayout();
-
-    document.fonts?.ready.then(updateNameLayout);
-
-    if (!("ResizeObserver" in window)) {
-      window.addEventListener("resize", updateNameLayout);
-      return () => window.removeEventListener("resize", updateNameLayout);
-    }
-
-    const observer = new ResizeObserver(updateNameLayout);
-    observer.observe(container);
-
-    return () => observer.disconnect();
-  }, [displayName]);
 
   const handleClick = () => {
     if (disabled) return;
@@ -223,30 +160,21 @@ const StoreCard = ({
             )}
           </div>
           <div className="p-3 bg-card">
-            <h3
-              ref={nameContainerRef}
-              className={cn("mb-1 min-w-0 overflow-hidden font-bold", nameFontSizeClass)}
-            >
-              <span
-                ref={nameTextRef}
-                className={cn(
-                  "block whitespace-nowrap",
-                  nameMarqueeDistance > 0 && "marquee-on-overflow"
-                )}
-                style={
-                  nameMarqueeDistance > 0
-                    ? ({
-                        "--marquee-distance": `${nameMarqueeDistance}px`,
-                      } as CSSProperties)
-                    : undefined
-                }
-              >
-                {displayName}
-              </span>
-            </h3>
+            <AutoFitMarquee
+              as="h3"
+              text={displayName}
+              className="mb-1"
+              textClassName="font-bold"
+              fontSizeClasses={["text-base", "text-sm", "text-xs", "text-[0.65rem]"]}
+            />
             <div className="flex items-center text-xs text-muted-foreground mb-1.5">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
-              <span className="break-words">{distance}</span>
+              <AutoFitMarquee
+                text={distance}
+                className="flex-1"
+                textClassName="text-muted-foreground"
+                fontSizeClasses={["text-xs", "text-[0.65rem]"]}
+              />
             </div>
             {isOpen === false && (
               <div className="flex items-center gap-1 text-xs mb-1.5">

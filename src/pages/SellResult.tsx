@@ -10,6 +10,7 @@ import { useRecognitionJob, useUpdateRecognitionJob } from "@/hooks/use-recognit
 import { useRegisterGifticonFromJob } from "@/hooks/use-recognition-jobs";
 import { useAuth } from "@/contexts/AuthContext";
 import { RecognitionResult } from "@/lib/gifticonRecognition";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 interface GifticonItem {
   id: string;
@@ -288,7 +289,13 @@ const SellResult = () => {
               )}
               <div className="flex-1 min-w-0 flex flex-col">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="min-w-0 flex-1 break-words text-sm font-semibold">{item.productName}</h3>
+                  <AutoFitMarquee
+                    as="h3"
+                    text={item.productName}
+                    className="flex-1"
+                    textClassName="font-semibold"
+                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                  />
                   <div className="flex items-center gap-2 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                     <span className="text-xs text-muted-foreground">판매</span>
                     <Switch checked={item.isSelling} onCheckedChange={(checked) =>
@@ -319,7 +326,13 @@ const SellResult = () => {
               )}
               <div className="flex-1 min-w-0 flex flex-col">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="min-w-0 flex-1 break-words text-sm font-semibold">{item.productName}</h3>
+                  <AutoFitMarquee
+                    as="h3"
+                    text={item.productName}
+                    className="flex-1"
+                    textClassName="font-semibold"
+                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                  />
                   <div className="flex items-center gap-2 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                     <span className="text-xs text-muted-foreground">판매</span>
                     <Switch checked={item.isSelling} onCheckedChange={(checked) =>

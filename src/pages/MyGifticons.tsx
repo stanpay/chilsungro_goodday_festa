@@ -19,6 +19,7 @@ import JsBarcode from "jsbarcode";
 import { useGifticons, useSellGifticon, useCancelSell, useRestoreGifticon } from "@/hooks/use-gifticons";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Gifticon } from "@/api/gifticons";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 type SortOrder = "유효기간임박순" | "구매일순" | "낮은가격순" | "높은가격순" | "사용일순";
 
@@ -304,32 +305,42 @@ const MyGifticons = () => {
             <div className="col-span-2 text-center py-12 text-muted-foreground">기프티콘이 없습니다</div>
           ) : (
             sortedGifticons.map((g) => (
-              <Card key={g.id} className="overflow-hidden hover:shadow-lg transition-shadow w-full cursor-pointer" onClick={() => handleGifticonClick(g)}>
+              <Card key={g.id} className="w-full cursor-pointer transition-shadow hover:shadow-lg" onClick={() => handleGifticonClick(g)}>
                 <div className="aspect-square bg-card flex items-center justify-center p-4 border-b border-border relative overflow-hidden">
                   <div className="text-7xl">{g.image}</div>
                   {filterStatus === "완료/만료" && (
                     <>
                       {g.status === "사용완료" && (
                         <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                          <Badge variant="secondary" className="text-sm whitespace-nowrap">사용완료</Badge>
+                          <Badge variant="secondary" className="whitespace-nowrap text-sm">사용완료</Badge>
                         </div>
                       )}
                       {g.status === "판매완료" && (
                         <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                          <Badge variant="outline" className="text-sm whitespace-nowrap">판매완료</Badge>
+                          <Badge variant="outline" className="whitespace-nowrap text-sm">판매완료</Badge>
                         </div>
                       )}
                       {g.status === "사용가능" && isExpired(g) && (
                         <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
-                          <Badge variant="destructive" className="text-sm whitespace-nowrap">기한만료</Badge>
+                          <Badge variant="destructive" className="whitespace-nowrap text-sm">기한만료</Badge>
                         </div>
                       )}
                     </>
                   )}
                 </div>
                 <div className="p-3 space-y-2">
-                  <p className="break-words text-sm text-muted-foreground">{g.brand}</p>
-                  <p className="break-words text-sm font-medium">{g.name}</p>
+                  <AutoFitMarquee
+                    as="p"
+                    text={g.brand}
+                    textClassName="text-muted-foreground"
+                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                  />
+                  <AutoFitMarquee
+                    as="p"
+                    text={g.name}
+                    textClassName="font-medium"
+                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                  />
                   <p className="text-lg font-bold text-foreground">
                     {g.original_price.toLocaleString()}<span className="text-sm font-normal">원</span>
                   </p>

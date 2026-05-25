@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { RecognitionResult } from "@/lib/gifticonRecognition";
 import { useRecognitionJob, useRegisterGifticonFromJob } from "@/hooks/use-recognition-jobs";
 import { useAuth } from "@/contexts/AuthContext";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 const SellResultDetail = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -145,7 +146,13 @@ const SellResultDetail = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate(`/sell/result/${jobId}`)} className="shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="min-w-0 break-words text-xl font-bold leading-tight">{result.productName}</h1>
+          <AutoFitMarquee
+            as="h1"
+            text={result.productName}
+            className="flex-1"
+            textClassName="font-bold"
+            fontSizeClasses={["text-xl", "text-lg", "text-base", "text-sm"]}
+          />
         </div>
       </header>
 

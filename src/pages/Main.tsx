@@ -20,10 +20,10 @@ import {
 import StoreCard from "@/components/StoreCard";
 import MapViewBottomSheet from "@/components/MapViewBottomSheet";
 import MainPromoBanner from "@/components/MainPromoBanner";
+import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useRef, useMemo } from "react";
-import type { CSSProperties } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { paymentHistoryApi } from "@/api/paymentHistory";
@@ -1505,34 +1505,6 @@ interface StoreData {
   const headerLocationText = isLoadingLocation
     ? h.checkingLocation
     : `${isManualLocation ? h.manualLocationLabel : h.currentLocationLabel}: ${headerLocationLine}`;
-  const headerLocationTextContainerRef = useRef<HTMLSpanElement>(null);
-  const headerLocationTextRef = useRef<HTMLSpanElement>(null);
-  const [headerLocationMarqueeDistance, setHeaderLocationMarqueeDistance] = useState(0);
-
-  useEffect(() => {
-    const container = headerLocationTextContainerRef.current;
-    const text = headerLocationTextRef.current;
-    if (!container || !text) return;
-
-    const updateMarqueeDistance = () => {
-      const overflowDistance = text.scrollWidth - container.clientWidth;
-      setHeaderLocationMarqueeDistance(overflowDistance > 2 ? overflowDistance : 0);
-    };
-
-    updateMarqueeDistance();
-
-    if (!("ResizeObserver" in window)) {
-      window.addEventListener("resize", updateMarqueeDistance);
-      return () => window.removeEventListener("resize", updateMarqueeDistance);
-    }
-
-    const observer = new ResizeObserver(updateMarqueeDistance);
-    observer.observe(container);
-    observer.observe(text);
-
-    return () => observer.disconnect();
-  }, [headerLocationText]);
-
 const chipLabelMap: Record<StoreFilterChipId, string> = {
   all: t.chipAll,
   chilsungro: t.chipChilsungro,
@@ -2046,7 +2018,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             <div className="flex items-center gap-2 w-full">
               <Button 
                 variant="outline" 
-                className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border-border/50 hover:border-primary/50 transition-colors"
+                className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border-border/50 transition-colors hover:border-primary/50"
                 disabled={isLoadingLocation}
                 onClick={() => navigate('/location')}
               >
@@ -2056,27 +2028,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                   ) : (
                     <MapPin className="w-5 h-5 mr-2 shrink-0 text-primary group-hover:text-white transition-colors" />
                   )}
-                  <span
-                    ref={headerLocationTextContainerRef}
-                    className="block min-w-0 overflow-hidden font-medium"
-                  >
-                    <span
-                      ref={headerLocationTextRef}
-                      className={cn(
-                        "block whitespace-nowrap",
-                        headerLocationMarqueeDistance > 0 && "marquee-on-overflow"
-                      )}
-                      style={
-                        headerLocationMarqueeDistance > 0
-                          ? ({
-                              "--marquee-distance": `${headerLocationMarqueeDistance}px`,
-                            } as CSSProperties)
-                          : undefined
-                      }
-                    >
-                      {headerLocationText}
-                    </span>
-                  </span>
+                  <AutoFitMarquee
+                    text={headerLocationText}
+                    className="flex-1"
+                    textClassName="font-medium"
+                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                  />
                 </div>
               </Button>
               <Button
@@ -2153,9 +2110,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 onClick={() => setIsLanguageMenuOpen((open) => !open)}
               >
                 <Languages className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 flex-1 break-words text-left text-xs font-medium leading-tight">
-                  {LOCALE_MENU_LABELS[locale]}
-                </span>
+                <AutoFitMarquee
+                  text={LOCALE_MENU_LABELS[locale]}
+                  className="flex-1"
+                  textClassName="text-xs font-medium"
+                  fontSizeClasses={["text-xs", "text-[0.65rem]"]}
+                />
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
