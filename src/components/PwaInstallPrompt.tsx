@@ -17,6 +17,16 @@ function isIosSafari() {
   return /iphone|ipad|ipod/i.test(ua) && /safari/i.test(ua) && !/crios|fxios/i.test(ua);
 }
 
+function isSamsungInternet() {
+  return /SamsungBrowser/i.test(navigator.userAgent);
+}
+
+function openCurrentPageInChrome() {
+  const { host, pathname, search, hash, href } = window.location;
+  const path = `${host}${pathname}${search}${hash}`;
+  window.location.href = `intent://${path}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(href)};end`;
+}
+
 function isDismissedToday(): boolean {
   const until = localStorage.getItem(DISMISS_KEY);
   if (!until) return false;
@@ -33,12 +43,16 @@ const PwaInstallPrompt = () => {
   const [step, setStep] = useState<Step>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIos, setIsIos] = useState(false);
+  const [isSamsung, setIsSamsung] = useState(false);
   const iosGuideTouchStartY = useRef<number | null>(null);
 
   useEffect(() => {
     if (isInStandaloneMode()) return;
     if (isDismissedToday()) return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
+
+    const samsung = isSamsungInternet();
+    setIsSamsung(samsung);
 
     if (isIosSafari()) {
       setIsIos(true);
@@ -69,6 +83,11 @@ const PwaInstallPrompt = () => {
   const handleYes = async () => {
     if (isIos) {
       setStep("ios-guide");
+      return;
+    }
+    if (isSamsung) {
+      openCurrentPageInChrome();
+      setStep(null);
       return;
     }
     if (!deferredPrompt) return;
@@ -163,8 +182,17 @@ const PwaInstallPrompt = () => {
               </div>
             </div>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-              <span className="block whitespace-nowrap">홈 화면에 추가하시면 앱처럼</span>
-              <span className="block whitespace-nowrap">빠르게 이용할 수 있어요</span>
+              {isSamsung ? (
+                <>
+                  <span className="block whitespace-nowrap">Chrome에서 홈 화면에 추가하시면</span>
+                  <span className="block whitespace-nowrap">안전하게 설치할 수 있어요</span>
+                </>
+              ) : (
+                <>
+                  <span className="block whitespace-nowrap">홈 화면에 추가하시면 앱처럼</span>
+                  <span className="block whitespace-nowrap">빠르게 이용할 수 있어요</span>
+                </>
+              )}
             </p>
           </div>
 
@@ -180,7 +208,7 @@ const PwaInstallPrompt = () => {
               onClick={handleYes}
               className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
             >
-              홈 화면에 추가
+              {isSamsung ? "Chrome에서 설치" : "홈 화면에 추가"}
             </button>
           </div>
         </div>
