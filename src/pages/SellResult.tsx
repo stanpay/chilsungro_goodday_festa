@@ -294,7 +294,7 @@ const SellResult = () => {
                     text={item.productName}
                     className="flex-1"
                     textClassName="font-semibold"
-                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                    fontSizeClasses={["text-sm", "text-xs"]}
                   />
                   <div className="flex items-center gap-2 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                     <span className="text-xs text-muted-foreground">판매</span>
@@ -331,7 +331,7 @@ const SellResult = () => {
                     text={item.productName}
                     className="flex-1"
                     textClassName="font-semibold"
-                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                    fontSizeClasses={["text-sm", "text-xs"]}
                   />
                   <div className="flex items-center gap-2 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                     <span className="text-xs text-muted-foreground">판매</span>

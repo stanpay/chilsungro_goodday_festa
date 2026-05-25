@@ -333,13 +333,13 @@ const MyGifticons = () => {
                     as="p"
                     text={g.brand}
                     textClassName="text-muted-foreground"
-                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                    fontSizeClasses={["text-sm", "text-xs"]}
                   />
                   <AutoFitMarquee
                     as="p"
                     text={g.name}
                     textClassName="font-medium"
-                    fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                    fontSizeClasses={["text-sm", "text-xs"]}
                   />
                   <p className="text-lg font-bold text-foreground">
                     {g.original_price.toLocaleString()}<span className="text-sm font-normal">원</span>

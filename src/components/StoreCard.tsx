@@ -165,7 +165,7 @@ const StoreCard = ({
               text={displayName}
               className="mb-1"
               textClassName="font-bold"
-              fontSizeClasses={["text-base", "text-sm", "text-xs", "text-[0.65rem]"]}
+              fontSizeClasses={["text-base", "text-sm", "text-xs"]}
             />
             <div className="flex items-center text-xs text-muted-foreground mb-1.5">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
@@ -173,7 +173,7 @@ const StoreCard = ({
                 text={distance}
                 className="flex-1"
                 textClassName="text-muted-foreground"
-                fontSizeClasses={["text-xs", "text-[0.65rem]"]}
+                fontSizeClasses={["text-xs"]}
               />
             </div>
             {isOpen === false && (

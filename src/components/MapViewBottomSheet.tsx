@@ -466,7 +466,7 @@ useEffect(() => {
           text={dragHint}
           className="mt-0.5 w-full"
           textClassName="text-center text-muted-foreground"
-          fontSizeClasses={["text-[10px]", "text-[9px]", "text-[8px]"]}
+          fontSizeClasses={["text-[10px]"]}
         />
       </div>
 

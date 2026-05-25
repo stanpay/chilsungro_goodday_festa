@@ -278,7 +278,7 @@ const Location = () => {
                             as="p"
                             text={result.road_address_name || result.address_name}
                             textClassName="text-muted-foreground"
-                            fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                            fontSizeClasses={["text-sm", "text-xs"]}
                           />
                           {result.category_name && (
                             <p className="text-xs text-muted-foreground mt-1">
@@ -319,7 +319,7 @@ const Location = () => {
                           as="p"
                           text={location.address}
                           textClassName="text-muted-foreground"
-                          fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+                          fontSizeClasses={["text-sm", "text-xs"]}
                         />
                       )}
                     </div>

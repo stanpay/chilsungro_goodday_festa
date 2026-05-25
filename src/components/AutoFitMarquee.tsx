@@ -10,7 +10,7 @@ type AutoFitMarqueeProps = {
   fontSizeClasses?: string[];
 };
 
-const DEFAULT_FONT_SIZE_CLASSES = ["text-sm", "text-xs", "text-[0.65rem]"];
+const DEFAULT_FONT_SIZE_CLASSES = ["text-sm", "text-xs"];
 const OVERFLOW_TOLERANCE_PX = 2;
 
 export function AutoFitMarquee({
@@ -77,7 +77,7 @@ export function AutoFitMarquee({
     <Tag ref={containerRef} className={cn("block min-w-0 overflow-hidden", className)}>
       <span
         className={cn(
-          "block whitespace-nowrap",
+          "block whitespace-nowrap text-left",
           textClassName,
           fontSizeClass,
           marqueeDistance > 0 && "marquee-on-overflow"

@@ -102,7 +102,7 @@ function BannerSlide({
             as="p"
             text={title}
             textClassName="font-semibold"
-            fontSizeClasses={["text-sm", "text-xs", "text-[0.65rem]"]}
+            fontSizeClasses={["text-sm", "text-xs"]}
           />
         ) : null}
         {description ? (
@@ -110,7 +110,7 @@ function BannerSlide({
             as="p"
             text={description}
             textClassName="opacity-90"
-            fontSizeClasses={["text-xs", "text-[0.65rem]"]}
+            fontSizeClasses={["text-xs"]}
           />
         ) : null}
       </div>
