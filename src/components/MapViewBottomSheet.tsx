@@ -114,43 +114,38 @@ const MapViewBottomSheet = ({
   maxHeightRef.current = maxHeight;
 
   useEffect(() => {
-    const el = scrollBodyRef.current;
-    if (!el) return;
+    const sheet = sheetRef.current;
+    if (!sheet) return;
 
     let startY = 0;
     let startH = 0;
     let lastY = 0;
     let controlling = false;
     let touching = false;
-    let crossedTop = el.scrollTop <= 0;
-    let prevScrollTop = el.scrollTop;
-
-    const onScroll = () => {
-      // 스크롤이 천장에 도달한 순간 플래그 세팅
-      if (touching && !controlling && prevScrollTop > 0 && el.scrollTop <= 0) {
-        crossedTop = true;
-      }
-      prevScrollTop = el.scrollTop;
-    };
+    let crossedTop = false;
 
     const onTouchStart = (e: TouchEvent) => {
+      const sb = scrollBodyRef.current;
+      if (!sb || !sb.contains(e.target as Node)) return;
+
       touching = true;
       startY = e.touches[0].clientY;
       lastY = startY;
       startH = panelHeightRef.current;
       controlling = false;
-      crossedTop = el.scrollTop <= 0;
-      prevScrollTop = el.scrollTop;
+      crossedTop = sb.scrollTop <= 0;
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      if (!touching) return;
+      const sb = scrollBodyRef.current;
+
       const currentY = e.touches[0].clientY;
       const frameDelta = currentY - lastY;
       lastY = currentY;
 
       if (!controlling) {
-        // 현재 scrollTop도 직접 확인 (scroll 이벤트가 늦게 올 수 있음)
-        if (el.scrollTop <= 0) crossedTop = true;
+        if (!sb || sb.scrollTop <= 0) crossedTop = true;
 
         if (crossedTop && frameDelta > 0) {
           controlling = true;
@@ -162,8 +157,7 @@ const MapViewBottomSheet = ({
 
       if (controlling) {
         e.preventDefault();
-        // 고무줄 효과 방지: scrollTop을 0에 고정
-        if (el.scrollTop !== 0) el.scrollTop = 0;
+        if (sb && sb.scrollTop !== 0) sb.scrollTop = 0;
 
         const deltaY = currentY - startY;
         const newH = Math.round(
@@ -175,6 +169,7 @@ const MapViewBottomSheet = ({
     };
 
     const onTouchEnd = () => {
+      if (!touching) return;
       touching = false;
       if (!controlling) return;
       controlling = false;
@@ -192,20 +187,18 @@ const MapViewBottomSheet = ({
       setPanelHeight(snapped);
     };
 
-    el.addEventListener("scroll", onScroll, { passive: true });
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    sheet.addEventListener("touchstart", onTouchStart, { passive: true });
+    sheet.addEventListener("touchmove", onTouchMove, { passive: false });
+    sheet.addEventListener("touchend", onTouchEnd, { passive: true });
+    sheet.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
     return () => {
-      el.removeEventListener("scroll", onScroll);
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchEnd);
+      sheet.removeEventListener("touchstart", onTouchStart);
+      sheet.removeEventListener("touchmove", onTouchMove);
+      sheet.removeEventListener("touchend", onTouchEnd);
+      sheet.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [showContent]);
+  }, []);
 
   useEffect(() => {
     const el = sheetRef.current;
