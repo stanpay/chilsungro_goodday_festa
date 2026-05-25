@@ -54,6 +54,12 @@ const PwaInstallPrompt = () => {
     const samsung = isSamsungInternet();
     setIsSamsung(samsung);
 
+    if (samsung) {
+      setStep("popup");
+      sessionStorage.setItem(SESSION_KEY, "1");
+      return;
+    }
+
     if (isIosSafari()) {
       setIsIos(true);
       setStep("popup");

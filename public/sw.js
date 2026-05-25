@@ -1,5 +1,5 @@
-const CACHE_NAME = "stan-v1";
-const PRECACHE_URLS = ["/", "/manifest.json", "/favicon.png"];
+const CACHE_NAME = "stan-v2";
+const PRECACHE_URLS = ["/favicon.png", "/pwa-icon-144.png", "/pwa-icon-192.png", "/pwa-icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -22,6 +22,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   // 외부 API 요청(카카오, 토스 등)은 캐시하지 않음
   if (!url.origin.includes(self.location.origin)) return;
+
+  if (event.request.mode === "navigate" || url.pathname === "/manifest.json") {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
