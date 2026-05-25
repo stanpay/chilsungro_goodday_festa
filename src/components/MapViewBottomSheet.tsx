@@ -113,6 +113,71 @@ const MapViewBottomSheet = ({
   maxHeightRef.current = maxHeight;
 
   useEffect(() => {
+    const el = scrollBodyRef.current;
+    if (!el) return;
+
+    let startY = 0;
+    let startH = 0;
+    let controlling = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+      startH = panelHeightRef.current;
+      controlling = false;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - startY; // 양수 = 손가락이 아래로
+
+      if (!controlling) {
+        if (el.scrollTop <= 0 && deltaY > 8) {
+          controlling = true;
+          setIsDragging(true);
+        }
+      }
+
+      if (controlling) {
+        e.preventDefault();
+        const newH = Math.round(
+          Math.min(maxHeightRef.current, Math.max(PEEK_HEIGHT, startH - deltaY))
+        );
+        panelHeightRef.current = newH;
+        setPanelHeight(newH);
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (!controlling) return;
+      controlling = false;
+      setIsDragging(false);
+
+      const h = panelHeightRef.current;
+      if (startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
+        panelHeightRef.current = PEEK_HEIGHT;
+        setPanelHeight(PEEK_HEIGHT);
+        return;
+      }
+      const mid = (PEEK_HEIGHT + maxHeightRef.current) / 2;
+      const snapped = h >= mid ? maxHeightRef.current : PEEK_HEIGHT;
+      panelHeightRef.current = snapped;
+      setPanelHeight(snapped);
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
+
+  useEffect(() => {
     const el = sheetRef.current;
     if (!el) return;
 
