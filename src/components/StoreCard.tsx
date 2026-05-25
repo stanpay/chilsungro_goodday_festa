@@ -28,6 +28,7 @@ interface StoreCardProps {
   todayHours?: { open: string; close: string } | null;
   photos?: string[];
   closedDayNote?: string;
+  hasGifticonDiscount?: boolean;
   tutorialMode?: boolean;
   isHighlighted?: boolean;
   disabled?: boolean;
@@ -60,6 +61,7 @@ const StoreCard = ({
   todayHours,
   photos,
   closedDayNote,
+  hasGifticonDiscount = false,
   tutorialMode = false,
   isHighlighted = false,
   disabled = false,
@@ -218,30 +220,24 @@ const StoreCard = ({
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <span className="break-words">{distance}</span>
             </div>
-            {isOpen !== undefined && (
+            {isOpen === false && (
               <div className="flex items-center gap-1 text-xs mb-1.5">
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full shrink-0",
-                    isOpen ? "bg-green-500" : "bg-muted-foreground/50"
-                  )}
-                />
-                {isOpen ? (
-                  <span className="text-green-600 dark:text-green-400 font-medium">
-                    영업중
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">
-                    {closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}
-                  </span>
-                )}
+                <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-muted-foreground/50" />
+                <span className="text-muted-foreground">
+                  {closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}
+                </span>
               </div>
             )}
-            {(showLocalCurrencyChip || showParkingChip) && (
+            {(showLocalCurrencyChip || hasGifticonDiscount || showParkingChip) && (
               <div className="flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide">
                 {showLocalCurrencyChip && local_currency_discount_rate != null && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
                     {sc.localCurrencyDiscount(local_currency_discount_rate)}
+                  </span>
+                )}
+                {hasGifticonDiscount && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/50 whitespace-nowrap shrink-0">
+                    {sc.chilsungroCoupon}
                   </span>
                 )}
                 {showParkingChip && (

@@ -250,6 +250,7 @@ export function isStoredKoreanSystemLocation(stored: string): boolean {
 type StoreCardCopy = {
   maxDiscountPercent: (n: number) => string;
   localCurrencyDiscount: (n: number) => string;
+  chilsungroCoupon: string;
   freeParking: string;
   freeParkingWithSize: (sizeLabel: string) => string;
   paidParking: string;
@@ -265,6 +266,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
   ko: {
     maxDiscountPercent: (n) => `최대 ${n}% 할인`,
     localCurrencyDiscount: (n) => `지역화폐 ${n}%할인`,
+    chilsungroCoupon: "원도심쿠폰",
     freeParking: "무료 주차 가능",
     freeParkingWithSize: (s) => `무료 주차 가능: ${s}`,
     paidParking: "주차 가능",
@@ -278,6 +280,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
   en: {
     maxDiscountPercent: (n) => `Up to ${n}% off`,
     localCurrencyDiscount: (n) => `Local currency ${n}% off`,
+    chilsungroCoupon: "Old Town coupon",
     freeParking: "Parking available (free)",
     freeParkingWithSize: (s) => `Free parking: ${s}`,
     paidParking: "Parking available",
@@ -291,6 +294,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
   zh: {
     maxDiscountPercent: (n) => `最高 ${n}% 折扣`,
     localCurrencyDiscount: (n) => `本地货币 ${n}% 优惠`,
+    chilsungroCoupon: "济州旧城区优惠券",
     freeParking: "可免费停车",
     freeParkingWithSize: (s) => `免费停车：${s}`,
     paidParking: "可停车",
@@ -304,6 +308,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
   ja: {
     maxDiscountPercent: (n) => `最大${n}%オフ`,
     localCurrencyDiscount: (n) => `地域プレミアム ${n}%割引`,
+    chilsungroCoupon: "済州旧市街クーポン",
     freeParking: "無料駐車可",
     freeParkingWithSize: (s) => `無料駐車可：${s}`,
     paidParking: "駐車可",
