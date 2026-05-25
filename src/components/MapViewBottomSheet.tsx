@@ -146,27 +146,33 @@ const MapViewBottomSheet = ({
     setIsDragging(true);
   };
 
-  const moveDrag = (clientY: number) => {
-    const d = dragRef.current;
-    if (!d?.dragging) return;
-    const delta = d.startY - clientY; // 양수 = 위로
-    const rawNext = d.startH + delta;
-    const next = Math.round(Math.min(maxHeight, Math.max(PEEK_HEIGHT, rawNext)));
-    panelHeightRef.current = next;
-    setPanelHeight(next);
+const moveDrag = (clientY: number) => {
+  const d = dragRef.current;
+  if (!d?.dragging) return;
 
-    if (next >= maxHeight) {
-      if (d.hitMaxY === undefined) d.hitMaxY = clientY;
-      const overshoot = Math.max(0, d.hitMaxY - clientY);
-      const sb = scrollBodyRef.current;
-      if (sb) {
-        const max = Math.max(0, sb.scrollHeight - sb.clientHeight);
-        sb.scrollTop = Math.min(max, overshoot);
-      }
-    } else {
-      d.hitMaxY = undefined;
+  const max = maxHeightRef.current || maxHeight;
+
+  const delta = d.startY - clientY; // 양수 = 위로
+  const rawNext = d.startH + delta;
+  const next = Math.round(Math.min(max, Math.max(PEEK_HEIGHT, rawNext)));
+
+  panelHeightRef.current = next;
+  setPanelHeight(next);
+
+  if (next >= max - 1) {
+    if (d.hitMaxY === undefined) d.hitMaxY = clientY;
+
+    const overshoot = Math.max(0, d.hitMaxY - clientY);
+    const sb = scrollBodyRef.current;
+
+    if (sb) {
+      const maxScroll = Math.max(0, sb.scrollHeight - sb.clientHeight);
+      sb.scrollTop = Math.min(maxScroll, overshoot);
     }
-  };
+  } else {
+    d.hitMaxY = undefined;
+  }
+};
   const onBodyTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
   if (e.touches.length !== 1) return;
 
@@ -257,31 +263,41 @@ const onBodyTouchEnd = () => {
   }
 };
 
-  const endDrag = () => {
-    const d = dragRef.current;
-    const was = d?.dragging;
-    const startH = d?.startH ?? panelHeightRef.current;
-    dragRef.current = null;
-    setIsDragging(false);
-    if (!was) return;
-    const h = panelHeightRef.current;
-    const startedPeek = startH <= PEEK_HEIGHT + 2;
-    if (startedPeek && h >= startH + SLIGHT_EXPAND_FROM_PEEK_PX) {
-      panelHeightRef.current = maxHeight;
-      setPanelHeight(maxHeight);
-      return;
-    }
-    const startedExpanded = startH >= maxHeight - 2;
-    if (startedExpanded && startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
-      panelHeightRef.current = PEEK_HEIGHT;
-      setPanelHeight(PEEK_HEIGHT);
-      return;
-    }
-    const mid = (PEEK_HEIGHT + maxHeight) / 2;
-    const snapped = h >= mid ? maxHeight : PEEK_HEIGHT;
-    panelHeightRef.current = snapped;
-    setPanelHeight(snapped);
-  };
+const endDrag = () => {
+  const d = dragRef.current;
+  const was = d?.dragging;
+  const startH = d?.startH ?? panelHeightRef.current;
+
+  dragRef.current = null;
+  setIsDragging(false);
+
+  if (!was) return;
+
+  const max = maxHeightRef.current || maxHeight;
+  const h = panelHeightRef.current;
+
+  const startedPeek = startH <= PEEK_HEIGHT + 2;
+
+  if (startedPeek && h >= startH + SLIGHT_EXPAND_FROM_PEEK_PX) {
+    panelHeightRef.current = max;
+    setPanelHeight(max);
+    return;
+  }
+
+  const startedExpanded = startH >= max - 2;
+
+  if (startedExpanded && startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
+    panelHeightRef.current = PEEK_HEIGHT;
+    setPanelHeight(PEEK_HEIGHT);
+    return;
+  }
+
+  const mid = (PEEK_HEIGHT + max) / 2;
+  const snapped = h >= mid ? max : PEEK_HEIGHT;
+
+  panelHeightRef.current = snapped;
+  setPanelHeight(snapped);
+};
 
   const onPointerDownHandle = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -301,7 +317,119 @@ const onBodyTouchEnd = () => {
     }
     endDrag();
   };
+useEffect(() => {
+  if (!showContent) return;
 
+  const sb = scrollBodyRef.current;
+  if (!sb) return;
+
+  let startY = 0;
+  let lastY = 0;
+  let startH = 0;
+  let mode: "idle" | "sheet" | "scroll" = "idle";
+
+  const THRESHOLD = 4;
+
+  const startSheetDrag = (anchorY: number, anchorH: number) => {
+    mode = "sheet";
+    dragRef.current = {
+      startY: anchorY,
+      startH: anchorH,
+      dragging: true,
+    };
+    setIsDragging(true);
+  };
+
+  const onTouchStart = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return;
+
+    const y = e.touches[0].clientY;
+
+    startY = y;
+    lastY = y;
+    startH = panelHeightRef.current;
+    mode = "idle";
+  };
+
+  const onTouchMove = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return;
+
+    const y = e.touches[0].clientY;
+    const totalDy = y - startY;
+    const stepDy = y - lastY;
+
+    if (Math.abs(totalDy) < THRESHOLD) {
+      lastY = y;
+      return;
+    }
+
+    const max = maxHeightRef.current;
+    const currentH = panelHeightRef.current;
+
+    const isSheetNotFull = currentH < max - 2;
+    const isAtTop = sb.scrollTop <= 0;
+
+    const draggingDown = totalDy > 0;
+
+    if (mode === "idle") {
+      // 1. 시트가 아직 최대 높이가 아니면 리스트 스크롤보다 시트 확장 우선
+      if (isSheetNotFull) {
+        startSheetDrag(startY, startH);
+      }
+      // 2. 시트가 최대 높이이고, 리스트 최상단에서 아래로 당기면 시트 닫기
+      else if (isAtTop && draggingDown) {
+        startSheetDrag(startY, startH);
+      }
+      // 3. 그 외에는 일반 리스트 스크롤
+      else {
+        mode = "scroll";
+      }
+    }
+
+    if (mode === "scroll") {
+      // 리스트 스크롤 중 최상단에서 아래로 더 당기면 시트 제어로 전환
+      if (sb.scrollTop <= 0 && stepDy > 0) {
+        startY = y;
+        startH = panelHeightRef.current;
+        startSheetDrag(startY, startH);
+
+        e.preventDefault();
+        lastY = y;
+        return;
+      }
+
+      lastY = y;
+      return;
+    }
+
+    if (mode === "sheet") {
+      e.preventDefault();
+      moveDrag(y);
+    }
+
+    lastY = y;
+  };
+
+  const onTouchEnd = () => {
+    if (mode === "sheet") {
+      endDrag();
+    }
+
+    mode = "idle";
+  };
+
+  sb.addEventListener("touchstart", onTouchStart, { passive: true });
+  sb.addEventListener("touchmove", onTouchMove, { passive: false });
+  sb.addEventListener("touchend", onTouchEnd, { passive: true });
+  sb.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+  return () => {
+    sb.removeEventListener("touchstart", onTouchStart);
+    sb.removeEventListener("touchmove", onTouchMove);
+    sb.removeEventListener("touchend", onTouchEnd);
+    sb.removeEventListener("touchcancel", onTouchEnd);
+  };
+}, [showContent]);
   return (
     <div
       className={cn(
@@ -357,14 +485,13 @@ const onBodyTouchEnd = () => {
             </div>
           </div>
 
-          <div
+<div
   ref={scrollBodyRef}
   className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3"
-  style={{ WebkitOverflowScrolling: "touch" }}
-  onTouchStart={onBodyTouchStart}
-  onTouchMove={onBodyTouchMove}
-  onTouchEnd={onBodyTouchEnd}
-  onTouchCancel={onBodyTouchEnd}
+  style={{
+    WebkitOverflowScrolling: "touch",
+    overscrollBehaviorY: "contain",
+  }}
 >
             <div>
               <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
