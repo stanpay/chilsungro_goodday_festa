@@ -11,10 +11,30 @@
     display: none;
   }
 
+  .scrollbar-show {
+    -ms-overflow-style: auto;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+  }
+  .scrollbar-show::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-show::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.45);
+    border-radius: 9999px;
+  }
+  .scrollbar-show::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   .marquee-on-overflow {
     display: inline-block;
+    max-width: none;
     white-space: nowrap;
     animation: marquee-x 3s linear infinite;
+    will-change: transform;
   }
 }
 
@@ -107,6 +127,12 @@ All colors MUST be HSL.
   * {
     @apply border-border;
     -webkit-tap-highlight-color: transparent;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
   }
 
   body {

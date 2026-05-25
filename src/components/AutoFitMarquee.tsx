@@ -78,23 +78,25 @@ export function AutoFitMarquee({
   }, [fontSizeKey, text, textClassName]);
 
   return (
-    <Tag ref={containerRef} className={cn("block min-w-0 overflow-hidden pr-1.5", className)}>
-      <span
-        className={cn(
-          "block whitespace-nowrap text-left",
-          textClassName,
-          fontSizeClass,
-          marqueeDistance > 0 && "marquee-on-overflow"
-        )}
-        style={
-          marqueeDistance > 0
-            ? ({
-                "--marquee-distance": `${marqueeDistance}px`,
-              } as CSSProperties)
-            : undefined
-        }
-      >
-        {text}
+    <Tag ref={containerRef} className={cn("block min-w-0 pr-1.5", className)}>
+      <span className="block min-w-0 overflow-hidden">
+        <span
+          className={cn(
+            "block whitespace-nowrap text-left",
+            textClassName,
+            fontSizeClass,
+            marqueeDistance > 0 && "marquee-on-overflow"
+          )}
+          style={
+            marqueeDistance > 0
+              ? ({
+                  "--marquee-distance": `${marqueeDistance}px`,
+                } as CSSProperties)
+              : undefined
+          }
+        >
+          {text}
+        </span>
       </span>
     </Tag>
   );

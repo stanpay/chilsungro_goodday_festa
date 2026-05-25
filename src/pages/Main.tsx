@@ -512,14 +512,7 @@ interface StoreData {
       setIsManualLocation(isManualLocationValue);
 
       // 사용자가 직접 설정한 위치가 있으면 그것을 사용 (현재 위치를 불러오지 않음)
-      if (isManualLocationValue) {
-        // savedLocation이 없는 경우 처리
-        if (!savedLocation) {
-          console.warn("⚠️ [위치 정보] 사용자 위치 설정 플래그는 있지만 저장된 위치가 없음");
-          setCurrentLocation("위치 불러올 수 없음");
-          setIsLoadingLocation(false);
-          return; // 사용자 위치 설정이므로 현재 위치 가져오기 건너뛰기
-        }
+      if (isManualLocationValue && savedLocation) {
         // 좌표가 있으면 바로 사용
         if (savedCoordinates) {
           try {
@@ -614,6 +607,13 @@ interface StoreData {
             return; // 수동 위치 설정이므로 브라우저 위치 가져오기 건너뛰기
           }
         }
+      } else if (isManualLocationValue && !savedLocation) {
+        console.warn(
+          "⚠️ [위치 정보] 수동 위치 플래그만 남아 있음 — 플래그 제거 후 현재 위치 재조회"
+        );
+        localStorage.removeItem("isManualLocation");
+        localStorage.removeItem("currentCoordinates");
+        setIsManualLocation(false);
       }
       
       // 직접 설정한 위치가 없으면 기본적으로 현재 위치 가져오기
@@ -2144,16 +2144,16 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               </Button>
             )}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 -mr-4">
             {renderFilterChipRow(
-              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              "flex w-full gap-2 overflow-x-auto pb-0.5 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               BENEFIT_FILTER_CHIP_ORDER,
               benefitFilterChips,
               toggleBenefitFilterChip,
               (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria
             )}
             {renderFilterChipRow(
-              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              "flex w-full gap-2 overflow-x-auto pb-0.5 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               STORE_CATEGORY_CHIP_ORDER,
               categoryFilterChips,
               toggleCategoryFilterChip,

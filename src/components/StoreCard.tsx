@@ -229,23 +229,25 @@ const StoreCard = ({
           <div className="grid grid-cols-1 grid-rows-[1.75rem_1.125rem_1.125rem_1.25rem] gap-y-1 bg-card p-3">
             <h3
               ref={nameContainerRef}
-              className="flex h-7 min-w-0 items-center overflow-hidden pr-1.5"
+              className="flex h-7 min-w-0 items-center pr-1.5"
             >
-              <span
-                className={cn(
-                  "block whitespace-nowrap text-left font-bold !leading-7",
-                  nameFontSizeClass,
-                  nameMarqueeDistance > 0 && "marquee-on-overflow"
-                )}
-                style={
-                  nameMarqueeDistance > 0
-                    ? ({
-                        "--marquee-distance": `${nameMarqueeDistance}px`,
-                      } as CSSProperties)
-                    : undefined
-                }
-              >
-                {displayName}
+              <span className="min-w-0 flex-1 overflow-hidden">
+                <span
+                  className={cn(
+                    "block whitespace-nowrap text-left font-bold !leading-7",
+                    nameFontSizeClass,
+                    nameMarqueeDistance > 0 && "marquee-on-overflow"
+                  )}
+                  style={
+                    nameMarqueeDistance > 0
+                      ? ({
+                          "--marquee-distance": `${nameMarqueeDistance}px`,
+                        } as CSSProperties)
+                      : undefined
+                  }
+                >
+                  {displayName}
+                </span>
               </span>
             </h3>
             <div className="flex h-[1.125rem] min-w-0 items-center text-xs text-muted-foreground">
