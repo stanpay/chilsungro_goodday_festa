@@ -225,14 +225,14 @@ const StoreCard = ({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-1 grid-rows-[1.5rem_1rem_1rem_1.25rem] gap-y-1 bg-card p-3">
+          <div className="grid grid-cols-1 grid-rows-[1.75rem_1.125rem_1.125rem_1.25rem] gap-y-1 bg-card p-3">
             <h3
               ref={nameContainerRef}
-              className="flex h-6 min-w-0 items-center overflow-hidden"
+              className="flex h-7 min-w-0 items-center overflow-hidden"
             >
               <span
                 className={cn(
-                  "block whitespace-nowrap text-left font-bold !leading-6",
+                  "block whitespace-nowrap text-left font-bold !leading-7",
                   nameFontSizeClass,
                   nameMarqueeDistance > 0 && "marquee-on-overflow"
                 )}
@@ -247,23 +247,23 @@ const StoreCard = ({
                 {displayName}
               </span>
             </h3>
-            <div className="flex h-4 min-w-0 items-center text-xs text-muted-foreground">
+            <div className="flex h-[1.125rem] min-w-0 items-center text-xs text-muted-foreground">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <AutoFitMarquee
                 text={distance}
                 className="flex-1"
-                textClassName="text-muted-foreground !leading-4"
+                textClassName="text-muted-foreground !leading-[1.125rem]"
                 fontSizeClasses={["text-xs"]}
               />
             </div>
-            <div className="flex h-4 min-w-0 items-center gap-1 text-xs">
+            <div className="flex h-[1.125rem] min-w-0 items-center gap-1 text-xs">
               {isOpen === false && (
                 <>
                   <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-muted-foreground/50" />
                   <AutoFitMarquee
                     text={closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}
                     className="flex-1"
-                    textClassName="text-muted-foreground !leading-4"
+                    textClassName="text-muted-foreground !leading-[1.125rem]"
                     fontSizeClasses={["text-xs"]}
                   />
                 </>
