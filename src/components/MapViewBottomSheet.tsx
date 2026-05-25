@@ -13,8 +13,10 @@ const CONTENT_REVEAL_EXTRA = 36;
 const MIN_EXPANDED = 280;
 /** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
 const SLIGHT_EXPAND_FROM_PEEK_PX = 10;
-/** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 */
+/** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 (핸들 드래그) */
 const COLLAPSE_FROM_EXPANDED_PX = 30;
+/** 리스트 최상단에서 아래로 당길 때 접힘 기준(px) */
+const COLLAPSE_FROM_SCROLL_TOP_PX = 8;
 
 export type MapSheetStore = {
   id: string;
@@ -76,6 +78,7 @@ const MapViewBottomSheet = ({
     startH: number;
     dragging: boolean;
     hitMaxY?: number;
+    fromScrollTop?: boolean;
   } | null>(null);
   const cardWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const scrollBodyRef = useRef<HTMLDivElement>(null);
@@ -142,8 +145,20 @@ const MapViewBottomSheet = ({
   const maxHeight = Math.max(MIN_EXPANDED, expandedCap());
   maxHeightRef.current = maxHeight;
 
-  const startDrag = (clientY: number) => {
-    dragRef.current = { startY: clientY, startH: panelHeightRef.current, dragging: true };
+  const collapseToPeek = useCallback(() => {
+    panelHeightRef.current = PEEK_HEIGHT;
+    setPanelHeight(PEEK_HEIGHT);
+    dragRef.current = null;
+    setIsDragging(false);
+  }, []);
+
+  const startDrag = (clientY: number, fromScrollTop = false) => {
+    dragRef.current = {
+      startY: clientY,
+      startH: panelHeightRef.current,
+      dragging: true,
+      fromScrollTop,
+    };
     setIsDragging(true);
   };
 
@@ -156,6 +171,11 @@ const moveDrag = (clientY: number) => {
   const delta = d.startY - clientY; // 양수 = 위로
   const rawNext = d.startH + delta;
   const next = Math.round(Math.min(max, Math.max(PEEK_HEIGHT, rawNext)));
+
+  if (d.fromScrollTop && d.startH - next >= COLLAPSE_FROM_SCROLL_TOP_PX) {
+    collapseToPeek();
+    return;
+  }
 
   panelHeightRef.current = next;
   setPanelHeight(next);
@@ -199,7 +219,7 @@ const onBodyTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
   const currentH = panelHeightRef.current;
 
   const isSheetNotFull = currentH < maxH - 2;
-  const isAtTop = sb.scrollTop <= 0;
+  const isAtTop = sb.scrollTop <= 1;
   const draggingUp = dyFromStart < 0;
   const draggingDown = dyFromStart > 0;
 
@@ -217,12 +237,7 @@ const onBodyTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     // 시트가 최대 높이이고, 리스트 최상단에서 아래로 당기면 시트 닫기
     else if (isAtTop && draggingDown) {
       g.mode = "sheet";
-      dragRef.current = {
-        startY: g.startY,
-        startH: g.startH,
-        dragging: true,
-      };
-      setIsDragging(true);
+      startDrag(g.startY, true);
     }
     // 그 외에는 일반 리스트 스크롤
     else {
@@ -233,14 +248,9 @@ const onBodyTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
   // 이미 리스트 스크롤 중이더라도,
   // 리스트가 최상단에 도달한 상태에서 계속 아래로 당기면 시트 제어로 전환
   if (g.mode === "scroll") {
-    if (sb.scrollTop <= 0 && dyFromLast > 0) {
+    if (sb.scrollTop <= 1 && dyFromLast > 0) {
       g.mode = "sheet";
-      dragRef.current = {
-        startY: y,
-        startH: panelHeightRef.current,
-        dragging: true,
-      };
-      setIsDragging(true);
+      startDrag(y, true);
     } else {
       g.lastY = y;
       return;
@@ -287,9 +297,13 @@ const endDrag = () => {
 
   const startedExpanded = startH >= max - 2;
 
+  if (startedExpanded && d?.fromScrollTop && h < startH) {
+    collapseToPeek();
+    return;
+  }
+
   if (startedExpanded && startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
-    panelHeightRef.current = PEEK_HEIGHT;
-    setPanelHeight(PEEK_HEIGHT);
+    collapseToPeek();
     return;
   }
 
@@ -331,12 +345,13 @@ useEffect(() => {
 
   const THRESHOLD = 4;
 
-  const startSheetDrag = (anchorY: number, anchorH: number) => {
+  const startSheetDrag = (anchorY: number, anchorH: number, fromScrollTop = false) => {
     mode = "sheet";
     dragRef.current = {
       startY: anchorY,
       startH: anchorH,
       dragging: true,
+      fromScrollTop,
     };
     setIsDragging(true);
   };
@@ -368,7 +383,7 @@ useEffect(() => {
     const currentH = panelHeightRef.current;
 
     const isSheetNotFull = currentH < max - 2;
-    const isAtTop = sb.scrollTop <= 0;
+    const isAtTop = sb.scrollTop <= 1;
 
     const draggingDown = totalDy > 0;
 
@@ -379,7 +394,7 @@ useEffect(() => {
       }
       // 2. 시트가 최대 높이이고, 리스트 최상단에서 아래로 당기면 시트 닫기
       else if (isAtTop && draggingDown) {
-        startSheetDrag(startY, startH);
+        startSheetDrag(startY, startH, true);
       }
       // 3. 그 외에는 일반 리스트 스크롤
       else {
@@ -389,10 +404,10 @@ useEffect(() => {
 
     if (mode === "scroll") {
       // 리스트 스크롤 중 최상단에서 아래로 더 당기면 시트 제어로 전환
-      if (sb.scrollTop <= 0 && stepDy > 0) {
+      if (sb.scrollTop <= 1 && stepDy > 0) {
         startY = y;
         startH = panelHeightRef.current;
-        startSheetDrag(startY, startH);
+        startSheetDrag(startY, startH, true);
 
         e.preventDefault();
         lastY = y;
