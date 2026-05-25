@@ -1,7 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { initClarity } from "@/lib/analytics";
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk';
+
+initClarity();
 
 // 🚀 Toss Payments SDK 사전 로딩
 const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY;
