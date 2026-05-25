@@ -196,6 +196,7 @@ const Main = () => {
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [storeFilterChips, setStoreFilterChips] = useState<Set<StoreFilterChipId>>(
     () => new Set<StoreFilterChipId>(["all", "openNow"])
   );
@@ -2042,7 +2043,7 @@ const Main = () => {
               </button>
             )}
           </div>
-          <DropdownMenu>
+          <DropdownMenu open={isLanguageMenuOpen} onOpenChange={setIsLanguageMenuOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
@@ -2050,6 +2051,8 @@ const Main = () => {
                 className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border-border/50 px-3 hover:border-primary/50 transition-colors"
                 aria-label={t.languageMenuAria}
                 title={LOCALE_MENU_LABELS[locale]}
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => setIsLanguageMenuOpen((open) => !open)}
               >
                 <Languages className="h-4 w-4 shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-left">
