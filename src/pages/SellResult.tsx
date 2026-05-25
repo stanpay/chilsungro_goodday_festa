@@ -288,7 +288,7 @@ const SellResult = () => {
               )}
               <div className="flex-1 min-w-0 flex flex-col">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-semibold text-sm truncate flex-1">{item.productName}</h3>
+                  <h3 className="min-w-0 flex-1 break-words text-sm font-semibold">{item.productName}</h3>
                   <div className="flex items-center gap-2 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                     <span className="text-xs text-muted-foreground">판매</span>
                     <Switch checked={item.isSelling} onCheckedChange={(checked) =>
@@ -319,7 +319,7 @@ const SellResult = () => {
               )}
               <div className="flex-1 min-w-0 flex flex-col">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-semibold text-sm truncate flex-1">{item.productName}</h3>
+                  <h3 className="min-w-0 flex-1 break-words text-sm font-semibold">{item.productName}</h3>
                   <div className="flex items-center gap-2 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                     <span className="text-xs text-muted-foreground">판매</span>
                     <Switch checked={item.isSelling} onCheckedChange={(checked) =>

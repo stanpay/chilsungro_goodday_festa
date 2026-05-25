@@ -145,7 +145,7 @@ const SellResultDetail = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate(`/sell/result/${jobId}`)} className="shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-xl font-bold truncate">{result.productName}</h1>
+          <h1 className="min-w-0 break-words text-xl font-bold leading-tight">{result.productName}</h1>
         </div>
       </header>
 

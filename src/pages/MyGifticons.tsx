@@ -328,8 +328,8 @@ const MyGifticons = () => {
                   )}
                 </div>
                 <div className="p-3 space-y-2">
-                  <p className="text-sm text-muted-foreground truncate">{g.brand}</p>
-                  <p className="text-sm font-medium line-clamp-2">{g.name}</p>
+                  <p className="break-words text-sm text-muted-foreground">{g.brand}</p>
+                  <p className="break-words text-sm font-medium">{g.name}</p>
                   <p className="text-lg font-bold text-foreground">
                     {g.original_price.toLocaleString()}<span className="text-sm font-normal">원</span>
                   </p>

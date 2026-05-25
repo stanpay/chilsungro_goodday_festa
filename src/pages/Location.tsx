@@ -272,8 +272,8 @@ const Location = () => {
                       <div className="flex items-start">
                         <MapPin className="w-4 h-4 mr-3 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{result.place_name}</p>
-                          <p className="text-sm text-muted-foreground truncate">
+                          <p className="break-words font-medium">{result.place_name}</p>
+                          <p className="break-words text-sm text-muted-foreground">
                             {result.road_address_name || result.address_name}
                           </p>
                           {result.category_name && (
@@ -309,9 +309,9 @@ const Location = () => {
                   <div className="flex items-start">
                     <MapPin className="w-4 h-4 mr-3 mt-1 text-muted-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{location.name}</p>
+                      <p className="break-words font-medium">{location.name}</p>
                       {location.address && location.address !== location.name && (
-                        <p className="text-sm text-muted-foreground truncate">
+                        <p className="break-words text-sm text-muted-foreground">
                           {location.address}
                         </p>
                       )}

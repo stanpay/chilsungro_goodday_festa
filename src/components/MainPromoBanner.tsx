@@ -96,9 +96,9 @@ function BannerSlide({
         <Megaphone className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        {title ? <p className="truncate text-sm font-semibold">{title}</p> : null}
+        {title ? <p className="break-words text-sm font-semibold leading-snug">{title}</p> : null}
         {description ? (
-          <p className="truncate text-xs opacity-90">{description}</p>
+          <p className="break-words text-xs leading-snug opacity-90">{description}</p>
         ) : null}
       </div>
     </div>

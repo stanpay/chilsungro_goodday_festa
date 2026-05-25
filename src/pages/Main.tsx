@@ -1692,7 +1692,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       const label = document.createElement("div");
       label.setAttribute("data-store-label", "1");
       label.style.cssText =
-        "margin-top:3px;max-width:118px;padding:2px 6px;font-size:11px;font-weight:600;color:#111827;background:rgba(255,255,255,.96);border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;";
+        "margin-top:3px;padding:2px 6px;font-size:11px;font-weight:600;color:#111827;background:rgba(255,255,255,.96);border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.12);white-space:nowrap;line-height:1.25;";
       label.textContent = mapPinLabelsRef.current[store.id] ?? store.name;
 
       root.appendChild(dot);
@@ -2153,7 +2153,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 onClick={() => setIsLanguageMenuOpen((open) => !open)}
               >
                 <Languages className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-left">
+                <span className="min-w-0 flex-1 break-words text-left text-xs font-medium leading-tight">
                   {LOCALE_MENU_LABELS[locale]}
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />

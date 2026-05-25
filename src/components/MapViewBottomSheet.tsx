@@ -460,7 +460,7 @@ useEffect(() => {
       >
         <div className="mb-0.5 h-1 w-10 rounded-full bg-muted-foreground/35" />
         <GripHorizontal className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden />
-        <p className="mt-0.5 line-clamp-2 max-h-8 text-center text-[10px] leading-tight text-muted-foreground">
+        <p className="mt-0.5 break-words text-center text-[10px] leading-tight text-muted-foreground">
           {dragHint}
         </p>
       </div>
