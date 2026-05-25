@@ -234,15 +234,22 @@ const MapViewBottomSheet = ({
   const moveDrag = (clientY: number) => {
     const d = dragRef.current;
     if (!d?.dragging) return;
-    const delta = d.startY - clientY; // 양수 = 위로 스와이프
-    const rawNext = d.startH + delta;
-    const next = Math.round(Math.min(maxHeight, Math.max(PEEK_HEIGHT, rawNext)));
+    const delta = d.startY - clientY;
+    const next = Math.round(
+      Math.min(maxHeight, Math.max(PEEK_HEIGHT, d.startH + delta))
+    );
     panelHeightRef.current = next;
     setPanelHeight(next);
 
-    // 패널이 최대 높이에 도달한 뒤 계속 위로 당기면 내용을 스크롤
-    if (rawNext > maxHeight && scrollBodyRef.current) {
-      scrollBodyRef.current.scrollTop = rawNext - maxHeight;
+    // 패널이 펼쳐지는 동안 내용도 함께 스크롤
+    const revealStart = PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
+    const inner = scrollBodyRef.current;
+    if (inner && next > revealStart) {
+      const progress = Math.min(1, (next - revealStart) / (maxHeight - revealStart));
+      const maxScroll = inner.scrollHeight - inner.clientHeight;
+      if (maxScroll > 0) {
+        inner.scrollTop = progress * Math.min(maxScroll, 120);
+      }
     }
   };
 
