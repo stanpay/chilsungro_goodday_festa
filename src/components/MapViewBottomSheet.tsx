@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDrag } from "@use-gesture/react";
 import { GripHorizontal, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
@@ -70,45 +69,19 @@ const MapViewBottomSheet = ({
 
   const [panelHeight, setPanelHeight] = useState(PEEK_HEIGHT);
   const [isDragging, setIsDragging] = useState(false);
-  const [scrollOffset, setScrollOffset] = useState(0);
   const panelHeightRef = useRef(PEEK_HEIGHT);
-  const scrollOffsetRef = useRef(0);
   const dragRef = useRef<{
     startY: number;
     startH: number;
     dragging: boolean;
     hitMaxY?: number;
   } | null>(null);
-  const scrollDragRef = useRef({
-    startScroll: 0,
-    startH: 0,
-    controlling: false,
-    lockedMy: 0,
-  });
   const cardWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const sheetRef = useRef<HTMLDivElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
-  const contentInnerRef = useRef<HTMLDivElement>(null);
   const maxHeightRef = useRef(0);
-  const momentumRafRef = useRef(0);
   const clearSelectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   panelHeightRef.current = panelHeight;
-  scrollOffsetRef.current = scrollOffset;
-
-  const updateScroll = useCallback((next: number) => {
-    scrollOffsetRef.current = next;
-    setScrollOffset(next);
-  }, []);
-
-  const stopMomentum = useCallback(() => {
-    if (momentumRafRef.current) {
-      cancelAnimationFrame(momentumRafRef.current);
-      momentumRafRef.current = 0;
-    }
-  }, []);
-
-  useEffect(() => () => stopMomentum(), [stopMomentum]);
 
   useEffect(() => {
     const onResize = () => {
@@ -126,8 +99,7 @@ const MapViewBottomSheet = ({
 
   useEffect(() => {
     if (!showContent) {
-      scrollOffsetRef.current = 0;
-      setScrollOffset(0);
+      if (scrollBodyRef.current) scrollBodyRef.current.scrollTop = 0;
     }
   }, [showContent]);
 
@@ -145,168 +117,23 @@ const MapViewBottomSheet = ({
     if (!selectedStoreId || !showContent) return;
     const el = cardWrapRefs.current.get(selectedStoreId);
     const sb = scrollBodyRef.current;
-    const inner = contentInnerRef.current;
-    if (!el || !sb || !inner) return;
-    const innerRect = inner.getBoundingClientRect();
-    const cardRect = el.getBoundingClientRect();
+    if (!el || !sb) return;
     const sbRect = sb.getBoundingClientRect();
-    const cardRelTop = cardRect.top - innerRect.top + scrollOffsetRef.current;
+    const cardRect = el.getBoundingClientRect();
+    const cardRelTop = cardRect.top - sbRect.top + sb.scrollTop;
     const target = cardRelTop + cardRect.height / 2 - sbRect.height / 2;
-    const maxScroll = Math.max(0, inner.offsetHeight - sb.offsetHeight);
-    updateScroll(Math.max(0, Math.min(maxScroll, target)));
-  }, [selectedStoreId, showContent, updateScroll]);
+    const maxScroll = Math.max(0, sb.scrollHeight - sb.clientHeight);
+    sb.scrollTo({ top: Math.max(0, Math.min(maxScroll, target)), behavior: "smooth" });
+  }, [selectedStoreId, showContent]);
+
+  useEffect(() => {
+    return () => {
+      if (clearSelectTimerRef.current) clearTimeout(clearSelectTimerRef.current);
+    };
+  }, []);
 
   const maxHeight = Math.max(MIN_EXPANDED, expandedCap());
   maxHeightRef.current = maxHeight;
-
-  // 스크롤바디 제스처: transform 기반 스크롤 + 천장 충돌 시 패널 collapse 핸드오프
-  useDrag(
-    ({ first, last, movement: [, my], delta: [, dy], velocity: [, vy], event }) => {
-      const sb = scrollBodyRef.current;
-      const inner = contentInnerRef.current;
-      if (!sb || !inner) return;
-
-      if (first) {
-        stopMomentum();
-        scrollDragRef.current = {
-          startScroll: scrollOffsetRef.current,
-          startH: panelHeightRef.current,
-          controlling: false,
-          lockedMy: 0,
-        };
-      }
-
-      const ds = scrollDragRef.current;
-      const maxScroll = Math.max(0, inner.offsetHeight - sb.offsetHeight);
-
-      if (!ds.controlling) {
-        // 손가락 아래로 = my>0 → 컨텐츠 위로 보임 = scrollOffset 감소
-        const targetScroll = ds.startScroll - my;
-        const newScroll = Math.max(0, Math.min(maxScroll, targetScroll));
-
-        if (newScroll !== scrollOffsetRef.current) {
-          updateScroll(newScroll);
-        }
-
-        // 천장 넘어 더 당기려는 시도 → 패널 제어로 전환
-        if (targetScroll < 0 && dy > 0) {
-          ds.controlling = true;
-          ds.lockedMy = ds.startScroll;
-          setIsDragging(true);
-        }
-      }
-
-      if (ds.controlling) {
-        const ev = event as Event | undefined;
-        if (ev && ev.cancelable) ev.preventDefault();
-        const panelDelta = my - ds.lockedMy;
-        const newH = Math.round(
-          Math.min(maxHeightRef.current, Math.max(PEEK_HEIGHT, ds.startH - panelDelta))
-        );
-        panelHeightRef.current = newH;
-        setPanelHeight(newH);
-      }
-
-      if (last) {
-        if (ds.controlling) {
-          ds.controlling = false;
-          setIsDragging(false);
-          const h = panelHeightRef.current;
-          if (ds.startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
-            panelHeightRef.current = PEEK_HEIGHT;
-            setPanelHeight(PEEK_HEIGHT);
-          } else {
-            const mid = (PEEK_HEIGHT + maxHeightRef.current) / 2;
-            const snapped = h >= mid ? maxHeightRef.current : PEEK_HEIGHT;
-            panelHeightRef.current = snapped;
-            setPanelHeight(snapped);
-          }
-        } else if (Math.abs(vy) > 0.1) {
-          // 모멘텀 스크롤
-          let v = -vy * 16;
-          const decay = 0.94;
-          const animate = () => {
-            if (Math.abs(v) < 0.3) {
-              momentumRafRef.current = 0;
-              return;
-            }
-            const sb2 = scrollBodyRef.current;
-            const inner2 = contentInnerRef.current;
-            const max = Math.max(0, (inner2?.offsetHeight ?? 0) - (sb2?.offsetHeight ?? 0));
-            const next = scrollOffsetRef.current + v;
-            if (next <= 0 || next >= max) {
-              updateScroll(Math.max(0, Math.min(max, next)));
-              momentumRafRef.current = 0;
-              return;
-            }
-            updateScroll(next);
-            v *= decay;
-            momentumRafRef.current = requestAnimationFrame(animate);
-          };
-          momentumRafRef.current = requestAnimationFrame(animate);
-        }
-      }
-    },
-    {
-      target: scrollBodyRef,
-      eventOptions: { passive: false },
-      filterTaps: true,
-    }
-  );
-
-  useEffect(() => {
-    const el = sheetRef.current;
-    if (!el) return;
-
-    const onWheel = (e: WheelEvent) => {
-      if (!el.contains(e.target as Node)) return;
-      if (dragRef.current?.dragging) return;
-
-      const cap = maxHeightRef.current;
-      const h = panelHeightRef.current;
-      const sb = scrollBodyRef.current;
-      const inner = contentInnerRef.current;
-      const expandedContent = h > PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
-
-      if (expandedContent && sb && inner) {
-        const maxScroll = Math.max(0, inner.offsetHeight - sb.offsetHeight);
-        const atTop = scrollOffsetRef.current <= 1;
-        const atBottom = scrollOffsetRef.current >= maxScroll - 1;
-
-        if (maxScroll > 0) {
-          if (e.deltaY > 0 && !atBottom) {
-            e.preventDefault();
-            e.stopPropagation();
-            updateScroll(Math.min(maxScroll, scrollOffsetRef.current + e.deltaY));
-            return;
-          }
-          if (e.deltaY < 0 && !atTop) {
-            e.preventDefault();
-            e.stopPropagation();
-            updateScroll(Math.max(0, scrollOffsetRef.current + e.deltaY));
-            return;
-          }
-        }
-      }
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (e.deltaY === 0) return;
-      if (Math.abs(e.deltaY) < 0.5) return;
-
-      const next = e.deltaY < 0 ? cap : PEEK_HEIGHT;
-      if (next === h) return;
-
-      panelHeightRef.current = next;
-      setPanelHeight(next);
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", onWheel);
-    };
-  }, [updateScroll]);
 
   const startDrag = (clientY: number) => {
     dragRef.current = { startY: clientY, startH: panelHeightRef.current, dragging: true };
@@ -325,10 +152,11 @@ const MapViewBottomSheet = ({
     if (next >= maxHeight) {
       if (d.hitMaxY === undefined) d.hitMaxY = clientY;
       const overshoot = Math.max(0, d.hitMaxY - clientY);
-      const inner = contentInnerRef.current;
       const sb = scrollBodyRef.current;
-      const max = Math.max(0, (inner?.offsetHeight ?? 0) - (sb?.offsetHeight ?? 0));
-      updateScroll(Math.min(max, overshoot));
+      if (sb) {
+        const max = Math.max(0, sb.scrollHeight - sb.clientHeight);
+        sb.scrollTop = Math.min(max, overshoot);
+      }
     } else {
       d.hitMaxY = undefined;
     }
@@ -381,9 +209,8 @@ const MapViewBottomSheet = ({
 
   return (
     <div
-      ref={sheetRef}
       className={cn(
-        "fixed left-0 right-0 z-[45] mx-auto flex max-w-md flex-col overflow-hidden overscroll-y-contain overscroll-x-none rounded-t-2xl border border-border/80 bg-card/98 shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-md touch-pan-y",
+        "fixed left-0 right-0 z-[45] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-2xl border border-border/80 bg-card/98 shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-md",
         className
       )}
       style={{
@@ -437,15 +264,10 @@ const MapViewBottomSheet = ({
 
           <div
             ref={scrollBodyRef}
-            className="touch-none min-h-0 flex-1 overflow-hidden px-3 pb-3"
+            className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3"
+            style={{ WebkitOverflowScrolling: "touch" }}
           >
-            <div
-              ref={contentInnerRef}
-              style={{
-                transform: `translate3d(0, ${-scrollOffset}px, 0)`,
-                willChange: "transform",
-              }}
-            >
+            <div>
               <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
                 {stores.map((store) => (
                   <div
