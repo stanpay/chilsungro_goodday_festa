@@ -23,7 +23,7 @@
   12% {
     transform: translateX(0);
   }
-  83%,
+  68%,
   100% {
     transform: translateX(calc(-1 * var(--marquee-distance, 0px)));
   }
