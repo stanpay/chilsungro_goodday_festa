@@ -130,11 +130,11 @@ const MapViewBottomSheet = ({
         const atTop = scrollTop <= 1;
         const atBottom = scrollTop + clientHeight >= scrollHeight - 2;
 
-        if (e.deltaY > 0 && !atTop) {
+        if (e.deltaY > 0 && !atBottom) {
           e.stopPropagation();
           return;
         }
-        if (e.deltaY < 0 && !atBottom) {
+        if (e.deltaY < 0 && !atTop) {
           e.stopPropagation();
           return;
         }
@@ -160,60 +160,6 @@ const MapViewBottomSheet = ({
       el.removeEventListener("wheel", onWheel);
     };
   }, []);
-
-  /** 리스트가 맨 위일 때 아래로 당기면 시트 높이를 줄여 접기 (모바일 터치) */
-  const touchPullLastYRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const inner = scrollBodyRef.current;
-    if (!inner || !showContent) return;
-
-    const onTouchStart = (e: TouchEvent) => {
-      touchPullLastYRef.current = e.touches[0].clientY;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (touchPullLastYRef.current == null) return;
-      const y = e.touches[0].clientY;
-      const innerEl = scrollBodyRef.current;
-      if (!innerEl) return;
-      const atTop = innerEl.scrollTop <= 1;
-      const lastY = touchPullLastYRef.current;
-      const movingDown = y > lastY;
-      const expanded = panelHeightRef.current > PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
-
-      if (atTop && movingDown && expanded) {
-        const dy = y - lastY;
-        e.preventDefault();
-        const next = Math.round(Math.max(PEEK_HEIGHT, panelHeightRef.current - dy));
-        panelHeightRef.current = next;
-        setPanelHeight(next);
-      }
-      touchPullLastYRef.current = y;
-    };
-
-    const onTouchEnd = () => {
-      touchPullLastYRef.current = null;
-      const h = panelHeightRef.current;
-      const mid = (PEEK_HEIGHT + maxHeight) / 2;
-      if (h > PEEK_HEIGHT + CONTENT_REVEAL_EXTRA && h < maxHeight) {
-        const snapped = h >= mid ? maxHeight : PEEK_HEIGHT;
-        panelHeightRef.current = snapped;
-        setPanelHeight(snapped);
-      }
-    };
-
-    inner.addEventListener("touchstart", onTouchStart, { passive: true });
-    inner.addEventListener("touchmove", onTouchMove, { passive: false });
-    inner.addEventListener("touchend", onTouchEnd);
-    inner.addEventListener("touchcancel", onTouchEnd);
-    return () => {
-      inner.removeEventListener("touchstart", onTouchStart);
-      inner.removeEventListener("touchmove", onTouchMove);
-      inner.removeEventListener("touchend", onTouchEnd);
-      inner.removeEventListener("touchcancel", onTouchEnd);
-    };
-  }, [showContent, maxHeight]);
 
   const startDrag = (clientY: number) => {
     dragRef.current = { startY: clientY, startH: panelHeightRef.current, dragging: true };
@@ -338,6 +284,7 @@ const MapViewBottomSheet = ({
           <div
             ref={scrollBodyRef}
             className="touch-pan-y flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none px-3 pb-3"
+            style={{ WebkitOverflowScrolling: "touch" }}
           >
             <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
               {stores.map((store) => (
