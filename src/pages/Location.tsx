@@ -78,6 +78,8 @@ const Location = () => {
 
   const handleLocationSelect = (name: string, address?: string, coordinates?: { latitude: number; longitude: number }) => {
     localStorage.setItem("selectedLocation", name);
+    localStorage.removeItem("nearbyStores");
+    localStorage.removeItem("lastLocationFetchTime");
     
     // 좌표가 있으면 저장
     if (coordinates) {
@@ -143,6 +145,8 @@ const Location = () => {
         localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
         localStorage.setItem("selectedLocation", displayName);
         localStorage.removeItem("isManualLocation");
+        localStorage.removeItem("nearbyStores");
+        localStorage.removeItem("lastLocationFetchTime");
 
         setIsLoadingLocation(false);
         toast({
