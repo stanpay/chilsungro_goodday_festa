@@ -159,33 +159,30 @@ const StoreCard = ({
               </div>
             )}
           </div>
-          <div className="p-3 bg-card">
+          <div className="grid grid-cols-1 grid-rows-[1.5rem_1rem_1.25rem] gap-y-1 bg-card p-3">
             <AutoFitMarquee
               as="h3"
               text={displayName}
-              className="mb-1 h-6"
+              className="flex h-6 items-center"
               textClassName="font-bold !leading-6"
               fontSizeClasses={["text-base", "text-sm"]}
             />
-            <div className="mb-1.5 flex h-4 items-center text-xs text-muted-foreground">
+            <div className="flex h-4 min-w-0 items-center text-xs text-muted-foreground">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <AutoFitMarquee
-                text={distance}
+                text={
+                  isOpen === false
+                    ? `${distance} · ${closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}`
+                    : distance
+                }
                 className="flex-1"
                 textClassName="text-muted-foreground !leading-4"
                 fontSizeClasses={["text-xs"]}
               />
             </div>
-            {isOpen === false && (
-              <div className="flex items-center gap-1 text-xs mb-1.5">
-                <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-muted-foreground/50" />
-                <span className="text-muted-foreground">
-                  {closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}
-                </span>
-              </div>
-            )}
-            {(showLocalCurrencyChip || hasGifticonDiscount || showParkingChip) && (
-              <div className="flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide">
+            <div className="flex h-5 flex-nowrap items-center gap-1 overflow-x-auto scrollbar-hide">
+              {(showLocalCurrencyChip || hasGifticonDiscount || showParkingChip) && (
+                <>
                 {showLocalCurrencyChip && local_currency_discount_rate != null && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
                     {sc.localCurrencyDiscount(local_currency_discount_rate)}
@@ -201,8 +198,9 @@ const StoreCard = ({
                     {getParkingText()}
                   </span>
                 )}
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </Card>
