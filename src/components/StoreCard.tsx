@@ -42,6 +42,9 @@ const brandLogos: Record<string, string> = {
   twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
 };
 
+const STORE_NAME_FONT_CLASSES = ["text-base", "text-sm", "text-xs", "text-[0.65rem]"];
+const STORE_NAME_MARQUEE_TOLERANCE_PX = 2;
+
 const StoreCard = ({
   id,
   name,
@@ -75,38 +78,63 @@ const StoreCard = ({
   const brandLogoUrl = brandLogos[image as keyof typeof brandLogos];
   const nameContainerRef = useRef<HTMLHeadingElement>(null);
   const nameTextRef = useRef<HTMLSpanElement>(null);
+  const [nameFontSizeClass, setNameFontSizeClass] = useState(STORE_NAME_FONT_CLASSES[0]);
   const [nameMarqueeDistance, setNameMarqueeDistance] = useState(0);
 
   useEffect(() => {
     const container = nameContainerRef.current;
-    const text = nameTextRef.current;
-    if (!container || !text) return;
+    if (!container) return;
 
-    const updateMarqueeDistance = () => {
-      setNameMarqueeDistance(Math.max(0, text.scrollWidth - container.clientWidth));
+    const measureTextWidth = (fontSizeClass: string) => {
+      const probe = document.createElement("span");
+      probe.className = `${fontSizeClass} font-bold`;
+      probe.textContent = displayName;
+      probe.style.position = "absolute";
+      probe.style.visibility = "hidden";
+      probe.style.whiteSpace = "nowrap";
+      probe.style.pointerEvents = "none";
+      document.body.appendChild(probe);
+      const width = probe.scrollWidth;
+      probe.remove();
+      return width;
     };
 
-    updateMarqueeDistance();
+    const updateNameLayout = () => {
+      const containerWidth = container.clientWidth;
+      if (containerWidth <= 0) return;
+
+      const measuredWidths = STORE_NAME_FONT_CLASSES.map((fontSizeClass) => ({
+        fontSizeClass,
+        width: measureTextWidth(fontSizeClass),
+      }));
+      const fittingSize = measuredWidths.find(
+        ({ width }) => width <= containerWidth + STORE_NAME_MARQUEE_TOLERANCE_PX
+      );
+      const selected = fittingSize ?? measuredWidths[measuredWidths.length - 1];
+      const overflowDistance = selected.width - containerWidth;
+
+      setNameFontSizeClass(selected.fontSizeClass);
+      setNameMarqueeDistance(
+        fittingSize || overflowDistance <= STORE_NAME_MARQUEE_TOLERANCE_PX
+          ? 0
+          : overflowDistance
+      );
+    };
+
+    updateNameLayout();
+
+    document.fonts?.ready.then(updateNameLayout);
 
     if (!("ResizeObserver" in window)) {
-      window.addEventListener("resize", updateMarqueeDistance);
-      return () => window.removeEventListener("resize", updateMarqueeDistance);
+      window.addEventListener("resize", updateNameLayout);
+      return () => window.removeEventListener("resize", updateNameLayout);
     }
 
-    const observer = new ResizeObserver(updateMarqueeDistance);
+    const observer = new ResizeObserver(updateNameLayout);
     observer.observe(container);
-    observer.observe(text);
 
     return () => observer.disconnect();
   }, [displayName]);
-  
-  // 매장명 길이에 따라 폰트 크기 자동 조절
-  const getFontSizeClass = () => {
-    if (displayName.length <= 8) return "text-base";
-    if (displayName.length <= 12) return "text-sm";
-    if (displayName.length <= 16) return "text-xs";
-    return "text-[0.65rem]";
-  };
 
   const handleClick = () => {
     if (disabled) return;
@@ -197,7 +225,7 @@ const StoreCard = ({
           <div className="p-3 bg-card">
             <h3
               ref={nameContainerRef}
-              className={`mb-1 min-w-0 overflow-hidden font-bold ${getFontSizeClass()}`}
+              className={cn("mb-1 min-w-0 overflow-hidden font-bold", nameFontSizeClass)}
             >
               <span
                 ref={nameTextRef}

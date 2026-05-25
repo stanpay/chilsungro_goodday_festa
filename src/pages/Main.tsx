@@ -1515,7 +1515,8 @@ interface StoreData {
     if (!container || !text) return;
 
     const updateMarqueeDistance = () => {
-      setHeaderLocationMarqueeDistance(Math.max(0, text.scrollWidth - container.clientWidth));
+      const overflowDistance = text.scrollWidth - container.clientWidth;
+      setHeaderLocationMarqueeDistance(overflowDistance > 2 ? overflowDistance : 0);
     };
 
     updateMarqueeDistance();
