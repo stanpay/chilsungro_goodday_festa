@@ -28,6 +28,7 @@ import LandingPage from "./pages/Landing/LandingPage";
 import RedirectToJeju from "./pages/RedirectToJeju";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import AnalyticsPageTracker from "@/components/AnalyticsPageTracker";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,7 @@ const App = () => (
           v7_relativeSplatPath: true,
         }}
       >
+        <AnalyticsPageTracker />
         <Routes>
           <Route path="/" element={<Main />} />
           <Route path="/jeju" element={<Main />} />
