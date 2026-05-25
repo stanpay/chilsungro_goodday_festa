@@ -188,17 +188,8 @@ const PwaInstallPrompt = () => {
               </div>
             </div>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-              {isSamsung ? (
-                <>
-                  <span className="block whitespace-nowrap">Chrome에서 홈 화면에 추가하시면</span>
-                  <span className="block whitespace-nowrap">안전하게 설치할 수 있어요</span>
-                </>
-              ) : (
-                <>
-                  <span className="block whitespace-nowrap">홈 화면에 추가하시면 앱처럼</span>
-                  <span className="block whitespace-nowrap">빠르게 이용할 수 있어요</span>
-                </>
-              )}
+              <span className="block whitespace-nowrap">홈 화면에 추가하시면 앱처럼</span>
+              <span className="block whitespace-nowrap">빠르게 이용할 수 있어요</span>
             </p>
           </div>
 
@@ -214,7 +205,7 @@ const PwaInstallPrompt = () => {
               onClick={handleYes}
               className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground active:opacity-80 transition-opacity"
             >
-              {isSamsung ? "Chrome에서 설치" : "홈 화면에 추가"}
+              홈 화면에 추가
             </button>
           </div>
         </div>
