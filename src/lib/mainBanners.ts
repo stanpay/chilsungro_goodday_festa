@@ -28,7 +28,7 @@ export const MAIN_BANNERS: MainBanner[] = [
       zh: "济州旅行者中心优惠券活动",
       ja: "済州旅行者センタークーポンイベント",
     },
-    href: "https://naver.me/Fbqwjezy",
+    href: "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome",
   },
 ];
 

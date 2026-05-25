@@ -24,7 +24,46 @@ type MainPromoBannerProps = {
   locale: AppLocale;
   className?: string;
 };
+const openNaverMap = () => {
+  const placeId = "2031464673";
+  const webUrl =
+    "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome";
 
+  // 모바일 웹이면 본인 서비스 도메인을 appname으로 넣는 게 좋습니다.
+  const appName = encodeURIComponent(window.location.origin);
+
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isAndroid) {
+    // Android Chrome 계열: 네이버지도 앱 설치 시 앱으로 열림
+    window.location.href =
+      `intent://place?id=${placeId}&appname=${appName}` +
+      `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
+      `category=android.intent.category.BROWSABLE;` +
+      `package=com.nhn.android.nmap;` +
+      `S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+    return;
+  }
+
+  if (isIOS) {
+    const deepLink = `nmap://place?id=${placeId}&appname=${appName}`;
+    const clickedAt = Date.now();
+
+    window.location.href = deepLink;
+
+    // 앱이 안 열리면 웹 네이버지도로 fallback
+    setTimeout(() => {
+      if (Date.now() - clickedAt < 2000) {
+        window.location.href = webUrl;
+      }
+    }, 1500);
+    return;
+  }
+
+  // PC에서는 그냥 웹 네이버지도
+  window.open(webUrl, "_blank");
+};
 function BannerSlide({
   banner,
   locale,
@@ -68,11 +107,12 @@ function BannerSlide({
   if (banner.href) {
     return (
       <a
-        href={banner.href}
-        target="_blank"
-        rel="noopener noreferrer"
+        // href={banner.href}
+        // target="_blank"
+        // rel="noopener noreferrer"
         className="block h-full w-full overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-label={title || imageAlt}
+        onClick={openNaverMap}
       >
         {content}
       </a>
