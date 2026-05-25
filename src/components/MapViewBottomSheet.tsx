@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDrag } from "@use-gesture/react";
 import { GripHorizontal, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
@@ -10,6 +11,10 @@ const TOP_RESERVE_PX = 16;
 const PEEK_HEIGHT = 60;
 const CONTENT_REVEAL_EXTRA = 36;
 const MIN_EXPANDED = 280;
+/** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
+const SLIGHT_EXPAND_FROM_PEEK_PX = 10;
+/** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 */
+const COLLAPSE_FROM_EXPANDED_PX = 30;
 
 export type MapSheetStore = {
   id: string;
@@ -65,20 +70,45 @@ const MapViewBottomSheet = ({
 
   const [panelHeight, setPanelHeight] = useState(PEEK_HEIGHT);
   const [isDragging, setIsDragging] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const panelHeightRef = useRef(PEEK_HEIGHT);
+  const scrollOffsetRef = useRef(0);
   const dragRef = useRef<{
     startY: number;
     startH: number;
     dragging: boolean;
     hitMaxY?: number;
   } | null>(null);
+  const scrollDragRef = useRef({
+    startScroll: 0,
+    startH: 0,
+    controlling: false,
+    lockedMy: 0,
+  });
   const cardWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const contentInnerRef = useRef<HTMLDivElement>(null);
   const maxHeightRef = useRef(0);
+  const momentumRafRef = useRef(0);
   const clearSelectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   panelHeightRef.current = panelHeight;
+  scrollOffsetRef.current = scrollOffset;
+
+  const updateScroll = useCallback((next: number) => {
+    scrollOffsetRef.current = next;
+    setScrollOffset(next);
+  }, []);
+
+  const stopMomentum = useCallback(() => {
+    if (momentumRafRef.current) {
+      cancelAnimationFrame(momentumRafRef.current);
+      momentumRafRef.current = 0;
+    }
+  }, []);
+
+  useEffect(() => () => stopMomentum(), [stopMomentum]);
 
   useEffect(() => {
     const onResize = () => {
@@ -95,6 +125,13 @@ const MapViewBottomSheet = ({
   const showContent = panelHeight > PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
 
   useEffect(() => {
+    if (!showContent) {
+      scrollOffsetRef.current = 0;
+      setScrollOffset(0);
+    }
+  }, [showContent]);
+
+  useEffect(() => {
     if (!selectedStoreId) return;
     // 핀 클릭 시 바텀시트가 접혀 있으면 자동으로 펼치기
     const cap = expandedCap();
@@ -107,98 +144,115 @@ const MapViewBottomSheet = ({
   useEffect(() => {
     if (!selectedStoreId || !showContent) return;
     const el = cardWrapRefs.current.get(selectedStoreId);
-    el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [selectedStoreId, showContent]);
+    const sb = scrollBodyRef.current;
+    const inner = contentInnerRef.current;
+    if (!el || !sb || !inner) return;
+    const innerRect = inner.getBoundingClientRect();
+    const cardRect = el.getBoundingClientRect();
+    const sbRect = sb.getBoundingClientRect();
+    const cardRelTop = cardRect.top - innerRect.top + scrollOffsetRef.current;
+    const target = cardRelTop + cardRect.height / 2 - sbRect.height / 2;
+    const maxScroll = Math.max(0, inner.offsetHeight - sb.offsetHeight);
+    updateScroll(Math.max(0, Math.min(maxScroll, target)));
+  }, [selectedStoreId, showContent, updateScroll]);
 
   const maxHeight = Math.max(MIN_EXPANDED, expandedCap());
   maxHeightRef.current = maxHeight;
 
-  useEffect(() => {
-    const sheet = sheetRef.current;
-    if (!sheet) return;
-
-    let startY = 0;
-    let startH = 0;
-    let lastY = 0;
-    let controlling = false;
-    let touching = false;
-    let crossedTop = false;
-
-    const onTouchStart = (e: TouchEvent) => {
+  // 스크롤바디 제스처: transform 기반 스크롤 + 천장 충돌 시 패널 collapse 핸드오프
+  useDrag(
+    ({ first, last, movement: [, my], delta: [, dy], velocity: [, vy], event }) => {
       const sb = scrollBodyRef.current;
-      if (!sb || !sb.contains(e.target as Node)) return;
+      const inner = contentInnerRef.current;
+      if (!sb || !inner) return;
 
-      touching = true;
-      startY = e.touches[0].clientY;
-      lastY = startY;
-      startH = panelHeightRef.current;
-      controlling = false;
-      crossedTop = sb.scrollTop <= 0;
-    };
+      if (first) {
+        stopMomentum();
+        scrollDragRef.current = {
+          startScroll: scrollOffsetRef.current,
+          startH: panelHeightRef.current,
+          controlling: false,
+          lockedMy: 0,
+        };
+      }
 
-    const onTouchMove = (e: TouchEvent) => {
-      if (!touching) return;
-      const sb = scrollBodyRef.current;
+      const ds = scrollDragRef.current;
+      const maxScroll = Math.max(0, inner.offsetHeight - sb.offsetHeight);
 
-      const currentY = e.touches[0].clientY;
-      const frameDelta = currentY - lastY;
-      lastY = currentY;
+      if (!ds.controlling) {
+        // 손가락 아래로 = my>0 → 컨텐츠 위로 보임 = scrollOffset 감소
+        const targetScroll = ds.startScroll - my;
+        const newScroll = Math.max(0, Math.min(maxScroll, targetScroll));
 
-      if (!controlling) {
-        if (!sb || sb.scrollTop <= 0) crossedTop = true;
+        if (newScroll !== scrollOffsetRef.current) {
+          updateScroll(newScroll);
+        }
 
-        if (crossedTop && frameDelta > 0) {
-          controlling = true;
-          startY = currentY;
-          startH = panelHeightRef.current;
+        // 천장 넘어 더 당기려는 시도 → 패널 제어로 전환
+        if (targetScroll < 0 && dy > 0) {
+          ds.controlling = true;
+          ds.lockedMy = ds.startScroll;
           setIsDragging(true);
         }
       }
 
-      if (controlling) {
-        e.preventDefault();
-        if (sb && sb.scrollTop !== 0) sb.scrollTop = 0;
-
-        const deltaY = currentY - startY;
+      if (ds.controlling) {
+        const ev = event as Event | undefined;
+        if (ev && ev.cancelable) ev.preventDefault();
+        const panelDelta = my - ds.lockedMy;
         const newH = Math.round(
-          Math.min(maxHeightRef.current, Math.max(PEEK_HEIGHT, startH - deltaY))
+          Math.min(maxHeightRef.current, Math.max(PEEK_HEIGHT, ds.startH - panelDelta))
         );
         panelHeightRef.current = newH;
         setPanelHeight(newH);
       }
-    };
 
-    const onTouchEnd = () => {
-      if (!touching) return;
-      touching = false;
-      if (!controlling) return;
-      controlling = false;
-      setIsDragging(false);
-
-      const h = panelHeightRef.current;
-      if (startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
-        panelHeightRef.current = PEEK_HEIGHT;
-        setPanelHeight(PEEK_HEIGHT);
-        return;
+      if (last) {
+        if (ds.controlling) {
+          ds.controlling = false;
+          setIsDragging(false);
+          const h = panelHeightRef.current;
+          if (ds.startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
+            panelHeightRef.current = PEEK_HEIGHT;
+            setPanelHeight(PEEK_HEIGHT);
+          } else {
+            const mid = (PEEK_HEIGHT + maxHeightRef.current) / 2;
+            const snapped = h >= mid ? maxHeightRef.current : PEEK_HEIGHT;
+            panelHeightRef.current = snapped;
+            setPanelHeight(snapped);
+          }
+        } else if (Math.abs(vy) > 0.1) {
+          // 모멘텀 스크롤
+          let v = -vy * 16;
+          const decay = 0.94;
+          const animate = () => {
+            if (Math.abs(v) < 0.3) {
+              momentumRafRef.current = 0;
+              return;
+            }
+            const sb2 = scrollBodyRef.current;
+            const inner2 = contentInnerRef.current;
+            const max = Math.max(0, (inner2?.offsetHeight ?? 0) - (sb2?.offsetHeight ?? 0));
+            const next = scrollOffsetRef.current + v;
+            if (next <= 0 || next >= max) {
+              updateScroll(Math.max(0, Math.min(max, next)));
+              momentumRafRef.current = 0;
+              return;
+            }
+            updateScroll(next);
+            v *= decay;
+            momentumRafRef.current = requestAnimationFrame(animate);
+          };
+          momentumRafRef.current = requestAnimationFrame(animate);
+        }
       }
-      const mid = (PEEK_HEIGHT + maxHeightRef.current) / 2;
-      const snapped = h >= mid ? maxHeightRef.current : PEEK_HEIGHT;
-      panelHeightRef.current = snapped;
-      setPanelHeight(snapped);
-    };
-
-    sheet.addEventListener("touchstart", onTouchStart, { passive: true });
-    sheet.addEventListener("touchmove", onTouchMove, { passive: false });
-    sheet.addEventListener("touchend", onTouchEnd, { passive: true });
-    sheet.addEventListener("touchcancel", onTouchEnd, { passive: true });
-
-    return () => {
-      sheet.removeEventListener("touchstart", onTouchStart);
-      sheet.removeEventListener("touchmove", onTouchMove);
-      sheet.removeEventListener("touchend", onTouchEnd);
-      sheet.removeEventListener("touchcancel", onTouchEnd);
-    };
-  }, []);
+    },
+    {
+      target: scrollBodyRef,
+      eventOptions: { passive: false },
+      filterTaps: true,
+    }
+  );
 
   useEffect(() => {
     const el = sheetRef.current;
@@ -210,21 +264,28 @@ const MapViewBottomSheet = ({
 
       const cap = maxHeightRef.current;
       const h = panelHeightRef.current;
-      const inner = scrollBodyRef.current;
+      const sb = scrollBodyRef.current;
+      const inner = contentInnerRef.current;
       const expandedContent = h > PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
 
-      if (expandedContent && inner && inner.scrollHeight > inner.clientHeight + 2) {
-        const { scrollTop, scrollHeight, clientHeight } = inner;
-        const atTop = scrollTop <= 1;
-        const atBottom = scrollTop + clientHeight >= scrollHeight - 2;
+      if (expandedContent && sb && inner) {
+        const maxScroll = Math.max(0, inner.offsetHeight - sb.offsetHeight);
+        const atTop = scrollOffsetRef.current <= 1;
+        const atBottom = scrollOffsetRef.current >= maxScroll - 1;
 
-        if (e.deltaY > 0 && !atBottom) {
-          e.stopPropagation();
-          return;
-        }
-        if (e.deltaY < 0 && !atTop) {
-          e.stopPropagation();
-          return;
+        if (maxScroll > 0) {
+          if (e.deltaY > 0 && !atBottom) {
+            e.preventDefault();
+            e.stopPropagation();
+            updateScroll(Math.min(maxScroll, scrollOffsetRef.current + e.deltaY));
+            return;
+          }
+          if (e.deltaY < 0 && !atTop) {
+            e.preventDefault();
+            e.stopPropagation();
+            updateScroll(Math.max(0, scrollOffsetRef.current + e.deltaY));
+            return;
+          }
         }
       }
 
@@ -232,8 +293,6 @@ const MapViewBottomSheet = ({
       e.stopPropagation();
 
       if (e.deltaY === 0) return;
-
-      /** 휠 한 번(방향)당 완전 펼침 / 완전 접힘 — 미세 떨림만 무시 */
       if (Math.abs(e.deltaY) < 0.5) return;
 
       const next = e.deltaY < 0 ? cap : PEEK_HEIGHT;
@@ -247,7 +306,7 @@ const MapViewBottomSheet = ({
     return () => {
       el.removeEventListener("wheel", onWheel);
     };
-  }, []);
+  }, [updateScroll]);
 
   const startDrag = (clientY: number) => {
     dragRef.current = { startY: clientY, startH: panelHeightRef.current, dragging: true };
@@ -265,17 +324,15 @@ const MapViewBottomSheet = ({
 
     if (next >= maxHeight) {
       if (d.hitMaxY === undefined) d.hitMaxY = clientY;
-      const inner = scrollBodyRef.current;
-      if (inner) inner.scrollTop = Math.max(0, d.hitMaxY - clientY);
+      const overshoot = Math.max(0, d.hitMaxY - clientY);
+      const inner = contentInnerRef.current;
+      const sb = scrollBodyRef.current;
+      const max = Math.max(0, (inner?.offsetHeight ?? 0) - (sb?.offsetHeight ?? 0));
+      updateScroll(Math.min(max, overshoot));
     } else {
       d.hitMaxY = undefined;
     }
   };
-
-  /** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
-  const SLIGHT_EXPAND_FROM_PEEK_PX = 10;
-  /** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 */
-  const COLLAPSE_FROM_EXPANDED_PX = 30;
 
   const endDrag = () => {
     const d = dragRef.current;
@@ -291,7 +348,6 @@ const MapViewBottomSheet = ({
       setPanelHeight(maxHeight);
       return;
     }
-    // 펼쳐진 상태에서 80px 이상 내렸으면 바로 접기
     const startedExpanded = startH >= maxHeight - 2;
     if (startedExpanded && startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
       panelHeightRef.current = PEEK_HEIGHT;
@@ -381,30 +437,37 @@ const MapViewBottomSheet = ({
 
           <div
             ref={scrollBodyRef}
-            className="touch-pan-y flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-none overscroll-x-none px-3 pb-3"
-            style={{ WebkitOverflowScrolling: "touch" }}
+            className="touch-none flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3"
           >
-            <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
-              {stores.map((store) => (
-                <div
-                  key={store.id}
-                  ref={(node) => {
-                    if (node) cardWrapRefs.current.set(store.id, node);
-                    else cardWrapRefs.current.delete(store.id);
-                  }}
-                  onClick={() => {
-                    onSelectStore(store.id);
-                    if (clearSelectTimerRef.current) clearTimeout(clearSelectTimerRef.current);
-                    clearSelectTimerRef.current = setTimeout(() => onSelectStore(null), 1200);
-                  }}
-                  className={cn(
-                    "h-full rounded-lg transition-[box-shadow,transform]",
-                    selectedStoreId === store.id && "ring-2 ring-primary ring-offset-2 ring-offset-card"
-                  )}
-                >
-                  <StoreCard {...store} isHighlighted={selectedStoreId === store.id} />
-                </div>
-              ))}
+            <div
+              ref={contentInnerRef}
+              style={{
+                transform: `translate3d(0, ${-scrollOffset}px, 0)`,
+                willChange: "transform",
+              }}
+            >
+              <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
+                {stores.map((store) => (
+                  <div
+                    key={store.id}
+                    ref={(node) => {
+                      if (node) cardWrapRefs.current.set(store.id, node);
+                      else cardWrapRefs.current.delete(store.id);
+                    }}
+                    onClick={() => {
+                      onSelectStore(store.id);
+                      if (clearSelectTimerRef.current) clearTimeout(clearSelectTimerRef.current);
+                      clearSelectTimerRef.current = setTimeout(() => onSelectStore(null), 1200);
+                    }}
+                    className={cn(
+                      "h-full rounded-lg transition-[box-shadow,transform]",
+                      selectedStoreId === store.id && "ring-2 ring-primary ring-offset-2 ring-offset-card"
+                    )}
+                  >
+                    <StoreCard {...store} isHighlighted={selectedStoreId === store.id} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </>
