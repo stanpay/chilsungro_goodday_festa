@@ -156,27 +156,25 @@ const PwaInstallPrompt = () => {
     return (
       <div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 px-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5 animate-in slide-in-from-bottom-4 duration-300">
-          {/* 오늘하루 보지 않기 */}
-          <button
-            onClick={handleDismissToday}
-            className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="오늘하루 보지 않기"
-          >
-            오늘하루 보지 않기
-            <X className="h-3.5 w-3.5" />
-          </button>
-
-          {/* 앱 정보 */}
+          {/* 앱 정보 + 오늘하루 보지 않기 */}
           <div className="mb-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
               <img
                 src="/favicon.png"
                 alt="스탠"
                 className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
               />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="font-bold text-base text-foreground">홈 화면 추가</p>
               </div>
+              <button
+                onClick={handleDismissToday}
+                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                aria-label="오늘하루 보지 않기"
+              >
+                오늘하루 보지 않기
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
               <span className="block whitespace-nowrap">홈 화면에 추가하시면 앱처럼</span>
