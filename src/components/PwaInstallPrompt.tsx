@@ -158,13 +158,13 @@ const PwaInstallPrompt = () => {
         <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5 animate-in slide-in-from-bottom-4 duration-300">
           {/* 앱 정보 + 오늘하루 보지 않기 */}
           <div className="mb-4">
-            <div className="flex items-start gap-3">
-              <img
-                src="/favicon.png"
-                alt="스탠"
-                className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
-              />
-              <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <img
+                  src="/favicon.png"
+                  alt="스탠"
+                  className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
+                />
                 <p className="font-bold text-base text-foreground">홈 화면 추가</p>
               </div>
               <button
