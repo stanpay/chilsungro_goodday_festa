@@ -25,6 +25,7 @@ import ChatSupport from "./components/ChatSupport";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import MembershipManagement from "./pages/MembershipManagement";
 import LandingPage from "./pages/Landing/LandingPage";
+import RedirectToJeju from "./pages/RedirectToJeju";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 
@@ -57,6 +58,7 @@ const App = () => (
           <Route path="/landing" element={<LandingPage />} />
           <Route path="/tutorial" element={<TutorialMain />} />
           <Route path="/location" element={<Location />} />
+          <Route path="/jejuqronedosim" element={<RedirectToJeju />} />
           <Route path="/sell" element={<Sell />} />
           <Route path="/sell/result/:jobId" element={<SellResult />} />
           <Route path="/sell/result/:jobId/detail" element={<SellResultDetail />} />
