@@ -70,6 +70,7 @@ const MapViewBottomSheet = ({
     startY: number;
     startH: number;
     dragging: boolean;
+    hitMaxY?: number;
   } | null>(null);
   const cardWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -240,13 +241,12 @@ const MapViewBottomSheet = ({
     panelHeightRef.current = next;
     setPanelHeight(next);
 
-    // 피크에서 시작한 드래그: maxHeight 초과분을 스크롤에 직접 반영
-    // (이 시점엔 showContent가 true이므로 scrollBodyRef가 DOM에 존재)
-    if (d.startH <= PEEK_HEIGHT + 2) {
+    if (next >= maxHeight) {
+      if (d.hitMaxY === undefined) d.hitMaxY = clientY;
       const inner = scrollBodyRef.current;
-      if (inner) {
-        inner.scrollTop = Math.max(0, rawNext - maxHeight);
-      }
+      if (inner) inner.scrollTop = Math.max(0, d.hitMaxY - clientY);
+    } else {
+      d.hitMaxY = undefined;
     }
   };
 
