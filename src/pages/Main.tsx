@@ -178,15 +178,6 @@ function storeMatchesCategoryChipFilters(
   return parts.length > 0 && parts.some(Boolean);
 }
 
-/** StoreCard의 brandLogos와 동일 — 실제 로고 이미지가 있는 매장만 표시 */
-const STORE_CARD_LOGO_IMAGE_KEYS = new Set([
-  "starbucks",
-  "baskin",
-  "mega",
-  "pascucci",
-  "twosome",
-]);
-
 const Main = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -1621,16 +1612,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     [categoryFilteredStores, benefitFilterChips]
   );
 
-  const storesWithLogoImage = useMemo(() =>
-    openStores.filter((store) => STORE_CARD_LOGO_IMAGE_KEYS.has(store.image)),
-    [openStores]
-  );
-
   const sortedStores = useMemo(() =>
-    [...storesWithLogoImage].sort((a, b) =>
+    [...openStores].sort((a, b) =>
       sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
     ),
-    [storesWithLogoImage, sortBy]
+    [openStores, sortBy]
   );
 
   const storesWithCoords = useMemo(() =>
