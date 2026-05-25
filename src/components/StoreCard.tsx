@@ -122,9 +122,7 @@ const StoreCard = ({
       const extraSmallOverflow = extraSmallWidth - containerWidth;
       setNameFontSizeClass("text-xs");
       setNameMarqueeDistance(
-        extraSmallOverflow > NAME_MARQUEE_TOLERANCE_PX
-          ? extraSmallOverflow + NAME_SAFE_RIGHT_PADDING_PX
-          : 0
+        extraSmallOverflow > NAME_MARQUEE_TOLERANCE_PX ? extraSmallOverflow : 0
       );
     };
 

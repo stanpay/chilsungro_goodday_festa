@@ -59,9 +59,7 @@ export function AutoFitMarquee({
 
       setFontSizeClass(selected.fontSizeClass);
       setMarqueeDistance(
-        fitting || overflowDistance <= OVERFLOW_TOLERANCE_PX
-          ? 0
-          : overflowDistance + SAFE_RIGHT_PADDING_PX
+        fitting || overflowDistance <= OVERFLOW_TOLERANCE_PX ? 0 : overflowDistance
       );
     };
 
