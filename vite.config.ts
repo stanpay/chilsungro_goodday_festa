@@ -4,6 +4,9 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    __APP_BUILD_ID__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? Date.now().toString()),
+  },
   server: {
     host: true, // 모든 네트워크 인터페이스에서 접근 가능
     port: 8080,

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { TouchEvent } from "react";
 import { X, Share } from "lucide-react";
 
-const SESSION_KEY = "pwa-prompt-shown";
-const DISMISS_KEY = "pwa-prompt-dismissed-until";
+const PROMPT_STORAGE_PREFIX = `pwa-prompt:${__APP_BUILD_ID__}`;
+const SESSION_KEY = `${PROMPT_STORAGE_PREFIX}:shown`;
+const DISMISS_KEY = `${PROMPT_STORAGE_PREFIX}:dismissed-until`;
 
 function isInStandaloneMode() {
   return (
@@ -19,12 +20,6 @@ function isIosSafari() {
 
 function isSamsungInternet() {
   return /SamsungBrowser/i.test(navigator.userAgent);
-}
-
-function openCurrentPageInChrome() {
-  const { host, pathname, search, hash, href } = window.location;
-  const path = `${host}${pathname}${search}${hash}`;
-  window.location.href = `intent://${path}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(href)};end`;
 }
 
 function isDismissedToday(): boolean {
@@ -89,11 +84,6 @@ const PwaInstallPrompt = () => {
   const handleYes = async () => {
     if (isIos) {
       setStep("ios-guide");
-      return;
-    }
-    if (isSamsung) {
-      openCurrentPageInChrome();
-      setStep(null);
       return;
     }
     if (!deferredPrompt) return;
