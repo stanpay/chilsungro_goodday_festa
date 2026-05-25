@@ -121,21 +121,36 @@ const MapViewBottomSheet = ({
     let startH = 0;
     let lastY = 0;
     let controlling = false;
+    let touching = false;
+    let prevScrollTop = el.scrollTop;
+
+    // scroll 이벤트로 최상단 도달 순간을 정확히 포착
+    const onScroll = () => {
+      if (prevScrollTop > 0 && el.scrollTop <= 0 && touching && !controlling) {
+        controlling = true;
+        startY = lastY;
+        startH = panelHeightRef.current;
+        setIsDragging(true);
+      }
+      prevScrollTop = el.scrollTop;
+    };
 
     const onTouchStart = (e: TouchEvent) => {
+      touching = true;
       startY = e.touches[0].clientY;
       lastY = startY;
       startH = panelHeightRef.current;
       controlling = false;
+      prevScrollTop = el.scrollTop;
     };
 
     const onTouchMove = (e: TouchEvent) => {
       const currentY = e.touches[0].clientY;
-      const frameDelta = currentY - lastY; // 이번 프레임 이동량 (양수 = 아래로)
+      const frameDelta = currentY - lastY;
       lastY = currentY;
 
       if (!controlling) {
-        if (el.scrollTop <= 0 && frameDelta > 2) {
+        if (el.scrollTop <= 0 && frameDelta > 0) {
           controlling = true;
           startY = currentY;
           startH = panelHeightRef.current;
@@ -145,7 +160,7 @@ const MapViewBottomSheet = ({
 
       if (controlling) {
         e.preventDefault();
-        const deltaY = currentY - startY; // 양수 = 손가락이 아래로
+        const deltaY = currentY - startY;
         const newH = Math.round(
           Math.min(maxHeightRef.current, Math.max(PEEK_HEIGHT, startH - deltaY))
         );
@@ -155,6 +170,7 @@ const MapViewBottomSheet = ({
     };
 
     const onTouchEnd = () => {
+      touching = false;
       if (!controlling) return;
       controlling = false;
       setIsDragging(false);
@@ -171,12 +187,14 @@ const MapViewBottomSheet = ({
       setPanelHeight(snapped);
     };
 
+    el.addEventListener("scroll", onScroll, { passive: true });
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd, { passive: true });
     el.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
     return () => {
+      el.removeEventListener("scroll", onScroll);
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", onTouchEnd);
@@ -365,7 +383,7 @@ const MapViewBottomSheet = ({
 
           <div
             ref={scrollBodyRef}
-            className="touch-pan-y flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none px-3 pb-3"
+            className="touch-pan-y flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-none overscroll-x-none px-3 pb-3"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
