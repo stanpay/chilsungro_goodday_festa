@@ -15,14 +15,7 @@
     <meta name="twitter:card" content="summary_large_image" />
 
     <!-- PWA -->
-    <script>
-      if (!/SamsungBrowser/i.test(navigator.userAgent)) {
-        const manifest = document.createElement("link");
-        manifest.rel = "manifest";
-        manifest.href = "/manifest.json";
-        document.head.appendChild(manifest);
-      }
-    </script>
+    <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#ffffff" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
