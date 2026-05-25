@@ -120,46 +120,69 @@ const MapViewBottomSheet = ({
     let startY = 0;
     let startH = 0;
     let lastY = 0;
+    let lastT = 0;
+    let velocity = 0;
     let controlling = false;
-    let touching = false;
-    let prevScrollTop = el.scrollTop;
+    let momentumRaf = 0;
 
-    // scroll 이벤트로 최상단 도달 순간을 정확히 포착
-    const onScroll = () => {
-      if (prevScrollTop > 0 && el.scrollTop <= 0 && touching && !controlling) {
-        controlling = true;
-        startY = lastY;
-        startH = panelHeightRef.current;
-        setIsDragging(true);
+    const stopMomentum = () => {
+      if (momentumRaf) {
+        cancelAnimationFrame(momentumRaf);
+        momentumRaf = 0;
       }
-      prevScrollTop = el.scrollTop;
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      touching = true;
       startY = e.touches[0].clientY;
       lastY = startY;
+      lastT = performance.now();
       startH = panelHeightRef.current;
       controlling = false;
-      prevScrollTop = el.scrollTop;
+      velocity = 0;
+      stopMomentum();
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+
       const currentY = e.touches[0].clientY;
+      const currentT = performance.now();
       const frameDelta = currentY - lastY;
+      const dt = currentT - lastT;
+      velocity = dt > 0 ? (frameDelta / dt) * 16 : 0;
       lastY = currentY;
+      lastT = currentT;
 
       if (!controlling) {
-        if (el.scrollTop <= 0 && frameDelta > 0) {
-          controlling = true;
-          startY = currentY;
-          startH = panelHeightRef.current;
-          setIsDragging(true);
+        if (frameDelta > 0) {
+          // 손가락 아래로 → 콘텐츠를 위로 스크롤
+          if (el.scrollTop > 0) {
+            const newScrollTop = Math.max(0, el.scrollTop - frameDelta);
+            const consumed = el.scrollTop - newScrollTop;
+            el.scrollTop = newScrollTop;
+            const leftover = frameDelta - consumed;
+            // 같은 프레임에서 천장 도달 + 남은 delta → 패널 제어로 전환
+            if (leftover > 0 && el.scrollTop <= 0) {
+              controlling = true;
+              startY = currentY - leftover;
+              startH = panelHeightRef.current;
+              setIsDragging(true);
+            }
+          } else {
+            // 이미 천장 → 즉시 패널 제어
+            controlling = true;
+            startY = currentY;
+            startH = panelHeightRef.current;
+            setIsDragging(true);
+          }
+        } else if (frameDelta < 0) {
+          // 손가락 위로 → 콘텐츠를 아래로 스크롤
+          const max = el.scrollHeight - el.clientHeight;
+          el.scrollTop = Math.min(max, el.scrollTop - frameDelta);
         }
       }
 
       if (controlling) {
-        e.preventDefault();
         const deltaY = currentY - startY;
         const newH = Math.round(
           Math.min(maxHeightRef.current, Math.max(PEEK_HEIGHT, startH - deltaY))
@@ -170,31 +193,55 @@ const MapViewBottomSheet = ({
     };
 
     const onTouchEnd = () => {
-      touching = false;
-      if (!controlling) return;
-      controlling = false;
-      setIsDragging(false);
-
-      const h = panelHeightRef.current;
-      if (startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
-        panelHeightRef.current = PEEK_HEIGHT;
-        setPanelHeight(PEEK_HEIGHT);
-        return;
+      if (controlling) {
+        controlling = false;
+        setIsDragging(false);
+        const h = panelHeightRef.current;
+        if (startH - h >= COLLAPSE_FROM_EXPANDED_PX) {
+          panelHeightRef.current = PEEK_HEIGHT;
+          setPanelHeight(PEEK_HEIGHT);
+          return;
+        }
+        const mid = (PEEK_HEIGHT + maxHeightRef.current) / 2;
+        const snapped = h >= mid ? maxHeightRef.current : PEEK_HEIGHT;
+        panelHeightRef.current = snapped;
+        setPanelHeight(snapped);
+      } else if (Math.abs(velocity) > 1.5) {
+        // 모멘텀 스크롤
+        let v = velocity;
+        const decay = 0.94;
+        const step = () => {
+          if (Math.abs(v) < 0.3) {
+            momentumRaf = 0;
+            return;
+          }
+          const max = el.scrollHeight - el.clientHeight;
+          const next = el.scrollTop - v;
+          if (next <= 0) {
+            el.scrollTop = 0;
+            momentumRaf = 0;
+            return;
+          }
+          if (next >= max) {
+            el.scrollTop = max;
+            momentumRaf = 0;
+            return;
+          }
+          el.scrollTop = next;
+          v *= decay;
+          momentumRaf = requestAnimationFrame(step);
+        };
+        momentumRaf = requestAnimationFrame(step);
       }
-      const mid = (PEEK_HEIGHT + maxHeightRef.current) / 2;
-      const snapped = h >= mid ? maxHeightRef.current : PEEK_HEIGHT;
-      panelHeightRef.current = snapped;
-      setPanelHeight(snapped);
     };
 
-    el.addEventListener("scroll", onScroll, { passive: true });
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd, { passive: true });
     el.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
     return () => {
-      el.removeEventListener("scroll", onScroll);
+      stopMomentum();
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", onTouchEnd);
@@ -383,8 +430,7 @@ const MapViewBottomSheet = ({
 
           <div
             ref={scrollBodyRef}
-            className="touch-pan-y flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-none overscroll-x-none px-3 pb-3"
-            style={{ WebkitOverflowScrolling: "touch" }}
+            className="touch-none flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-none overscroll-x-none px-3 pb-3"
           >
             <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
               {stores.map((store) => (
