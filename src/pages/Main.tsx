@@ -2048,10 +2048,13 @@ const Main = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border-border/50 px-3 hover:border-primary/50 transition-colors"
+                className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border-border/50 bg-card px-3 text-foreground transition-colors hover:bg-card hover:text-foreground focus:bg-card focus:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 active:bg-card active:text-foreground data-[state=open]:bg-card data-[state=open]:text-foreground"
                 aria-label={t.languageMenuAria}
                 title={LOCALE_MENU_LABELS[locale]}
                 onPointerDown={(event) => event.preventDefault()}
+                onPointerLeave={(event) => event.currentTarget.blur()}
+                onPointerCancel={(event) => event.currentTarget.blur()}
+                onPointerUp={(event) => event.currentTarget.blur()}
                 onClick={() => setIsLanguageMenuOpen((open) => !open)}
               >
                 <Languages className="h-4 w-4 shrink-0" />
