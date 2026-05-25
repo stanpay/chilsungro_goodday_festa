@@ -7,6 +7,8 @@ import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
 import { openNaverMapsApp } from "@/lib/mapDirectionLinks";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 interface StoreCardProps {
   id: string;
@@ -41,6 +43,8 @@ const brandLogos: Record<string, string> = {
   twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
 };
 
+const NAME_MARQUEE_TOLERANCE_PX = 2;
+
 const StoreCard = ({
   id,
   name,
@@ -72,6 +76,61 @@ const StoreCard = ({
   const location = useLocation();
   const isTutorial = location.pathname.includes("/tutorial");
   const brandLogoUrl = brandLogos[image as keyof typeof brandLogos];
+  const nameContainerRef = useRef<HTMLHeadingElement>(null);
+  const [nameFontSizeClass, setNameFontSizeClass] = useState("text-base");
+  const [nameMarqueeDistance, setNameMarqueeDistance] = useState(0);
+
+  useLayoutEffect(() => {
+    const container = nameContainerRef.current;
+    if (!container) return;
+
+    const measure = (fontSizeClass: string) => {
+      const probe = document.createElement("span");
+      probe.className = `${fontSizeClass} font-bold whitespace-nowrap`;
+      probe.textContent = displayName;
+      probe.style.position = "absolute";
+      probe.style.visibility = "hidden";
+      probe.style.pointerEvents = "none";
+      probe.style.left = "-9999px";
+      probe.style.top = "-9999px";
+      document.body.appendChild(probe);
+      const width = probe.scrollWidth;
+      probe.remove();
+      return width;
+    };
+
+    const updateNameLayout = () => {
+      const containerWidth = container.clientWidth;
+      if (containerWidth <= 0) return;
+
+      const baseWidth = measure("text-base");
+      if (baseWidth <= containerWidth + NAME_MARQUEE_TOLERANCE_PX) {
+        setNameFontSizeClass("text-base");
+        setNameMarqueeDistance(0);
+        return;
+      }
+
+      const smallWidth = measure("text-sm");
+      const smallOverflow = smallWidth - containerWidth;
+      setNameFontSizeClass("text-sm");
+      setNameMarqueeDistance(
+        smallOverflow > NAME_MARQUEE_TOLERANCE_PX ? smallOverflow : 0
+      );
+    };
+
+    updateNameLayout();
+    document.fonts?.ready.then(updateNameLayout);
+
+    if (!("ResizeObserver" in window)) {
+      window.addEventListener("resize", updateNameLayout);
+      return () => window.removeEventListener("resize", updateNameLayout);
+    }
+
+    const observer = new ResizeObserver(updateNameLayout);
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, [displayName]);
 
   const handleClick = () => {
     if (disabled) return;
@@ -159,26 +218,49 @@ const StoreCard = ({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-1 grid-rows-[1.5rem_1rem_1.25rem] gap-y-1 bg-card p-3">
-            <AutoFitMarquee
-              as="h3"
-              text={displayName}
-              className="flex h-6 items-center"
-              textClassName="font-bold !leading-6"
-              fontSizeClasses={["text-base", "text-sm"]}
-            />
+          <div className="grid grid-cols-1 grid-rows-[1.5rem_1rem_1rem_1.25rem] gap-y-1 bg-card p-3">
+            <h3
+              ref={nameContainerRef}
+              className="flex h-6 min-w-0 items-center overflow-hidden"
+            >
+              <span
+                className={cn(
+                  "block whitespace-nowrap text-left font-bold !leading-6",
+                  nameFontSizeClass,
+                  nameMarqueeDistance > 0 && "marquee-on-overflow"
+                )}
+                style={
+                  nameMarqueeDistance > 0
+                    ? ({
+                        "--marquee-distance": `${nameMarqueeDistance}px`,
+                      } as CSSProperties)
+                    : undefined
+                }
+              >
+                {displayName}
+              </span>
+            </h3>
             <div className="flex h-4 min-w-0 items-center text-xs text-muted-foreground">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <AutoFitMarquee
-                text={
-                  isOpen === false
-                    ? `${distance} · ${closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}`
-                    : distance
-                }
+                text={distance}
                 className="flex-1"
                 textClassName="text-muted-foreground !leading-4"
                 fontSizeClasses={["text-xs"]}
               />
+            </div>
+            <div className="flex h-4 min-w-0 items-center gap-1 text-xs">
+              {isOpen === false && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-muted-foreground/50" />
+                  <AutoFitMarquee
+                    text={closedDayNote || (todayHours ? `오늘 ${todayHours.open} 오픈` : "영업종료")}
+                    className="flex-1"
+                    textClassName="text-muted-foreground !leading-4"
+                    fontSizeClasses={["text-xs"]}
+                  />
+                </>
+              )}
             </div>
             <div className="flex h-5 flex-nowrap items-center gap-1 overflow-x-auto scrollbar-hide">
               {(showLocalCurrencyChip || hasGifticonDiscount || showParkingChip) && (
