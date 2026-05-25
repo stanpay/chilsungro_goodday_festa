@@ -175,7 +175,7 @@ const MapViewBottomSheet = ({
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, []);
+  }, [showContent]);
 
   useEffect(() => {
     const el = sheetRef.current;
