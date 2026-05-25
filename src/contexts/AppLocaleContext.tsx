@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import {
-  getStoredLocale,
+  getInitialLocale,
   setStoredLocale,
   LOCALE_STORAGE_KEY,
   isAppLocale,
@@ -23,12 +23,16 @@ type AppLocaleContextValue = {
 const AppLocaleContext = createContext<AppLocaleContextValue | null>(null);
 
 export function AppLocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<AppLocale>(() => getStoredLocale());
+  const [locale, setLocaleState] = useState<AppLocale>(() => getInitialLocale());
 
   const setLocale = useCallback((next: AppLocale) => {
     setLocaleState(next);
     setStoredLocale(next);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {

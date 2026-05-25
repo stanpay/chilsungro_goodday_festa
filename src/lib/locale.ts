@@ -18,6 +18,42 @@ export function setStoredLocale(locale: AppLocale): void {
   localStorage.setItem(LOCALE_STORAGE_KEY, locale);
 }
 
+const DEFAULT_BROWSER_LOCALE: AppLocale = "en";
+
+function mapLanguageTagToAppLocale(tag: string): AppLocale | null {
+  const normalized = tag.trim().toLowerCase().replace(/_/g, "-");
+  if (normalized.startsWith("ko")) return "ko";
+  if (normalized.startsWith("en")) return "en";
+  if (normalized.startsWith("zh")) return "zh";
+  if (normalized.startsWith("ja")) return "ja";
+  return null;
+}
+
+export function detectBrowserLocale(): AppLocale {
+  if (typeof navigator === "undefined") return DEFAULT_BROWSER_LOCALE;
+
+  const candidates = [
+    ...(navigator.languages ?? []),
+    navigator.language,
+  ].filter(Boolean);
+
+  for (const tag of candidates) {
+    const locale = mapLanguageTagToAppLocale(tag);
+    if (locale) return locale;
+  }
+  return DEFAULT_BROWSER_LOCALE;
+}
+
+export function getInitialLocale(): AppLocale {
+  if (typeof localStorage === "undefined") return detectBrowserLocale();
+  const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+  if (isAppLocale(stored)) return stored;
+
+  const detected = detectBrowserLocale();
+  setStoredLocale(detected);
+  return detected;
+}
+
 /** 드롭다운에 표시할 언어 이름 (각 언어의 자기 표기) */
 export const LOCALE_MENU_LABELS: Record<AppLocale, string> = {
   ko: "한국어",
