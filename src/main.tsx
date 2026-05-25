@@ -28,6 +28,10 @@ document.addEventListener("dragstart", (event) => {
   event.preventDefault();
 });
 
+document.addEventListener("gesturestart", (event) => event.preventDefault());
+document.addEventListener("gesturechange", (event) => event.preventDefault());
+document.addEventListener("gestureend", (event) => event.preventDefault());
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/service-worker.js").catch((error) => {
