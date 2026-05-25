@@ -2064,7 +2064,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                       ref={headerLocationTextRef}
                       className={cn(
                         "block whitespace-nowrap",
-                        headerLocationMarqueeDistance > 0 ? "marquee-on-overflow" : "truncate"
+                        headerLocationMarqueeDistance > 0 && "marquee-on-overflow"
                       )}
                       style={
                         headerLocationMarqueeDistance > 0

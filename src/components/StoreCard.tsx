@@ -231,7 +231,7 @@ const StoreCard = ({
                 ref={nameTextRef}
                 className={cn(
                   "block whitespace-nowrap",
-                  nameMarqueeDistance > 0 ? "marquee-on-overflow" : "truncate"
+                  nameMarqueeDistance > 0 && "marquee-on-overflow"
                 )}
                 style={
                   nameMarqueeDistance > 0
