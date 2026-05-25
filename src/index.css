@@ -14,21 +14,17 @@
   .marquee-on-overflow {
     display: inline-block;
     white-space: nowrap;
-    animation: marquee-x 9s ease-in-out infinite;
+    animation: marquee-x 8s linear infinite;
   }
 }
 
 @keyframes marquee-x {
   0%,
-  18% {
+  12% {
     transform: translateX(0);
-  }
-  72%,
-  82% {
-    transform: translateX(calc(-1 * var(--marquee-distance, 0px)));
   }
   100% {
-    transform: translateX(0);
+    transform: translateX(calc(-1 * var(--marquee-distance, 0px)));
   }
 }
 
