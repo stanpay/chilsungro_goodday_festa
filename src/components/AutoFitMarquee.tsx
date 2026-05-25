@@ -11,7 +11,8 @@ type AutoFitMarqueeProps = {
 };
 
 const DEFAULT_FONT_SIZE_CLASSES = ["text-sm", "text-xs"];
-const OVERFLOW_TOLERANCE_PX = 2;
+const OVERFLOW_TOLERANCE_PX = 1;
+const SAFE_RIGHT_PADDING_PX = 6;
 
 export function AutoFitMarquee({
   as: Tag = "span",
@@ -45,7 +46,7 @@ export function AutoFitMarquee({
     };
 
     const updateLayout = () => {
-      const containerWidth = container.clientWidth;
+      const containerWidth = container.clientWidth - SAFE_RIGHT_PADDING_PX;
       if (containerWidth <= 0) return;
 
       const measured = fontSizeClasses.map((candidateFontSizeClass) => ({
@@ -58,7 +59,9 @@ export function AutoFitMarquee({
 
       setFontSizeClass(selected.fontSizeClass);
       setMarqueeDistance(
-        fitting || overflowDistance <= OVERFLOW_TOLERANCE_PX ? 0 : overflowDistance
+        fitting || overflowDistance <= OVERFLOW_TOLERANCE_PX
+          ? 0
+          : overflowDistance + SAFE_RIGHT_PADDING_PX
       );
     };
 
@@ -77,7 +80,7 @@ export function AutoFitMarquee({
   }, [fontSizeKey, text, textClassName]);
 
   return (
-    <Tag ref={containerRef} className={cn("block min-w-0 overflow-hidden", className)}>
+    <Tag ref={containerRef} className={cn("block min-w-0 overflow-hidden pr-1.5", className)}>
       <span
         className={cn(
           "block whitespace-nowrap text-left",

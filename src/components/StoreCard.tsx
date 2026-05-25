@@ -43,7 +43,8 @@ const brandLogos: Record<string, string> = {
   twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
 };
 
-const NAME_MARQUEE_TOLERANCE_PX = 2;
+const NAME_MARQUEE_TOLERANCE_PX = 1;
+const NAME_SAFE_RIGHT_PADDING_PX = 6;
 
 const StoreCard = ({
   id,
@@ -100,7 +101,7 @@ const StoreCard = ({
     };
 
     const updateNameLayout = () => {
-      const containerWidth = container.clientWidth;
+      const containerWidth = container.clientWidth - NAME_SAFE_RIGHT_PADDING_PX;
       if (containerWidth <= 0) return;
 
       const baseWidth = measure("text-base");
@@ -121,7 +122,9 @@ const StoreCard = ({
       const extraSmallOverflow = extraSmallWidth - containerWidth;
       setNameFontSizeClass("text-xs");
       setNameMarqueeDistance(
-        extraSmallOverflow > NAME_MARQUEE_TOLERANCE_PX ? extraSmallOverflow : 0
+        extraSmallOverflow > NAME_MARQUEE_TOLERANCE_PX
+          ? extraSmallOverflow + NAME_SAFE_RIGHT_PADDING_PX
+          : 0
       );
     };
 
@@ -228,7 +231,7 @@ const StoreCard = ({
           <div className="grid grid-cols-1 grid-rows-[1.75rem_1.125rem_1.125rem_1.25rem] gap-y-1 bg-card p-3">
             <h3
               ref={nameContainerRef}
-              className="flex h-7 min-w-0 items-center overflow-hidden"
+              className="flex h-7 min-w-0 items-center overflow-hidden pr-1.5"
             >
               <span
                 className={cn(
