@@ -158,7 +158,7 @@ const PwaInstallPrompt = () => {
           {/* 오늘하루 보지 않기 */}
           <button
             onClick={handleDismissToday}
-            className="ml-auto mb-4 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
             aria-label="오늘하루 보지 않기"
           >
             오늘하루 보지 않기
