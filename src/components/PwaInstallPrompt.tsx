@@ -78,6 +78,7 @@ const PwaInstallPrompt = () => {
   };
 
   const handleNo = () => {
+    sessionStorage.removeItem(SESSION_KEY);
     setStep(null);
   };
 
