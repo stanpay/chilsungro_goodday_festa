@@ -119,27 +119,33 @@ const MapViewBottomSheet = ({
 
     let startY = 0;
     let startH = 0;
+    let lastY = 0;
     let controlling = false;
 
     const onTouchStart = (e: TouchEvent) => {
       startY = e.touches[0].clientY;
+      lastY = startY;
       startH = panelHeightRef.current;
       controlling = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
       const currentY = e.touches[0].clientY;
-      const deltaY = currentY - startY; // 양수 = 손가락이 아래로
+      const frameDelta = currentY - lastY; // 이번 프레임 이동량 (양수 = 아래로)
+      lastY = currentY;
 
       if (!controlling) {
-        if (el.scrollTop <= 0 && deltaY > 8) {
+        if (el.scrollTop <= 0 && frameDelta > 2) {
           controlling = true;
+          startY = currentY;
+          startH = panelHeightRef.current;
           setIsDragging(true);
         }
       }
 
       if (controlling) {
         e.preventDefault();
+        const deltaY = currentY - startY; // 양수 = 손가락이 아래로
         const newH = Math.round(
           Math.min(maxHeightRef.current, Math.max(PEEK_HEIGHT, startH - deltaY))
         );
