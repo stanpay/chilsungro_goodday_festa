@@ -80,6 +80,12 @@ const MapViewBottomSheet = ({
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const maxHeightRef = useRef(0);
   const clearSelectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bodyGestureRef = useRef<{
+  startY: number;
+  lastY: number;
+  startH: number;
+  mode: "pending" | "sheet" | "scroll";
+} | null>(null);
 
   panelHeightRef.current = panelHeight;
 
@@ -161,6 +167,95 @@ const MapViewBottomSheet = ({
       d.hitMaxY = undefined;
     }
   };
+  const onBodyTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+  if (e.touches.length !== 1) return;
+
+  bodyGestureRef.current = {
+    startY: e.touches[0].clientY,
+    lastY: e.touches[0].clientY,
+    startH: panelHeightRef.current,
+    mode: "pending",
+  };
+};
+
+const onBodyTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+  const g = bodyGestureRef.current;
+  const sb = scrollBodyRef.current;
+
+  if (!g || !sb || e.touches.length !== 1) return;
+
+  const y = e.touches[0].clientY;
+  const dyFromStart = y - g.startY;
+  const dyFromLast = y - g.lastY;
+
+  const maxH = maxHeightRef.current;
+  const currentH = panelHeightRef.current;
+
+  const isSheetNotFull = currentH < maxH - 2;
+  const isAtTop = sb.scrollTop <= 0;
+  const draggingUp = dyFromStart < 0;
+  const draggingDown = dyFromStart > 0;
+
+  if (g.mode === "pending") {
+    // 시트가 아직 최대 높이가 아니면 내부 스크롤보다 시트 이동을 우선
+    if (isSheetNotFull) {
+      g.mode = "sheet";
+      dragRef.current = {
+        startY: g.startY,
+        startH: g.startH,
+        dragging: true,
+      };
+      setIsDragging(true);
+    }
+    // 시트가 최대 높이이고, 리스트 최상단에서 아래로 당기면 시트 닫기
+    else if (isAtTop && draggingDown) {
+      g.mode = "sheet";
+      dragRef.current = {
+        startY: g.startY,
+        startH: g.startH,
+        dragging: true,
+      };
+      setIsDragging(true);
+    }
+    // 그 외에는 일반 리스트 스크롤
+    else {
+      g.mode = "scroll";
+    }
+  }
+
+  // 이미 리스트 스크롤 중이더라도,
+  // 리스트가 최상단에 도달한 상태에서 계속 아래로 당기면 시트 제어로 전환
+  if (g.mode === "scroll") {
+    if (sb.scrollTop <= 0 && dyFromLast > 0) {
+      g.mode = "sheet";
+      dragRef.current = {
+        startY: y,
+        startH: panelHeightRef.current,
+        dragging: true,
+      };
+      setIsDragging(true);
+    } else {
+      g.lastY = y;
+      return;
+    }
+  }
+
+  if (g.mode === "sheet") {
+    e.preventDefault();
+    moveDrag(y);
+  }
+
+  g.lastY = y;
+};
+
+const onBodyTouchEnd = () => {
+  const mode = bodyGestureRef.current?.mode;
+  bodyGestureRef.current = null;
+
+  if (mode === "sheet") {
+    endDrag();
+  }
+};
 
   const endDrag = () => {
     const d = dragRef.current;
@@ -263,10 +358,14 @@ const MapViewBottomSheet = ({
           </div>
 
           <div
-            ref={scrollBodyRef}
-            className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
+  ref={scrollBodyRef}
+  className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3"
+  style={{ WebkitOverflowScrolling: "touch" }}
+  onTouchStart={onBodyTouchStart}
+  onTouchMove={onBodyTouchMove}
+  onTouchEnd={onBodyTouchEnd}
+  onTouchCancel={onBodyTouchEnd}
+>
             <div>
               <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
                 {stores.map((store) => (
