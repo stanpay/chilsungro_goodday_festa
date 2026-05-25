@@ -151,18 +151,21 @@ const PwaInstallPrompt = () => {
           </button>
 
           {/* 앱 정보 */}
-          <div className="mb-4 flex items-center gap-3">
-            <img
-              src="/favicon.png"
-              alt="스탠"
-              className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
-            />
-            <div className="min-w-0">
-              <p className="font-bold text-base text-foreground">홈 화면 추가</p>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                홈 화면에 추가하시면 앱처럼 빠르게 이용할 수 있어요
-              </p>
+          <div className="mb-4">
+            <div className="flex items-center gap-3">
+              <img
+                src="/favicon.png"
+                alt="스탠"
+                className="h-14 w-14 rounded-2xl shrink-0 object-contain border border-border/40"
+              />
+              <div className="min-w-0">
+                <p className="font-bold text-base text-foreground">홈 화면 추가</p>
+              </div>
             </div>
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+              <span className="block whitespace-nowrap">홈 화면에 추가하시면 앱처럼</span>
+              <span className="block whitespace-nowrap">빠르게 이용할 수 있어요</span>
+            </p>
           </div>
 
           {/* 버튼 */}

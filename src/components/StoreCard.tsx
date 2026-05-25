@@ -6,6 +6,8 @@ import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
 import { openNaverMapsApp } from "@/lib/mapDirectionLinks";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 interface StoreCardProps {
   id: string;
@@ -69,6 +71,32 @@ const StoreCard = ({
   const location = useLocation();
   const isTutorial = location.pathname.includes("/tutorial");
   const brandLogoUrl = brandLogos[image as keyof typeof brandLogos];
+  const nameContainerRef = useRef<HTMLHeadingElement>(null);
+  const nameTextRef = useRef<HTMLSpanElement>(null);
+  const [nameMarqueeDistance, setNameMarqueeDistance] = useState(0);
+
+  useEffect(() => {
+    const container = nameContainerRef.current;
+    const text = nameTextRef.current;
+    if (!container || !text) return;
+
+    const updateMarqueeDistance = () => {
+      setNameMarqueeDistance(Math.max(0, text.scrollWidth - container.clientWidth));
+    };
+
+    updateMarqueeDistance();
+
+    if (!("ResizeObserver" in window)) {
+      window.addEventListener("resize", updateMarqueeDistance);
+      return () => window.removeEventListener("resize", updateMarqueeDistance);
+    }
+
+    const observer = new ResizeObserver(updateMarqueeDistance);
+    observer.observe(container);
+    observer.observe(text);
+
+    return () => observer.disconnect();
+  }, [displayName]);
   
   // 매장명 길이에 따라 폰트 크기 자동 조절
   const getFontSizeClass = () => {
@@ -125,7 +153,7 @@ const StoreCard = ({
         )}
       >
         <div className="flex flex-col">
-          <div className="flex-1 bg-primary/10 flex items-center justify-center p-4 relative overflow-hidden" style={{ minHeight: 96 }}>
+          <div className="relative flex h-28 items-center justify-center overflow-hidden bg-primary/10 p-4">
             {/* 비브랜드 매장: 더미 사진 배경 */}
             {!brandLogoUrl && photos && photos.length > 0 && (
               <img
@@ -146,14 +174,14 @@ const StoreCard = ({
               <img
                 src={brandLogoUrl}
                 alt={displayName}
-                className="relative z-10 w-20 h-20 object-contain"
+                className="relative z-10 h-20 w-20 object-contain"
               />
             ) : image === "shopping" ? (
-              <ShoppingBag className="relative z-10 h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
+              <ShoppingBag className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
             ) : image === "restaurant" ? (
-              <UtensilsCrossed className="relative z-10 h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
+              <UtensilsCrossed className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
             ) : (
-              <Coffee className="relative z-10 h-14 w-14 text-primary/70" strokeWidth={1.5} aria-hidden />
+              <Coffee className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
             )}
 
             {discountBadgeText && (
@@ -165,7 +193,27 @@ const StoreCard = ({
             )}
           </div>
           <div className="p-3 bg-card">
-            <h3 className={`font-bold mb-1 whitespace-nowrap ${getFontSizeClass()}`}>{displayName}</h3>
+            <h3
+              ref={nameContainerRef}
+              className={`mb-1 min-w-0 overflow-hidden font-bold ${getFontSizeClass()}`}
+            >
+              <span
+                ref={nameTextRef}
+                className={cn(
+                  "block whitespace-nowrap",
+                  nameMarqueeDistance > 0 ? "marquee-on-overflow" : "truncate"
+                )}
+                style={
+                  nameMarqueeDistance > 0
+                    ? ({
+                        "--marquee-distance": `${nameMarqueeDistance}px`,
+                      } as CSSProperties)
+                    : undefined
+                }
+              >
+                {displayName}
+              </span>
+            </h3>
             <div className="flex items-center text-xs text-muted-foreground mb-1.5">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <span className="break-words">{distance}</span>
