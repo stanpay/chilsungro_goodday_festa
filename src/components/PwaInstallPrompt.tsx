@@ -61,7 +61,7 @@ const PwaInstallPrompt = () => {
 
     if (isIosSafari()) {
       setIsIos(true);
-      setStep("popup");
+      setStep("ios-guide");
       sessionStorage.setItem(SESSION_KEY, "1");
       return;
     }
