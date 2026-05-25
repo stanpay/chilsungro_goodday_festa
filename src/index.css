@@ -14,7 +14,7 @@
   .marquee-on-overflow {
     display: inline-block;
     white-space: nowrap;
-    animation: marquee-x 8s linear infinite;
+    animation: marquee-x 7s linear infinite;
   }
 }
 
