@@ -50,19 +50,27 @@ type StoreFilterChipId =
   | "all"
   | "chilsungro"
   | "localCurrency"
+  | "highOilSupport"
   | "restaurant"
   | "cafe"
+  | "shopping"
   | "other"
   | "openNow";
 
-const STORE_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
+const BENEFIT_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
   "all",
   "chilsungro",
   "localCurrency",
+  "highOilSupport",
+  "openNow",
+];
+
+const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
+  "all",
   "restaurant",
   "cafe",
+  "shopping",
   "other",
-  "openNow",
 ];
 
 function inferChainImageFromPlaceName(placeName: string): string | null {
@@ -99,8 +107,13 @@ type StoreLikeForChip = {
   categoryGroupCode?: string;
   categoryName?: string;
   local_currency_available?: boolean;
+  high_oil_support_available?: boolean;
   hasGifticonDiscount?: boolean;
 };
+
+function storeHasHighOilSupport(store: StoreLikeForChip): boolean {
+  return store.high_oil_support_available === true;
+}
 
 function storeChipIsCafe(store: StoreLikeForChip): boolean {
   if (store.categoryGroupCode === "CE7") return true;
@@ -128,20 +141,40 @@ function storeHasChilsungroCoupon(store: StoreLikeForChip): boolean {
 }
 
 function storeChipIsOther(store: StoreLikeForChip): boolean {
-  return !storeChipIsRestaurant(store) && !storeChipIsCafe(store);
+  return (
+    !storeChipIsRestaurant(store) &&
+    !storeChipIsCafe(store) &&
+    !storeChipIsShopping(store)
+  );
 }
 
-function storeMatchesChipFilters(
+function storeMatchesBenefitChipFilters(
+  store: StoreLikeForChip,
+  chips: ReadonlySet<StoreFilterChipId>
+): boolean {
+  // openNow는 영업 여부 필터에서 따로 처리하므로 여기서는 제외
+  if (chips.has("all")) return true;
+
+  const parts: boolean[] = [];
+  if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
+  if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
+  if (chips.has("highOilSupport")) parts.push(storeHasHighOilSupport(store));
+
+  return parts.length > 0 && parts.some(Boolean);
+}
+
+function storeMatchesCategoryChipFilters(
   store: StoreLikeForChip,
   chips: ReadonlySet<StoreFilterChipId>
 ): boolean {
   if (chips.has("all")) return true;
+
   const parts: boolean[] = [];
-  if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
-  if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
   if (chips.has("restaurant")) parts.push(storeChipIsRestaurant(store));
   if (chips.has("cafe")) parts.push(storeChipIsCafe(store));
+  if (chips.has("shopping")) parts.push(storeChipIsShopping(store));
   if (chips.has("other")) parts.push(storeChipIsOther(store));
+
   return parts.length > 0 && parts.some(Boolean);
 }
 
@@ -164,31 +197,32 @@ const Main = () => {
   const { isLoggedIn } = useAuth();
   const [isManualLocation, setIsManualLocation] = useState(false);
 
-  interface StoreData {
-    id: string;
-    name: string;
-    distance: string;
-    distanceNum: number;
-    image: string;
-    maxDiscount: string | null; // 할인율이 없으면 null
-    discountNum: number; // 정렬용 할인율 (0-100)
-    maxDiscountPercent: number | null; // 최대 할인율 (%)
-    lat?: number;
-    lon?: number;
-    address?: string;
-    local_currency_available?: boolean; // 지역화폐 사용가능 여부
-    local_currency_discount_rate?: number | null; // 지역화폐 할인율
-    parking_available?: boolean; // 주차가능 여부
-    free_parking?: boolean; // 무료주차 여부
-    parking_size?: string | null; // 주차장 규모 ('넓음', '보통', '좁음')
-    categoryGroupCode?: string;
-    categoryName?: string;
-    hasGifticonDiscount?: boolean;
-    isOpen?: boolean;
-    todayHours?: DayHours | null;
-    photos?: string[];
-    closedDayNote?: string;
-  }
+interface StoreData {
+  id: string;
+  name: string;
+  distance: string;
+  distanceNum: number;
+  image: string;
+  maxDiscount: string | null;
+  discountNum: number;
+  maxDiscountPercent: number | null;
+  lat?: number;
+  lon?: number;
+  address?: string;
+  local_currency_available?: boolean;
+  local_currency_discount_rate?: number | null;
+  high_oil_support_available?: boolean;
+  parking_available?: boolean;
+  free_parking?: boolean;
+  parking_size?: string | null;
+  categoryGroupCode?: string;
+  categoryName?: string;
+  hasGifticonDiscount?: boolean;
+  isOpen?: boolean;
+  todayHours?: DayHours | null;
+  photos?: string[];
+  closedDayNote?: string;
+}
 
   const [stores, setStores] = useState<StoreData[]>([]);
   const [isLoadingStores, setIsLoadingStores] = useState(true);
@@ -197,8 +231,11 @@ const Main = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const [storeFilterChips, setStoreFilterChips] = useState<Set<StoreFilterChipId>>(
+  const [benefitFilterChips, setBenefitFilterChips] = useState<Set<StoreFilterChipId>>(
     () => new Set<StoreFilterChipId>(["all", "openNow"])
+  );
+  const [categoryFilterChips, setCategoryFilterChips] = useState<Set<StoreFilterChipId>>(
+    () => new Set<StoreFilterChipId>(["all"])
   );
   const { locale, setLocale } = useAppLocale();
   const [showTutorialModal, setShowTutorialModal] = useState(false);
@@ -965,20 +1002,40 @@ const Main = () => {
       // 거리순으로 정렬하여 초기 8개 선택
       const initialStores = allStores.slice(0, 8);
       const remainingStores = allStores.slice(8);
+
+      const getStoreDataByPlaceId = async (store: any): Promise<any | null> => {
+        try {
+          const isNumeric = /^\d+$/.test(store.id);
+          if (!isNumeric) return null;
+          return await storesApi.getStoreByKakaoPlaceId(store.id);
+        } catch (e) {
+          console.log(`⚠️ [매장 정보] ${store.name}: kakao_place_id 매장 정보 조회 실패`);
+          return null;
+        }
+      };
       
       console.log("🚀 [초기 로딩] 처음 8개 매장만 빠르게 표시");
       
       // 각 매장의 할인 정보 조회 (초기 8개만 먼저 처리)
       console.log("🔄 [할인 정보 조회] 초기 8개 매장 처리 시작");
       const initialStoresWithDiscount = await Promise.all(initialStores.map(async (store) => {
+        let preloadedStoreData: any = null;
+
         try {
-          // 파스쿠찌와 투썸플레이스만 할인율 조회
+          preloadedStoreData = await getStoreDataByPlaceId(store);
+          // 파스쿠찌와 투썸플레이스가 아니어도 DB 기반 칩(지역화폐/고유가 지원금)은 반영
           if (store.image !== 'pascucci' && store.image !== 'twosome') {
             return {
               ...store,
               maxDiscount: null,
               discountNum: 0,
               maxDiscountPercent: null,
+              local_currency_available: preloadedStoreData?.local_currency_available || false,
+              local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
+              high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
+              parking_available: preloadedStoreData?.parking_available || false,
+              free_parking: preloadedStoreData?.free_parking || false,
+              parking_size: preloadedStoreData?.parking_size || null,
               hasGifticonDiscount: false,
             };
           }
@@ -1035,22 +1092,20 @@ const Main = () => {
           // 3. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
           let localCurrencyDiscount = 0;
           let maxGifticonDiscount = 0;
-          let storeData: any = null;
+          let storeData: any = preloadedStoreData;
           
           try {
             // storeId가 숫자인지 확인 (카카오 플레이스 ID)
             const isNumeric = /^\d+$/.test(store.id);
-            let storeError: any = null;
 
-            if (isNumeric && franchiseData) {
+            if (!storeData && isNumeric) {
               // kakao_place_id로 조회 시도
               const data = await storesApi.getStoreByKakaoPlaceId(store.id);
-              storeData = data;
-              storeError = data ? null : new Error("not found");
+              storeData = data || null;
             }
 
             // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
-            if (storeError && franchiseData) {
+            if (!storeData && franchiseData) {
               const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
               if (data) {
                 storeData = data;
@@ -1160,6 +1215,7 @@ const Main = () => {
             free_parking: storeData?.free_parking || false,
             parking_size: storeData?.parking_size || null,
             hasGifticonDiscount: maxGifticonDiscount > 0,
+            high_oil_support_available: storeData?.high_oil_support_available || false,
           };
         } catch (error) {
           console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
@@ -1174,6 +1230,7 @@ const Main = () => {
             free_parking: false,
             parking_size: null,
             hasGifticonDiscount: false,
+            high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
           };
         }
       }));
@@ -1200,14 +1257,23 @@ const Main = () => {
         
         // 나머지 매장의 할인 정보 조회
         const remainingStoresWithDiscount = await Promise.all(remainingStores.map(async (store) => {
+          let preloadedStoreData: any = null;
+
           try {
-            // 파스쿠찌와 투썸플레이스만 할인율 조회
+            preloadedStoreData = await getStoreDataByPlaceId(store);
+            // 파스쿠찌와 투썸플레이스가 아니어도 DB 기반 칩(지역화폐/고유가 지원금)은 반영
             if (store.image !== 'pascucci' && store.image !== 'twosome') {
               return {
                 ...store,
                 maxDiscount: null,
                 discountNum: 0,
                 maxDiscountPercent: null,
+                local_currency_available: preloadedStoreData?.local_currency_available || false,
+                local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
+                high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
+                parking_available: preloadedStoreData?.parking_available || false,
+                free_parking: preloadedStoreData?.free_parking || false,
+                parking_size: preloadedStoreData?.parking_size || null,
                 hasGifticonDiscount: false,
               };
             }
@@ -1262,22 +1328,20 @@ const Main = () => {
             // 3. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
             let localCurrencyDiscount = 0;
             let maxGifticonDiscount = 0;
-            let storeData: any = null;
+            let storeData: any = preloadedStoreData;
 
             try {
               // storeId가 숫자인지 확인 (카카오 플레이스 ID)
               const isNumeric = /^\d+$/.test(store.id);
-              let storeError: any = null;
 
-              if (isNumeric && franchiseData) {
+              if (!storeData && isNumeric) {
                 // kakao_place_id로 조회 시도
                 const data = await storesApi.getStoreByKakaoPlaceId(store.id);
-                storeData = data;
-                storeError = data ? null : new Error("not found");
+                storeData = data || null;
               }
 
               // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
-              if (storeError && franchiseData) {
+              if (!storeData && franchiseData) {
                 const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
                 if (data) {
                   storeData = data;
@@ -1387,6 +1451,7 @@ const Main = () => {
               free_parking: storeData?.free_parking || false,
               parking_size: storeData?.parking_size || null,
               hasGifticonDiscount: maxGifticonDiscount > 0,
+              high_oil_support_available: storeData?.high_oil_support_available || false,
             };
           } catch (error) {
             console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
@@ -1401,6 +1466,7 @@ const Main = () => {
               free_parking: false,
               parking_size: null,
               hasGifticonDiscount: false,
+              high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
             };
           }
         }));
@@ -1466,54 +1532,77 @@ const Main = () => {
     return () => observer.disconnect();
   }, [headerLocationText]);
 
-  const chipLabelMap: Record<StoreFilterChipId, string> = {
-    all: t.chipAll,
-    chilsungro: t.chipChilsungro,
-    localCurrency: t.chipLocalCurrency,
-    restaurant: t.chipRestaurant,
-    cafe: t.chipCafe,
-    other: t.chipOther,
-    openNow: t.chipOpenNow,
-  };
+const chipLabelMap: Record<StoreFilterChipId, string> = {
+  all: t.chipAll,
+  chilsungro: t.chipChilsungro,
+  localCurrency: t.chipLocalCurrency,
+  highOilSupport: t.chipHighOilSupport,
+  restaurant: t.chipRestaurant,
+  cafe: t.chipCafe,
+  shopping: (t as any).chipShopping ?? "쇼핑",
+  other: t.chipOther,
+  openNow: t.chipOpenNow,
+};
 
-  const toggleStoreFilterChip = (id: StoreFilterChipId) => {
-    setStoreFilterChips((prev) => {
+  const toggleBenefitFilterChip = (id: StoreFilterChipId) => {
+    setBenefitFilterChips((prev) => {
       const next = new Set(prev);
-      // openNow는 카테고리 칩과 독립적으로 토글
+
+      // 영업중은 혜택 칩들과 별도로 토글한다.
       if (id === "openNow") {
         if (next.has("openNow")) next.delete("openNow");
         else next.add("openNow");
         return next;
       }
+
       if (id === "all") {
         next.delete("all");
         next.add("all");
-        // openNow 유지
         return next;
       }
+
       next.delete("all");
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      // 카테고리 칩이 하나도 없으면 "all"로 복귀 (openNow는 제외하고 계산)
-      const categoryChips = new Set([...next].filter((c) => c !== "openNow"));
-      if (categoryChips.size === 0) next.add("all");
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+
+      // openNow를 제외한 혜택 칩이 하나도 없으면 전체로 복귀한다.
+      const selectedBenefitChips = new Set([...next].filter((c) => c !== "openNow"));
+      if (selectedBenefitChips.size === 0) next.add("all");
+
       return next;
     });
   };
 
-  const renderFilterChipRow = (className: string) => (
-    <div className={className} role="toolbar" aria-label={t.storeFilterToolbarAria}>
-      {STORE_FILTER_CHIP_ORDER.map((id) => {
-        const active = storeFilterChips.has(id);
+  const toggleCategoryFilterChip = (id: StoreFilterChipId) => {
+    setCategoryFilterChips((prev) => {
+      if (id === "all") return new Set<StoreFilterChipId>(["all"]);
+
+      const next = new Set(prev);
+      next.delete("all");
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+
+      if (next.size === 0) next.add("all");
+      return next;
+    });
+  };
+
+  const renderFilterChipRow = (
+    className: string,
+    order: StoreFilterChipId[],
+    activeChips: ReadonlySet<StoreFilterChipId>,
+    onToggle: (id: StoreFilterChipId) => void,
+    ariaLabel: string
+  ) => (
+    <div className={className} role="toolbar" aria-label={ariaLabel}>
+      {order.map((id) => {
+        const active = activeChips.has(id);
         return (
           <button
             key={id}
             type="button"
             aria-pressed={active}
-            onClick={() => toggleStoreFilterChip(id)}
+            onClick={() => onToggle(id)}
             className={cn(
               "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
               active
@@ -1541,17 +1630,22 @@ const Main = () => {
     [stores, searchQuery]
   );
 
-  const chipFilteredStores = useMemo(() =>
-    filteredStores.filter((store) => storeMatchesChipFilters(store, storeFilterChips)),
-    [filteredStores, storeFilterChips]
+  const benefitFilteredStores = useMemo(() =>
+    filteredStores.filter((store) => storeMatchesBenefitChipFilters(store, benefitFilterChips)),
+    [filteredStores, benefitFilterChips]
   );
 
-  // openNow 칩이 켜진 경우에만 영업중 필터 적용
+  const categoryFilteredStores = useMemo(() =>
+    benefitFilteredStores.filter((store) => storeMatchesCategoryChipFilters(store, categoryFilterChips)),
+    [benefitFilteredStores, categoryFilterChips]
+  );
+
+  // 혜택 필터 줄의 openNow 칩이 켜진 경우에만 영업중 필터 적용
   const openStores = useMemo(() =>
-    storeFilterChips.has("openNow")
-      ? chipFilteredStores.filter((store) => store.isOpen !== false)
-      : chipFilteredStores,
-    [chipFilteredStores, storeFilterChips]
+    benefitFilterChips.has("openNow")
+      ? categoryFilteredStores.filter((store) => store.isOpen !== false)
+      : categoryFilteredStores,
+    [categoryFilteredStores, benefitFilterChips]
   );
 
   const storesWithLogoImage = useMemo(() =>
@@ -2103,14 +2197,22 @@ const Main = () => {
               </Button>
             )}
           </div>
-          {!isMapView &&
-            renderFilterChipRow(
-              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          <div className="space-y-2">
+            {renderFilterChipRow(
+              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              BENEFIT_FILTER_CHIP_ORDER,
+              benefitFilterChips,
+              toggleBenefitFilterChip,
+              (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria
             )}
-          {isMapView &&
-            renderFilterChipRow(
-              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            {renderFilterChipRow(
+              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              STORE_CATEGORY_CHIP_ORDER,
+              categoryFilterChips,
+              toggleCategoryFilterChip,
+              (t as any).categoryFilterToolbarAria ?? t.storeFilterToolbarAria
             )}
+          </div>
           {isMapView && showResearchButton && (
             <div className="flex justify-center pt-0.5">
               <button

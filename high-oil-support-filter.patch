@@ -1,0 +1,165 @@
+--- a/src/pages/Main.tsx
++++ b/src/pages/Main.tsx
+@@ -974,22 +974,41 @@
+       // 거리순으로 정렬하여 초기 8개 선택
+       const initialStores = allStores.slice(0, 8);
+       const remainingStores = allStores.slice(8);
++
++      const getStoreDataByPlaceId = async (store: any): Promise<any | null> => {
++        try {
++          const isNumeric = /^\d+$/.test(store.id);
++          if (!isNumeric) return null;
++          return await storesApi.getStoreByKakaoPlaceId(store.id);
++        } catch (e) {
++          console.log(`⚠️ [매장 정보] ${store.name}: kakao_place_id 매장 정보 조회 실패`);
++          return null;
++        }
++      };
+       
+       console.log("🚀 [초기 로딩] 처음 8개 매장만 빠르게 표시");
+       
+       // 각 매장의 할인 정보 조회 (초기 8개만 먼저 처리)
+       console.log("🔄 [할인 정보 조회] 초기 8개 매장 처리 시작");
+       const initialStoresWithDiscount = await Promise.all(initialStores.map(async (store) => {
++        let preloadedStoreData: any = null;
++
+         try {
+-          // 파스쿠찌와 투썸플레이스만 할인율 조회
++          preloadedStoreData = await getStoreDataByPlaceId(store);
++          // 파스쿠찌와 투썸플레이스가 아니어도 DB 기반 칩(지역화폐/고유가 지원금)은 반영
+           if (store.image !== 'pascucci' && store.image !== 'twosome') {
+             return {
+               ...store,
+               maxDiscount: null,
+               discountNum: 0,
+               maxDiscountPercent: null,
++              local_currency_available: preloadedStoreData?.local_currency_available || false,
++              local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
++              high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
++              parking_available: preloadedStoreData?.parking_available || false,
++              free_parking: preloadedStoreData?.free_parking || false,
++              parking_size: preloadedStoreData?.parking_size || null,
+               hasGifticonDiscount: false,
+-              high_oil_support_available: store?.high_oil_support_available || false,
+             };
+           }
+ 
+@@ -1045,22 +1064,20 @@
+           // 3. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
+           let localCurrencyDiscount = 0;
+           let maxGifticonDiscount = 0;
+-          let storeData: any = null;
++          let storeData: any = preloadedStoreData;
+           
+           try {
+             // storeId가 숫자인지 확인 (카카오 플레이스 ID)
+             const isNumeric = /^\d+$/.test(store.id);
+-            let storeError: any = null;
+-
+-            if (isNumeric && franchiseData) {
++
++            if (!storeData && isNumeric) {
+               // kakao_place_id로 조회 시도
+               const data = await storesApi.getStoreByKakaoPlaceId(store.id);
+-              storeData = data;
+-              storeError = data ? null : new Error("not found");
++              storeData = data || null;
+             }
+ 
+             // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
+-            if (storeError && franchiseData) {
++            if (!storeData && franchiseData) {
+               const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
+               if (data) {
+                 storeData = data;
+@@ -1170,7 +1187,7 @@
+             free_parking: storeData?.free_parking || false,
+             parking_size: storeData?.parking_size || null,
+             hasGifticonDiscount: maxGifticonDiscount > 0,
+-            high_oil_support_available: store?.high_oil_support_available || false,
++            high_oil_support_available: storeData?.high_oil_support_available || false,
+           };
+         } catch (error) {
+           console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
+@@ -1185,7 +1202,7 @@
+             free_parking: false,
+             parking_size: null,
+             hasGifticonDiscount: false,
+-            high_oil_support_available: store?.high_oil_support_available || false,
++            high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
+           };
+         }
+       }));
+@@ -1212,16 +1229,24 @@
+         
+         // 나머지 매장의 할인 정보 조회
+         const remainingStoresWithDiscount = await Promise.all(remainingStores.map(async (store) => {
++          let preloadedStoreData: any = null;
++
+           try {
+-            // 파스쿠찌와 투썸플레이스만 할인율 조회
++            preloadedStoreData = await getStoreDataByPlaceId(store);
++            // 파스쿠찌와 투썸플레이스가 아니어도 DB 기반 칩(지역화폐/고유가 지원금)은 반영
+             if (store.image !== 'pascucci' && store.image !== 'twosome') {
+               return {
+                 ...store,
+                 maxDiscount: null,
+                 discountNum: 0,
+                 maxDiscountPercent: null,
++                local_currency_available: preloadedStoreData?.local_currency_available || false,
++                local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
++                high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
++                parking_available: preloadedStoreData?.parking_available || false,
++                free_parking: preloadedStoreData?.free_parking || false,
++                parking_size: preloadedStoreData?.parking_size || null,
+                 hasGifticonDiscount: false,
+-                high_oil_support_available: store?.high_oil_support_available || false,
+               };
+             }
+ 
+@@ -1275,22 +1300,20 @@
+             // 3. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
+             let localCurrencyDiscount = 0;
+             let maxGifticonDiscount = 0;
+-            let storeData: any = null;
++            let storeData: any = preloadedStoreData;
+ 
+             try {
+               // storeId가 숫자인지 확인 (카카오 플레이스 ID)
+               const isNumeric = /^\d+$/.test(store.id);
+-              let storeError: any = null;
+-
+-              if (isNumeric && franchiseData) {
++
++              if (!storeData && isNumeric) {
+                 // kakao_place_id로 조회 시도
+                 const data = await storesApi.getStoreByKakaoPlaceId(store.id);
+-                storeData = data;
+-                storeError = data ? null : new Error("not found");
++                storeData = data || null;
+               }
+ 
+               // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
+-              if (storeError && franchiseData) {
++              if (!storeData && franchiseData) {
+                 const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
+                 if (data) {
+                   storeData = data;
+@@ -1400,7 +1423,7 @@
+               free_parking: storeData?.free_parking || false,
+               parking_size: storeData?.parking_size || null,
+               hasGifticonDiscount: maxGifticonDiscount > 0,
+-              high_oil_support_available: store?.high_oil_support_available || false,
++              high_oil_support_available: storeData?.high_oil_support_available || false,
+             };
+           } catch (error) {
+             console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
+@@ -1415,7 +1438,7 @@
+               free_parking: false,
+               parking_size: null,
+               hasGifticonDiscount: false,
+-              high_oil_support_available: store?.high_oil_support_available || false,
++              high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
+             };
+           }
+         }));

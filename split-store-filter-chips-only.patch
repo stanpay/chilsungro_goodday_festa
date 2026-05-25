@@ -1,0 +1,236 @@
+--- a/src/pages/Main.tsx
++++ b/src/pages/Main.tsx
+@@ -53,18 +53,24 @@
+   | "highOilSupport"
+   | "restaurant"
+   | "cafe"
++  | "shopping"
+   | "other"
+   | "openNow";
+ 
+-const STORE_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
++const BENEFIT_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
+   "all",
+   "chilsungro",
+   "localCurrency",
+   "highOilSupport",
++  "openNow",
++];
++
++const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
++  "all",
+   "restaurant",
+   "cafe",
++  "shopping",
+   "other",
+-  "openNow",
+ ];
+ 
+ function inferChainImageFromPlaceName(placeName: string): string | null {
+@@ -135,21 +141,40 @@
+ }
+ 
+ function storeChipIsOther(store: StoreLikeForChip): boolean {
+-  return !storeChipIsRestaurant(store) && !storeChipIsCafe(store);
++  return (
++    !storeChipIsRestaurant(store) &&
++    !storeChipIsCafe(store) &&
++    !storeChipIsShopping(store)
++  );
+ }
+ 
+-function storeMatchesChipFilters(
++function storeMatchesBenefitChipFilters(
++  store: StoreLikeForChip,
++  chips: ReadonlySet<StoreFilterChipId>
++): boolean {
++  // openNow는 영업 여부 필터에서 따로 처리하므로 여기서는 제외
++  if (chips.has("all")) return true;
++
++  const parts: boolean[] = [];
++  if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
++  if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
++  if (chips.has("highOilSupport")) parts.push(storeHasHighOilSupport(store));
++
++  return parts.length > 0 && parts.some(Boolean);
++}
++
++function storeMatchesCategoryChipFilters(
+   store: StoreLikeForChip,
+   chips: ReadonlySet<StoreFilterChipId>
+ ): boolean {
+   if (chips.has("all")) return true;
++
+   const parts: boolean[] = [];
+-  if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
+-  if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
+-  if (chips.has("highOilSupport")) parts.push(storeHasHighOilSupport(store));
+   if (chips.has("restaurant")) parts.push(storeChipIsRestaurant(store));
+   if (chips.has("cafe")) parts.push(storeChipIsCafe(store));
++  if (chips.has("shopping")) parts.push(storeChipIsShopping(store));
+   if (chips.has("other")) parts.push(storeChipIsOther(store));
++
+   return parts.length > 0 && parts.some(Boolean);
+ }
+ 
+@@ -206,8 +231,11 @@
+   const [searchQuery, setSearchQuery] = useState("");
+   const [searchInput, setSearchInput] = useState("");
+   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+-  const [storeFilterChips, setStoreFilterChips] = useState<Set<StoreFilterChipId>>(
++  const [benefitFilterChips, setBenefitFilterChips] = useState<Set<StoreFilterChipId>>(
+     () => new Set<StoreFilterChipId>(["all", "openNow"])
++  );
++  const [categoryFilterChips, setCategoryFilterChips] = useState<Set<StoreFilterChipId>>(
++    () => new Set<StoreFilterChipId>(["all"])
+   );
+   const { locale, setLocale } = useAppLocale();
+   const [showTutorialModal, setShowTutorialModal] = useState(false);
+@@ -1488,48 +1516,70 @@
+   highOilSupport: t.chipHighOilSupport,
+   restaurant: t.chipRestaurant,
+   cafe: t.chipCafe,
++  shopping: (t as any).chipShopping ?? "쇼핑",
+   other: t.chipOther,
+   openNow: t.chipOpenNow,
+ };
+ 
+-  const toggleStoreFilterChip = (id: StoreFilterChipId) => {
+-    setStoreFilterChips((prev) => {
++  const toggleBenefitFilterChip = (id: StoreFilterChipId) => {
++    setBenefitFilterChips((prev) => {
+       const next = new Set(prev);
+-      // openNow는 카테고리 칩과 독립적으로 토글
++
++      // 영업중은 혜택 칩들과 별도로 토글한다.
+       if (id === "openNow") {
+         if (next.has("openNow")) next.delete("openNow");
+         else next.add("openNow");
+         return next;
+       }
++
+       if (id === "all") {
+         next.delete("all");
+         next.add("all");
+-        // openNow 유지
+         return next;
+       }
++
+       next.delete("all");
+-      if (next.has(id)) {
+-        next.delete(id);
+-      } else {
+-        next.add(id);
+-      }
+-      // 카테고리 칩이 하나도 없으면 "all"로 복귀 (openNow는 제외하고 계산)
+-      const categoryChips = new Set([...next].filter((c) => c !== "openNow"));
+-      if (categoryChips.size === 0) next.add("all");
++      if (next.has(id)) next.delete(id);
++      else next.add(id);
++
++      // openNow를 제외한 혜택 칩이 하나도 없으면 전체로 복귀한다.
++      const selectedBenefitChips = new Set([...next].filter((c) => c !== "openNow"));
++      if (selectedBenefitChips.size === 0) next.add("all");
++
+       return next;
+     });
+   };
+ 
+-  const renderFilterChipRow = (className: string) => (
+-    <div className={className} role="toolbar" aria-label={t.storeFilterToolbarAria}>
+-      {STORE_FILTER_CHIP_ORDER.map((id) => {
+-        const active = storeFilterChips.has(id);
++  const toggleCategoryFilterChip = (id: StoreFilterChipId) => {
++    setCategoryFilterChips((prev) => {
++      if (id === "all") return new Set<StoreFilterChipId>(["all"]);
++
++      const next = new Set(prev);
++      next.delete("all");
++      if (next.has(id)) next.delete(id);
++      else next.add(id);
++
++      if (next.size === 0) next.add("all");
++      return next;
++    });
++  };
++
++  const renderFilterChipRow = (
++    className: string,
++    order: StoreFilterChipId[],
++    activeChips: ReadonlySet<StoreFilterChipId>,
++    onToggle: (id: StoreFilterChipId) => void,
++    ariaLabel: string
++  ) => (
++    <div className={className} role="toolbar" aria-label={ariaLabel}>
++      {order.map((id) => {
++        const active = activeChips.has(id);
+         return (
+           <button
+             key={id}
+             type="button"
+             aria-pressed={active}
+-            onClick={() => toggleStoreFilterChip(id)}
++            onClick={() => onToggle(id)}
+             className={cn(
+               "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+               active
+@@ -1557,17 +1607,22 @@
+     [stores, searchQuery]
+   );
+ 
+-  const chipFilteredStores = useMemo(() =>
+-    filteredStores.filter((store) => storeMatchesChipFilters(store, storeFilterChips)),
+-    [filteredStores, storeFilterChips]
++  const benefitFilteredStores = useMemo(() =>
++    filteredStores.filter((store) => storeMatchesBenefitChipFilters(store, benefitFilterChips)),
++    [filteredStores, benefitFilterChips]
+   );
+ 
+-  // openNow 칩이 켜진 경우에만 영업중 필터 적용
++  const categoryFilteredStores = useMemo(() =>
++    benefitFilteredStores.filter((store) => storeMatchesCategoryChipFilters(store, categoryFilterChips)),
++    [benefitFilteredStores, categoryFilterChips]
++  );
++
++  // 혜택 필터 줄의 openNow 칩이 켜진 경우에만 영업중 필터 적용
+   const openStores = useMemo(() =>
+-    storeFilterChips.has("openNow")
+-      ? chipFilteredStores.filter((store) => store.isOpen !== false)
+-      : chipFilteredStores,
+-    [chipFilteredStores, storeFilterChips]
++    benefitFilterChips.has("openNow")
++      ? categoryFilteredStores.filter((store) => store.isOpen !== false)
++      : categoryFilteredStores,
++    [categoryFilteredStores, benefitFilterChips]
+   );
+ 
+   const storesWithLogoImage = useMemo(() =>
+@@ -2119,14 +2174,22 @@
+               </Button>
+             )}
+           </div>
+-          {!isMapView &&
+-            renderFilterChipRow(
+-              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
++          <div className="space-y-2">
++            {renderFilterChipRow(
++              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
++              BENEFIT_FILTER_CHIP_ORDER,
++              benefitFilterChips,
++              toggleBenefitFilterChip,
++              (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria
+             )}
+-          {isMapView &&
+-            renderFilterChipRow(
+-              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
++            {renderFilterChipRow(
++              "flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
++              STORE_CATEGORY_CHIP_ORDER,
++              categoryFilterChips,
++              toggleCategoryFilterChip,
++              (t as any).categoryFilterToolbarAria ?? t.storeFilterToolbarAria
+             )}
++          </div>
+           {isMapView && showResearchButton && (
+             <div className="flex justify-center pt-0.5">
+               <button
