@@ -36,38 +36,6 @@ export const MAIN_BANNERS: MainBanner[] = [
     },
     href: "https://naver.me/Fbqwjezy",
   },
-  {
-    id: "festa-notice",
-    title: {
-      ko: "칠성로 굿데이 페스타",
-      en: "Chilsungro Goodday Festa",
-      zh: "七星路 Goodday Festa",
-      ja: "チルソンロ Goodday Festa",
-    },
-    description: {
-      ko: "주변 매장에서 할인 혜택을 받아보세요",
-      en: "Get discounts at nearby stores",
-      zh: "在附近门店享受折扣优惠",
-      ja: "近くの店舗で割引特典を受け取りましょう",
-    },
-    variant: "primary",
-  },
-  {
-    id: "sample-ad",
-    title: {
-      ko: "이벤트 안내",
-      en: "Event notice",
-      zh: "活动公告",
-      ja: "イベントのお知らせ",
-    },
-    description: {
-      ko: "광고·공지 이미지는 mainBanners.ts에서 추가할 수 있어요",
-      en: "Add ad and notice images in mainBanners.ts",
-      zh: "可在 mainBanners.ts 中添加广告和公告图片",
-      ja: "mainBanners.ts で広告・お知らせ画像を追加できます",
-    },
-    variant: "accent",
-  },
 ];
 
 export function getBannerText(
