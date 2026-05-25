@@ -28,12 +28,6 @@ export const MAIN_BANNERS: MainBanner[] = [
       zh: "济州旅行者中心优惠券活动",
       ja: "済州旅行者センタークーポンイベント",
     },
-    imageCtaLabel: {
-      ko: "길찾기",
-      en: "Directions",
-      zh: "路线",
-      ja: "道案内",
-    },
     href: "https://naver.me/Fbqwjezy",
   },
 ];

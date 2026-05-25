@@ -156,7 +156,7 @@ const PwaInstallPrompt = () => {
     return (
       <div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 px-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl py-3 px-5 animate-in slide-in-from-bottom-4 duration-300">
-          {/* 앱 정보 + 오늘하루 보지 않기 */}
+          {/* 앱 정보 + 오늘 하루 보지 않기 */}
           <div className="mb-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -170,9 +170,9 @@ const PwaInstallPrompt = () => {
               <button
                 onClick={handleDismissToday}
                 className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                aria-label="오늘하루 보지 않기"
+                aria-label="오늘 하루 보지 않기"
               >
-                오늘하루 보지 않기
+                오늘 하루 보지 않기
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>

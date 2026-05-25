@@ -45,11 +45,6 @@ function BannerSlide({
         className="h-full w-full object-cover"
         loading="lazy"
       />
-      {banner.href ? (
-        <span className="absolute bottom-2 right-2 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg">
-          {imageCtaLabel}
-        </span>
-      ) : null}
     </div>
   ) : (
     <div
