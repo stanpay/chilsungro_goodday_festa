@@ -155,7 +155,7 @@ const PwaInstallPrompt = () => {
   if (step === "popup") {
     return (
       <div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 px-4">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5 animate-in slide-in-from-bottom-4 duration-300">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl py-3 px-5 animate-in slide-in-from-bottom-4 duration-300">
           {/* 앱 정보 + 오늘하루 보지 않기 */}
           <div className="mb-4">
             <div className="flex items-start justify-between gap-3">
