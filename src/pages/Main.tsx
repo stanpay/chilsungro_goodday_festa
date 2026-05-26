@@ -1491,19 +1491,26 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         "display:flex;flex-direction:column;align-items:center;width:max-content;cursor:pointer;user-select:none;";
       root.dataset.storeId = store.id;
 
-      const dot = document.createElement("div");
-      dot.dataset.pinDot = "1";
-      dot.style.cssText =
-        "width:11px;height:11px;margin-top:-5.5px;border-radius:9999px;background:#2D8CFF;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.28);flex-shrink:0;transition:transform .15s ease,background .15s ease,box-shadow .15s ease;";
+      const balloon = document.createElement("div");
+      balloon.dataset.pinDot = "1";
+      balloon.style.cssText =
+        "background:#2D8CFF;border-radius:8px;padding:4px 8px;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transition:background .15s ease,transform .15s ease,box-shadow .15s ease;";
 
-      const label = document.createElement("div");
+      const label = document.createElement("span");
       label.setAttribute("data-store-label", "1");
       label.style.cssText =
-        "margin-top:3px;padding:2px 6px;font-size:11px;font-weight:600;color:#111827;background:rgba(255,255,255,.96);border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.12);white-space:nowrap;line-height:1.25;";
+        "font-size:11px;font-weight:700;color:#fff;line-height:1.35;";
       label.textContent = mapPinLabelsRef.current[store.id] ?? store.name;
 
-      root.appendChild(dot);
-      root.appendChild(label);
+      balloon.appendChild(label);
+
+      const tail = document.createElement("div");
+      tail.dataset.pinTail = "1";
+      tail.style.cssText =
+        "width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #2D8CFF;transition:border-top-color .15s ease;";
+
+      root.appendChild(balloon);
+      root.appendChild(tail);
 
       root.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -1587,7 +1594,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             position,
             content,
             xAnchor: 0.5,
-            yAnchor: 0,
+            yAnchor: 1,
             zIndex: 10,
             clickable: true,
           });
@@ -1720,7 +1727,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               position,
               content,
               xAnchor: 0.5,
-              yAnchor: 0,
+              yAnchor: 1,
               zIndex: 10,
               clickable: true,
             });
@@ -1787,16 +1794,19 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       overlay.setZIndex(id === selectedMapStoreId ? 45 : 10);
       const el = overlay.getContent() as HTMLElement | undefined;
       if (!el) return;
-      const dot = el.querySelector("[data-pin-dot]") as HTMLElement | null;
-      if (!dot) return;
+      const balloon = el.querySelector("[data-pin-dot]") as HTMLElement | null;
+      const tail = el.querySelector("[data-pin-tail]") as HTMLElement | null;
+      if (!balloon) return;
       if (id === selectedMapStoreId) {
-        dot.style.background = "#ea580c";
-        dot.style.transform = "scale(1.2)";
-        dot.style.boxShadow = "0 0 0 3px rgba(234,88,12,.35)";
+        balloon.style.background = "#ea580c";
+        balloon.style.transform = "scale(1.1)";
+        balloon.style.boxShadow = "0 2px 8px rgba(234,88,12,.45)";
+        if (tail) tail.style.borderTopColor = "#ea580c";
       } else {
-        dot.style.background = "#2D8CFF";
-        dot.style.transform = "scale(1)";
-        dot.style.boxShadow = "0 1px 3px rgba(0,0,0,.28)";
+        balloon.style.background = "#2D8CFF";
+        balloon.style.transform = "scale(1)";
+        balloon.style.boxShadow = "0 2px 6px rgba(0,0,0,.3)";
+        if (tail) tail.style.borderTopColor = "#2D8CFF";
       }
     });
   }, [selectedMapStoreId]);
