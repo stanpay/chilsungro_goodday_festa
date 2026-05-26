@@ -1,68 +1,69 @@
-import { loadKakaoMaps } from "@/lib/kakao";
+import { loadNaverMaps } from "@/lib/naver";
 
-/**
- * 위도/경도 → 주소 문자열 변환.
- * 반환 형식: "경주시 석장동 753-1" (시·군·구 + 읍·면·동 + 지번)
- */
 export async function getAddressFromCoords(
   latitude: number,
   longitude: number
 ): Promise<string> {
   try {
-    await loadKakaoMaps();
-
-    const kakao = (window as any).kakao;
-    if (!kakao?.maps?.services) return "위치를 확인할 수 없음";
-
-    const geocoder = new kakao.maps.services.Geocoder();
+    await loadNaverMaps();
+    const naver = (window as any).naver;
+    if (!naver?.maps?.Service) return "위치를 확인할 수 없음";
 
     return new Promise<string>((resolve) => {
       const timeoutId = setTimeout(() => resolve("위치를 확인할 수 없음"), 10000);
 
-      const coord = new kakao.maps.LatLng(latitude, longitude);
+      naver.maps.Service.reverseGeocode(
+        { coords: new naver.maps.LatLng(latitude, longitude) },
+        (status: any, response: any) => {
+          clearTimeout(timeoutId);
 
-      const callback = (result: any, status: any) => {
-        clearTimeout(timeoutId);
+          if (status !== naver.maps.Service.Status.OK) {
+            resolve("위치를 확인할 수 없음");
+            return;
+          }
 
-        if (status === kakao.maps.services.Status.OK && result.length > 0) {
-          const addr = result[0].address || result[0].road_address;
-          if (addr) {
-            // 시/군/구
-            let city = addr.region_2depth_name ?? "";
-            if (!city && addr.region_1depth_name) {
-              city = addr.region_1depth_name
-                .replace(/특별자치도$/, "")
-                .replace(/특별시$/, "시")
-                .replace(/광역시$/, "시")
-                .replace(/도$/, "");
+          try {
+            // v2.results 배열에서 addr 타입 결과 우선 사용
+            const results: any[] = response.v2?.results ?? [];
+            const addrResult =
+              results.find((r: any) => r.name === "addr") || results[0];
+
+            if (addrResult) {
+              const region = addrResult.region ?? {};
+              const area2 = region.area2?.name || ""; // 시/군/구
+              const area3 = region.area3?.name || ""; // 읍/면/동
+              const land = addrResult.land;
+              let lot = "";
+              if (land?.number1) {
+                lot = ` ${land.number1}`;
+                if (land.number2) lot += `-${land.number2}`;
+              }
+              const parts = [area2, area3].filter(Boolean).join(" ") + lot;
+              if (parts.trim()) {
+                resolve(parts.trim());
+                return;
+              }
             }
-            // 서울·광역시는 구 대신 시 이름을 앞에 붙이지 않아도 구만으로 충분
-            const district = addr.region_3depth_name || addr.region_3depth_h_name || "";
 
-            // 지번
-            let lot = "";
-            if (addr.main_address_no) {
-              lot = " " + addr.main_address_no;
-              if (addr.sub_address_no) lot += "-" + addr.sub_address_no;
-            }
-
-            const parts = [city, district].filter(Boolean).join(" ") + lot;
-            if (parts.trim()) {
-              resolve(parts.trim());
+            // fallback: jibunAddress 에서 광역시/도 제거
+            const jibun: string = response.v2?.address?.jibunAddress ?? "";
+            if (jibun) {
+              const short = jibun
+                .replace(/^[가-힣]+특별자치도\s*/, "")
+                .replace(/^[가-힣]+특별시\s*/, "")
+                .replace(/^[가-힣]+광역시\s*/, "")
+                .replace(/^[가-힣]+도\s*/, "")
+                .trim();
+              resolve(short || jibun);
               return;
             }
+          } catch {
+            /* ignore parse errors */
           }
+
+          resolve("위치를 확인할 수 없음");
         }
-
-        resolve("위치를 확인할 수 없음");
-      };
-
-      try {
-        geocoder.coord2Address(coord.getLng(), coord.getLat(), callback);
-      } catch {
-        clearTimeout(timeoutId);
-        resolve("위치를 확인할 수 없음");
-      }
+      );
     });
   } catch {
     return "위치를 확인할 수 없음";

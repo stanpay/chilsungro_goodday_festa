@@ -418,20 +418,19 @@ interface StoreData {
         }
       }
 
-      // Kakao SDK 로드 보장
+      // Naver Maps SDK 로드 보장
       try {
-        const { loadKakaoMaps } = await import("@/lib/kakao");
-        await loadKakaoMaps();
-        console.log("✅ [Kakao SDK] 로드 완료");
+        const { loadNaverMaps } = await import("@/lib/naver");
+        await loadNaverMaps();
       } catch (error: any) {
-        console.error("❌ [위치 초기화] Kakao SDK 로드 실패:", error);
+        console.error("❌ [위치 초기화] Naver Maps SDK 로드 실패:", error);
         setIsLoadingLocation(false);
         setCurrentLocation("위치 불러올 수 없음");
         localStorage.removeItem("selectedLocation");
         localStorage.removeItem("currentCoordinates");
         toast({
           title: "위치 기반 검색 불가",
-          description: error.message || "카카오 SDK 설정 오류입니다. 배포 환경에 VITE_KAKAO_APP_KEY 환경 변수를 설정해주세요.",
+          description: error.message || "네이버 지도 SDK 설정 오류입니다. 배포 환경에 VITE_NAVER_CLIENT_ID 환경 변수를 설정해주세요.",
           variant: "destructive",
         });
         setIsLoadingStores(false);
@@ -499,7 +498,7 @@ interface StoreData {
         if (!savedCoordinates) {
           try {
             console.log("🔍 [위치 정보] 주소 검색으로 좌표 가져오기:", savedLocation);
-            const { searchAddress } = await import("@/lib/kakao");
+            const { searchAddress } = await import("@/lib/naver");
             const searchResult = await searchAddress(savedLocation);
             
             if (searchResult.documents && searchResult.documents.length > 0) {
@@ -656,8 +655,6 @@ interface StoreData {
   const handleResearch = () => {
     const map = mapInstanceRef.current;
     if (!map) return;
-    const kakao = (window as any).kakao;
-    if (!kakao?.maps) return;
     const center = map.getCenter();
     const centerLat = center.getLat();
     const centerLng = center.getLng();
@@ -1485,11 +1482,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     let mapReady = false;
     let readyTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const buildStorePin = (store: StoreData, kakao: any) => {
+    // 핀 요소: zero-size anchor div + inner wrapper (CSS로 tip=anchor 구현)
+    const buildStorePin = (store: StoreData) => {
       const root = document.createElement("div");
-      root.style.cssText =
-        "display:flex;flex-direction:column;align-items:center;width:max-content;cursor:pointer;user-select:none;";
+      root.style.cssText = "position:absolute;width:0;height:0;user-select:none;";
       root.dataset.storeId = store.id;
+
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText =
+        "position:absolute;bottom:0;left:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;cursor:pointer;";
 
       const balloon = document.createElement("div");
       balloon.dataset.pinDot = "1";
@@ -1498,8 +1499,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
       const label = document.createElement("span");
       label.setAttribute("data-store-label", "1");
-      label.style.cssText =
-        "font-size:11px;font-weight:700;color:#fff;line-height:1.35;";
+      label.style.cssText = "font-size:11px;font-weight:700;color:#fff;line-height:1.35;";
       label.textContent = mapPinLabelsRef.current[store.id] ?? store.name;
 
       balloon.appendChild(label);
@@ -1509,104 +1509,126 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       tail.style.cssText =
         "width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #2D8CFF;transition:border-top-color .15s ease;";
 
-      root.appendChild(balloon);
-      root.appendChild(tail);
+      wrapper.appendChild(balloon);
+      wrapper.appendChild(tail);
+      root.appendChild(wrapper);
 
-      root.addEventListener("click", (ev) => {
+      wrapper.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        if (typeof kakao.maps.event?.preventMap === "function") {
-          kakao.maps.event.preventMap();
-        }
         selectStoreOnMapRef.current(store.id);
       });
 
       return root;
     };
 
-    const buildMyLocationPin = (kakao: any, title: string) => {
+    const buildMyLocationPin = (title: string) => {
       const root = document.createElement("div");
-      root.style.cssText =
-        "display:flex;flex-direction:column;align-items:center;width:max-content;pointer-events:none;";
+      root.style.cssText = "position:absolute;width:0;height:0;pointer-events:none;";
       root.title = title;
       const dot = document.createElement("div");
       dot.style.cssText =
-        "width:13px;height:13px;margin-top:-6.5px;border-radius:9999px;background:#22c55e;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);";
+        "position:absolute;width:13px;height:13px;transform:translate(-50%,-50%);border-radius:9999px;background:#22c55e;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);";
       root.appendChild(dot);
       return root;
     };
 
     const buildClusterPin = (count: number) => {
+      const root = document.createElement("div");
+      root.style.cssText = "position:absolute;width:0;height:0;user-select:none;";
       const el = document.createElement("div");
       el.style.cssText =
-        "display:flex;align-items:center;justify-content:center;" +
-        "width:36px;height:36px;border-radius:9999px;" +
+        "position:absolute;display:flex;align-items:center;justify-content:center;" +
+        "width:36px;height:36px;transform:translate(-50%,-50%);border-radius:9999px;" +
         "background:#2D8CFF;border:2.5px solid #fff;" +
         "box-shadow:0 2px 8px rgba(0,0,0,.32);" +
-        "font-size:13px;font-weight:700;color:#fff;" +
-        "cursor:pointer;user-select:none;";
+        "font-size:13px;font-weight:700;color:#fff;cursor:pointer;";
       el.textContent = String(count);
-      return el;
+      root.appendChild(el);
+      return { root, el };
     };
 
     const initializeMap = async () => {
       try {
-        const { loadKakaoMaps } = await import("@/lib/kakao");
-        await loadKakaoMaps();
+        const { loadNaverMaps } = await import("@/lib/naver");
+        await loadNaverMaps();
 
         if (isCancelled || !mapContainerRef.current) return;
 
-        const kakao = (window as any).kakao;
-        if (!kakao?.maps) return;
+        const naver = (window as any).naver;
+        if (!naver?.maps) return;
+
+        // Naver Maps OverlayView 기반 커스텀 오버레이 클래스 생성
+        function makeOverlayClass() {
+          const NaverOV: any = function(this: any, { position, content, zIndex = 10, clickable = true, map: initMap }: any) {
+            this._position = position;
+            this._content = content;
+            this._zIndex = zIndex;
+            this._clickable = clickable;
+            this._content.style.zIndex = String(zIndex);
+            naver.maps.OverlayView.call(this);
+            if (initMap) this.setMap(initMap);
+          };
+          NaverOV.prototype = Object.create(naver.maps.OverlayView.prototype);
+          NaverOV.prototype.constructor = NaverOV;
+          NaverOV.prototype.onAdd = function(this: any) {
+            const pane = this._clickable
+              ? this.getPanes().overlayMouseTarget
+              : this.getPanes().overlayLayer;
+            pane.appendChild(this._content);
+          };
+          NaverOV.prototype.draw = function(this: any) {
+            const proj = this.getProjection();
+            if (!proj) return;
+            const pt = proj.fromCoordToOffset(this._position);
+            this._content.style.left = Math.round(pt.x) + "px";
+            this._content.style.top = Math.round(pt.y) + "px";
+          };
+          NaverOV.prototype.onRemove = function(this: any) {
+            if (this._content?.parentNode) {
+              this._content.parentNode.removeChild(this._content);
+            }
+          };
+          NaverOV.prototype.getContent = function(this: any) { return this._content; };
+          NaverOV.prototype.getPosition = function(this: any) { return this._position; };
+          NaverOV.prototype.setZIndex = function(this: any, n: number) {
+            this._zIndex = n;
+            if (this._content) this._content.style.zIndex = String(n);
+          };
+          return NaverOV;
+        }
+        const NaverCustomOverlay = makeOverlayClass();
 
         // 제주 원도심 중심 좌표 (제주시청 기준)
-        const jejuDowntownCenter = new kakao.maps.LatLng(33.5098, 126.5219);
+        const jejuDowntownCenter = new naver.maps.LatLng(33.5098, 126.5219);
 
-        const map = new kakao.maps.Map(mapContainerRef.current, {
+        const map = new naver.maps.Map(mapContainerRef.current, {
           center: jejuDowntownCenter,
-          level: 6,
-          minLevel: 1,
+          zoom: 13,
+          maxZoom: 19,
+          minZoom: 9,
         });
         mapInstanceRef.current = map;
 
-        const bounds = new kakao.maps.LatLngBounds();
         storeOverlaysRef.current = [];
 
         if (currentCoords) {
-          const pos = new kakao.maps.LatLng(currentCoords.latitude, currentCoords.longitude);
-          const el = buildMyLocationPin(kakao, headerStrings(locale).mapCurrentLocationTitle);
-          const curOverlay = new kakao.maps.CustomOverlay({
-            map,
-            position: pos,
-            content: el,
-            xAnchor: 0.5,
-            yAnchor: 0,
-            zIndex: 50,
-            clickable: false,
-          });
+          const pos = new naver.maps.LatLng(currentCoords.latitude, currentCoords.longitude);
+          const el = buildMyLocationPin(headerStrings(locale).mapCurrentLocationTitle);
+          const curOverlay = new NaverCustomOverlay({ map, position: pos, content: el, zIndex: 50, clickable: false });
           overlays.push(curOverlay);
-          bounds.extend(pos);
         }
 
         storesWithCoords.forEach((store) => {
-          const position = new kakao.maps.LatLng(store.lat!, store.lon!);
-          const content = buildStorePin(store, kakao);
-          const overlay = new kakao.maps.CustomOverlay({
-            map,
-            position,
-            content,
-            xAnchor: 0.5,
-            yAnchor: 1,
-            zIndex: 10,
-            clickable: true,
-          });
+          const position = new naver.maps.LatLng(store.lat!, store.lon!);
+          const content = buildStorePin(store);
+          const overlay = new NaverCustomOverlay({ map, position, content, zIndex: 10, clickable: true });
           overlays.push(overlay);
           storeOverlaysRef.current.push({ id: store.id, overlay });
-          bounds.extend(position);
         });
 
         // 항상 제주 원도심 중심으로 고정
         map.setCenter(jejuDowntownCenter);
-        map.setLevel(6);
+        map.setZoom(13);
 
         const updateStoreLabels = () => {
           storeOverlaysRef.current.forEach(({ id, overlay }) => {
@@ -1618,16 +1640,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           });
         };
         updateStoreLabels();
-
-        if (typeof map.relayout === "function") {
-          requestAnimationFrame(() => {
-            try {
-              map.relayout();
-            } catch {
-              /* ignore */
-            }
-          });
-        }
 
         const updateClusters = () => {
           if (isCancelled) return;
@@ -1641,16 +1653,16 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           if (!allPins.length) return;
 
           const proj = map.getProjection();
-          const currentLevel = map.getLevel();
+          const currentZoom = map.getZoom();
           const CLUSTER_DISTANCE_PX =
-            currentLevel <= 2 ? 18 :
-            currentLevel <= 3 ? 28 : 45;
+            currentZoom >= 18 ? 18 :
+            currentZoom >= 16 ? 28 : 45;
 
           const pins = allPins.map(({ id, overlay }) => {
             const pos = overlay.getPosition();
             let px = 0, py = 0;
             try {
-              const pt = proj.containerPointFromCoords(pos);
+              const pt = proj.fromCoordToOffset(pos);
               px = pt.x;
               py = pt.y;
             } catch {}
@@ -1690,27 +1702,21 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               cluster.forEach(({ overlay }) => overlay.setMap(null));
               const avgLat = cluster.reduce((s, p) => s + p.pos.getLat(), 0) / cluster.length;
               const avgLng = cluster.reduce((s, p) => s + p.pos.getLng(), 0) / cluster.length;
-              const centroid = new kakao.maps.LatLng(avgLat, avgLng);
-              const el = buildClusterPin(cluster.length);
-              const clusterOverlay = new kakao.maps.CustomOverlay({
+              const centroid = new naver.maps.LatLng(avgLat, avgLng);
+              const { root: clusterRoot, el: clusterEl } = buildClusterPin(cluster.length);
+              const clusterOverlay = new NaverCustomOverlay({
                 map,
                 position: centroid,
-                content: el,
-                xAnchor: 0.5,
-                yAnchor: 0.5,
+                content: clusterRoot,
                 zIndex: 20,
                 clickable: true,
               });
               clusterOverlaysRef.current.push(clusterOverlay);
-              el.addEventListener("click", (ev) => {
+              clusterEl.addEventListener("click", (ev) => {
                 ev.stopPropagation();
-                if (typeof kakao.maps.event?.preventMap === "function") {
-                  kakao.maps.event.preventMap();
-                }
-                const currentLevel = map.getLevel();
-                if (currentLevel > 1) {
-                  map.setLevel(Math.max(1, currentLevel - 2), { anchor: centroid });
-                }
+                const zoom = map.getZoom();
+                map.setZoom(Math.min(19, zoom + 2));
+                map.setCenter(centroid);
               });
             }
           });
@@ -1724,29 +1730,21 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           clusterOverlaysRef.current.forEach((o) => { try { o.setMap(null); } catch {} });
           clusterOverlaysRef.current = [];
           storesWithCoordsRef.current.forEach((store: any) => {
-            const position = new kakao.maps.LatLng(store.lat, store.lon);
-            const content = buildStorePin(store, kakao);
-            const overlay = new kakao.maps.CustomOverlay({
-              map,
-              position,
-              content,
-              xAnchor: 0.5,
-              yAnchor: 1,
-              zIndex: 10,
-              clickable: true,
-            });
+            const position = new naver.maps.LatLng(store.lat, store.lon);
+            const content = buildStorePin(store);
+            const overlay = new NaverCustomOverlay({ map, position, content, zIndex: 10, clickable: true });
             storeOverlaysRef.current.push({ id: store.id, overlay });
           });
           updateStoreLabels();
           setTimeout(() => { if (!isCancelled) updateClusters(); }, 100);
         };
 
-        kakao.maps.event.addListener(map, "idle", updateClusters);
+        naver.maps.Event.addListener(map, "idle", updateClusters);
         setTimeout(() => { if (!isCancelled) updateClusters(); }, 400);
 
-        // 초기 setBounds 완료 후 600ms 지나면 사용자 이동 감지 시작
+        // 초기 로드 후 600ms 지나면 사용자 이동 감지 시작
         readyTimer = setTimeout(() => { mapReady = true; }, 600);
-        kakao.maps.event.addListener(map, "idle", () => {
+        naver.maps.Event.addListener(map, "idle", () => {
           if (!mapReady || isCancelled) return;
           setShowResearchButton(true);
         });

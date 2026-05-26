@@ -5,7 +5,7 @@ import { ArrowLeft, MapPin, Search, Loader2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { searchAddress, KakaoSearchResult } from "@/lib/kakao";
+import { searchAddress, NaverSearchResult as KakaoSearchResult } from "@/lib/naver";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
