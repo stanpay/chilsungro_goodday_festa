@@ -1623,17 +1623,35 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         const kakao = (window as any).kakao;
         if (!kakao?.maps) return;
 
-        const defaultCenter = currentCoords
-          ? new kakao.maps.LatLng(currentCoords.latitude, currentCoords.longitude)
-          : storesWithCoords.length > 0
-            ? new kakao.maps.LatLng(storesWithCoords[0].lat!, storesWithCoords[0].lon!)
-            : new kakao.maps.LatLng(37.5665, 126.978);
+        // 제주 원도심 중심 좌표 (제주시청 기준)
+        const jejuDowntownCenter = new kakao.maps.LatLng(33.5098, 126.5219);
 
         const map = new kakao.maps.Map(mapContainerRef.current, {
-          center: defaultCenter,
-          level: 5,
+          center: jejuDowntownCenter,
+          level: 6,
         });
         mapInstanceRef.current = map;
+
+        // 제주 원도심 영역 폴리곤 그리기
+        const downtownPolygonPath = [
+          new kakao.maps.LatLng(33.5165, 126.5145), // 북서쪽
+          new kakao.maps.LatLng(33.5165, 126.5293), // 북동쪽
+          new kakao.maps.LatLng(33.5031, 126.5293), // 남동쪽
+          new kakao.maps.LatLng(33.5031, 126.5145), // 남서쪽
+        ];
+
+        const downtownPolygon = new kakao.maps.Polygon({
+          map: map,
+          path: downtownPolygonPath,
+          strokeWeight: 3,
+          strokeColor: '#2D8CFF',
+          strokeOpacity: 0.8,
+          strokeStyle: 'solid',
+          fillColor: '#2D8CFF',
+          fillOpacity: 0.1,
+        });
+
+        overlays.push(downtownPolygon);
 
         const bounds = new kakao.maps.LatLngBounds();
         storeOverlaysRef.current = [];
@@ -1671,9 +1689,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           bounds.extend(position);
         });
 
-        if (!bounds.isEmpty()) {
-          map.setBounds(bounds, 48, 48, 48, 120);
-        }
+        // 항상 제주 원도심 중심으로 고정
+        map.setCenter(jejuDowntownCenter);
+        map.setLevel(6);
 
         const updateStoreLabels = () => {
           storeOverlaysRef.current.forEach(({ id, overlay }) => {
@@ -1889,7 +1907,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     }
   }, [selectedMapStoreId, isMapView, storesWithCoords]);
 
-  const showMapFillLayer = isMapView && !isLoadingStores;
+  const showMapFillLayer = isMapView;
 
   useEffect(() => {
     if (!isMapView) return;

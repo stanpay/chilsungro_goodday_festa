@@ -300,6 +300,7 @@ type StoreCardCopy = {
   localCurrency: string;
   localCurrencyDiscount: (n: number) => string;
   chilsungroCoupon: string;
+  highOilSupport: string;
   freeParking: string;
   freeParkingWithSize: (sizeLabel: string) => string;
   paidParking: string;
@@ -317,6 +318,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     localCurrency: "지역화폐",
     localCurrencyDiscount: (n) => `지역화폐 ${n}%할인`,
     chilsungroCoupon: "원도심쿠폰",
+    highOilSupport: "고유가지원금",
     freeParking: "무료 주차 가능",
     freeParkingWithSize: (s) => `무료 주차 가능: ${s}`,
     paidParking: "주차 가능",
@@ -332,6 +334,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     localCurrency: "Local currency",
     localCurrencyDiscount: (n) => `Local currency ${n}% off`,
     chilsungroCoupon: "Old Town coupon",
+    highOilSupport: "High Oil Support",
     freeParking: "Parking available (free)",
     freeParkingWithSize: (s) => `Free parking: ${s}`,
     paidParking: "Parking available",
@@ -347,6 +350,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     localCurrency: "本地货币",
     localCurrencyDiscount: (n) => `本地货币 ${n}% 优惠`,
     chilsungroCoupon: "济州旧城区优惠券",
+    highOilSupport: "高油价支援金",
     freeParking: "可免费停车",
     freeParkingWithSize: (s) => `免费停车：${s}`,
     paidParking: "可停车",
@@ -362,6 +366,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     localCurrency: "地域通貨",
     localCurrencyDiscount: (n) => `地域プレミアム ${n}%割引`,
     chilsungroCoupon: "済州旧市街クーポン",
+    highOilSupport: "高油価支援金",
     freeParking: "無料駐車可",
     freeParkingWithSize: (s) => `無料駐車可：${s}`,
     paidParking: "駐車可",
