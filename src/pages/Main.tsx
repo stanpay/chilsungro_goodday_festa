@@ -1661,6 +1661,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             return;
           }
 
+          const currentLevel = map.getLevel();
+          if (currentLevel <= 2) {
+            allPins.forEach(({ overlay }) => { try { overlay.setMap(map); } catch {} });
+            return;
+          }
+
           const assigned = new Set<string>();
           const clusters: (typeof pins)[] = [];
 
