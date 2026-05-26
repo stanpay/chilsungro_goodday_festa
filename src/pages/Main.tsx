@@ -257,6 +257,7 @@ interface StoreData {
   const selectStoreOnMapRef = useRef<(id: string) => void>(() => {});
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null);
   const [showResearchButton, setShowResearchButton] = useState(false);
+  const [mapFilteredStores, setMapFilteredStores] = useState<any[] | null>(null);
   const allFetchedStoresRef = useRef<any[]>([]);
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
@@ -314,6 +315,7 @@ interface StoreData {
     if (!isMapView) {
       setSelectedMapStoreId(null);
       setShowResearchButton(false);
+      setMapFilteredStores(null);
     }
   }, [isMapView]);
 
@@ -603,7 +605,7 @@ interface StoreData {
     });
 
     console.log(`🔍 [재검색] 지도 중심 (${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}) 기준 ${NEARBY_FILTER_RADIUS_M}m 이내: ${filtered.length}개`);
-    setStores(filtered);
+    setMapFilteredStores(filtered);
     setShowResearchButton(false);
   };
 
@@ -1405,14 +1407,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     [openStores, sortBy]
   );
 
-  const storesWithCoords = useMemo(() =>
-    [...openStores]
-      .filter((store) => typeof store.lat === "number" && typeof store.lon === "number")
-      .sort((a, b) =>
-        sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
-      ),
-    [openStores, sortBy]
-  );
+  const storesWithCoords = useMemo(() => {
+    // 지도뷰 재검색 결과가 있으면 그것만, 없으면 전체 필터 체인에서 좌표 있는 것만
+    const base = mapFilteredStores
+      ? mapFilteredStores
+      : openStores.filter((store) => typeof store.lat === "number" && typeof store.lon === "number");
+    return [...base].sort((a, b) =>
+      sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
+    );
+  }, [mapFilteredStores, openStores, sortBy]);
 
   useEffect(() => {
     if (!isMapView || !mapContainerRef.current) return;
