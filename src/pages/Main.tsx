@@ -232,7 +232,7 @@ function ChipButton({
       aria-pressed={active}
       onClick={onToggle}
       className={cn(
-        "flex shrink-0 max-w-[8rem] items-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
+        "flex shrink-0 max-w-[8rem] items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground shadow-sm"
           : "border-border bg-card text-foreground hover:bg-muted/80"
@@ -246,7 +246,7 @@ function ChipButton({
           )}
         />
       )}
-      <span ref={containerRef} className="block min-w-0 flex-1 overflow-hidden">
+      <span ref={containerRef} className="block min-w-0 overflow-hidden">
         <span
           ref={textRef}
           className={cn(
