@@ -684,33 +684,7 @@ const Payment = () => {
       }
 
       try {
-        // 1. localStorage에서 매장 정보 확인 (전체 목록 키 우선, 없으면 표시용 배치)
-        const storedStores =
-          localStorage.getItem("nearbyStoresFull") || localStorage.getItem("nearbyStores");
-        if (storedStores) {
-          try {
-            const stores = JSON.parse(storedStores);
-            // storeId와 정확히 일치하는 매장 찾기
-            const store = stores.find((s: any) => String(s.id) === String(storeId));
-            if (store) {
-              if (store.name) {
-                setActualStoreName(store.name);
-              }
-              // 매장의 image 필드를 브랜드명으로 변환
-              if (store.image && storeNames[store.image]) {
-                setStoreBrand(storeNames[store.image]);
-              } else if (store.image) {
-                // storeNames에 없는 경우 image 값을 그대로 사용 (한글인 경우)
-                setStoreBrand(store.image);
-              }
-              return;
-            }
-          } catch (e) {
-            console.error("localStorage 파싱 오류:", e);
-          }
-        }
-
-        // 2. storeNames에서 브랜드명 매핑 확인 - 우선순위 2
+        // storeNames에서 브랜드명 매핑 확인
         if (storeNames[storeId]) {
           setActualStoreName(storeNames[storeId]);
           setStoreBrand(storeNames[storeId]);

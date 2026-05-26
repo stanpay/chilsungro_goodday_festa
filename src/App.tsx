@@ -26,6 +26,7 @@ import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import MembershipManagement from "./pages/MembershipManagement";
 import LandingPage from "./pages/Landing/LandingPage";
 import RedirectToJeju from "./pages/RedirectToJeju";
+import DevTools from "./pages/DevTools";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AnalyticsPageTracker from "@/components/AnalyticsPageTracker";
@@ -77,6 +78,7 @@ const App = () => (
           <Route path="/membership-management" element={<MembershipManagement />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/payment-fail" element={<PaymentFail />} />
+          <Route path="/dev-tools-9f3k" element={<DevTools />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

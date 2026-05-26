@@ -215,12 +215,14 @@ const StoreCard = ({
                 alt={displayName}
                 className="relative z-10 h-20 w-20 object-contain"
               />
-            ) : image === "shopping" ? (
-              <ShoppingBag className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
-            ) : image === "restaurant" ? (
-              <UtensilsCrossed className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
-            ) : (
-              <Coffee className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
+            ) : !(photos && photos.length > 0) && (
+              image === "shopping" ? (
+                <ShoppingBag className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
+              ) : image === "restaurant" ? (
+                <UtensilsCrossed className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
+              ) : (
+                <Coffee className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
+              )
             )}
 
             {discountBadgeText && (

@@ -343,163 +343,6 @@ interface StoreData {
         }
       }
 
-      // 최근 위치 조회 시간 확인 (5분 이내면 재조회 하지 않음)
-      const lastLocationFetchTime = localStorage.getItem("lastLocationFetchTime");
-      const now = Date.now();
-      const LOCATION_CACHE_DURATION = 5 * 60 * 1000; // 5분
-      
-      console.log("🔍 [위치 캐시 확인] 시작");
-      console.log("📍 [위치 캐시] lastLocationFetchTime:", lastLocationFetchTime, "(타입:", typeof lastLocationFetchTime, ")");
-      console.log("📍 [위치 캐시] 현재 시간:", now);
-      
-      // localStorage 전체 상태 확인
-      console.log("🔍 [localStorage 전체 상태]:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
-        obj[key] = localStorage.getItem(key);
-        return obj;
-      }, {} as Record<string, string | null>));
-
-      let cacheMissReason = "";
-      let lastFetchTimestamp = 0;
-      let timeSinceLastFetch = Number.POSITIVE_INFINITY;
-
-      if (!lastLocationFetchTime) {
-        cacheMissReason = "❌ 위치 조회 기록이 없음 (lastLocationFetchTime이 null/undefined)";
-        console.log(cacheMissReason);
-      } else {
-        lastFetchTimestamp = parseInt(lastLocationFetchTime);
-        if (isNaN(lastFetchTimestamp)) {
-          cacheMissReason = "❌ 위치 조회 기록이 숫자가 아님 (parseInt 실패)";
-          console.log(cacheMissReason);
-        } else {
-          timeSinceLastFetch = now - lastFetchTimestamp;
-        const secondsSinceLastFetch = Math.floor(timeSinceLastFetch / 1000);
-        const minutesSinceLastFetch = Math.floor(secondsSinceLastFetch / 60);
-        
-          console.log("⏱️ [위치 캐시] 마지막 위치 조회:", `${secondsSinceLastFetch}초 전 (${minutesSinceLastFetch}분 전)`);
-        console.log("⏱️ [위치 캐시] 캐시 유효 기간:", LOCATION_CACHE_DURATION / 1000, "초");
-
-          if (timeSinceLastFetch >= LOCATION_CACHE_DURATION) {
-            cacheMissReason = `❌ 캐시 만료됨 (${timeSinceLastFetch / 1000}초 경과 > ${LOCATION_CACHE_DURATION / 1000}초)`;
-            console.log(cacheMissReason);
-          }
-        }
-      }
-
-      const hasValidRecentCache = !!lastFetchTimestamp && timeSinceLastFetch < LOCATION_CACHE_DURATION;
-      console.log("⏱️ [위치 캐시] 캐시 유효 여부:", hasValidRecentCache, hasValidRecentCache ? "✅ HIT" : "❌ MISS");
-
-      if (hasValidRecentCache) {
-        console.log("✅✅✅ [위치 캐시 HIT] 5분 이내 캐시 유효 - 저장된 위치 사용 시도 ✅✅✅");
-
-        const savedCoordinates = localStorage.getItem("currentCoordinates");
-        const savedLocation = localStorage.getItem("selectedLocation");
-        const isManualLocationValue = localStorage.getItem("isManualLocation") === "true";
-
-        console.log("📍 [위치 캐시] savedLocation:", savedLocation);
-        console.log("📍 [위치 캐시] savedCoordinates:", savedCoordinates);
-
-        setIsManualLocation(isManualLocationValue);
-        setIsLoadingLocation(false);
-
-        if (savedLocation) {
-          setCurrentLocation(savedLocation);
-        } else {
-          setCurrentLocation("위치 불러올 수 없음");
-        }
-
-        let cacheFullyApplied = false;
-
-        if (savedCoordinates) {
-          try {
-            const coords = JSON.parse(savedCoordinates);
-            const { latitude, longitude } = coords;
-            if (
-              typeof latitude === "number" &&
-              typeof longitude === "number" &&
-              !isNaN(latitude) &&
-              !isNaN(longitude) &&
-              latitude >= -90 &&
-              latitude <= 90 &&
-              longitude >= -180 &&
-              longitude <= 180
-            ) {
-              setCurrentCoords({ latitude, longitude });
-
-              const savedStores = localStorage.getItem("nearbyStores");
-              if (savedStores) {
-                try {
-                  const storesData = JSON.parse(savedStores);
-                  setStores(storesData);
-                  allFetchedStoresRef.current = storesData;
-                  setIsLoadingStores(false);
-                  console.log("✅ [위치 캐시] 저장된 매장 정보 사용");
-                  cacheFullyApplied = true;
-                } catch (e) {
-                  console.log("⚠️ [위치 캐시] 저장된 매장 정보 파싱 실패, 다시 조회");
-                  try {
-                    await fetchNearbyStores(latitude, longitude);
-                    cacheFullyApplied = true;
-                  } catch {
-                    /* fall through: 타임스탬프 무효화 후 전체 위치 재조회 */
-                  }
-                }
-              } else {
-                console.log("⚠️ [위치 캐시] 저장된 매장 정보 없음, 다시 조회");
-                try {
-                  await fetchNearbyStores(latitude, longitude);
-                  cacheFullyApplied = true;
-                } catch {
-                  /* fall through */
-                }
-              }
-            }
-          } catch (error) {
-            console.error("❌ [위치 캐시] 저장된 좌표 파싱 오류:", error);
-          }
-        }
-
-        if (cacheFullyApplied) {
-          console.log("✅✅✅ [위치 캐시 완료] 저장 좌표·매장까지 반영 — 조회 종료 ✅✅✅");
-          return;
-        }
-
-        console.warn(
-          "⚠️ [위치 캐시] 타임스탬프만 유효하고 좌표/매장을 복구하지 못함 — lastLocationFetchTime 제거 후 재조회"
-        );
-        localStorage.removeItem("lastLocationFetchTime");
-      }
-
-      if (cacheMissReason) {
-        console.log("❌❌❌ [위치 캐시 MISS] 이유:", cacheMissReason, "- 위치 다시 조회 ❌❌❌");
-      } else {
-        console.log("❌❌❌ [위치 캐시 MISS] 알 수 없는 이유로 캐시 무효 - 위치 다시 조회 ❌❌❌");
-      }
-      
-      console.log("🌍🌍🌍 [위치 조회 시작] 새로운 위치 정보 가져오기 🌍🌍🌍");
-
-      // 로그인한 경우 실제 위치 가져오기
-      console.log("🚀🚀🚀 [위치 초기화] 시작 - 위치 조회 🚀🚀🚀");
-      
-      // 위치 조회 시작 시간 기록
-      const fetchTimestamp = Date.now();
-      const timestampString = fetchTimestamp.toString();
-      console.log("📝 [위치 타임스탬프 저장 전] localStorage 상태:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
-        obj[key] = localStorage.getItem(key);
-        return obj;
-      }, {} as Record<string, string | null>));
-
-      localStorage.setItem("lastLocationFetchTime", timestampString);
-      console.log("✅ [위치 타임스탬프] 기록 완료:", fetchTimestamp, "(문자열:", timestampString, ")");
-
-      const savedValue = localStorage.getItem("lastLocationFetchTime");
-      console.log("✅ [위치 타임스탬프] localStorage에서 읽은 값:", savedValue, "(타입:", typeof savedValue, ")");
-      console.log("✅ [위치 타임스탬프] 저장 값과 일치:", savedValue === timestampString ? "✅ 일치" : "❌ 불일치");
-
-      console.log("📝 [위치 타임스탬프 저장 후] localStorage 상태:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
-        obj[key] = localStorage.getItem(key);
-        return obj;
-      }, {} as Record<string, string | null>));
-      
       // Kakao SDK 로드 보장
       try {
         const { loadKakaoMaps } = await import("@/lib/kakao");
@@ -1160,14 +1003,6 @@ interface StoreData {
       setStores(initialStoresWithDiscount);
       allFetchedStoresRef.current = initialStoresWithDiscount;
       setIsLoadingStores(false);
-      
-      // localStorage에 초기 매장 정보 저장 (Payment 페이지에서 사용)
-      try {
-        localStorage.setItem('nearbyStores', JSON.stringify(initialStoresWithDiscount));
-      } catch (e) {
-        console.error("localStorage 저장 오류:", e);
-      }
-      
       console.log("✅ [초기 로딩] 완료 - 초기 8개 매장 표시");
       
       // 나머지 매장 데이터 백그라운드 로딩
@@ -1384,14 +1219,7 @@ interface StoreData {
 
         // 전체 매장 데이터 합치기
         const allStoresWithDiscount = [...initialStoresWithDiscount, ...remainingStoresWithDiscount];
-        
-        // localStorage에 전체 매장 정보 저장
-        try {
-          localStorage.setItem('nearbyStores', JSON.stringify(allStoresWithDiscount));
-        } catch (e) {
-          console.error("localStorage 저장 오류:", e);
-        }
-        
+
         setStores(allStoresWithDiscount);
         allFetchedStoresRef.current = allStoresWithDiscount;
         setIsLoadingMoreStores(false);
