@@ -100,7 +100,7 @@ function categoryDefaultImage(place: {
   if (g === "MT1" || g === "CS2") return "shopping";
   if (g === "CE7") return "cafe";
   if (g === "FD6") return "restaurant";
-  return "restaurant";
+  return "other";
 }
 
 type StoreLikeForChip = {
@@ -142,11 +142,11 @@ function storeHasChilsungroCoupon(store: StoreLikeForChip): boolean {
 }
 
 function imageFromStoreCategory(category?: string | null): string {
-  if (!category) return "restaurant";
+  if (!category) return "other";
   if (category.includes("카페") || category.includes("디저트")) return "cafe";
   if (category.includes("쇼핑")) return "shopping";
   if (category.includes("음식")) return "restaurant";
-  return "restaurant";
+  return "other";
 }
 
 function categoryGroupCodeFromStoreCategory(category?: string | null): string {
