@@ -23,7 +23,8 @@ import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
+import type { CSSProperties } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { paymentHistoryApi } from "@/api/paymentHistory";
@@ -193,6 +194,76 @@ function storeMatchesCategoryChipFilters(
   if (chips.has("other")) parts.push(storeChipIsOther(store));
 
   return parts.length > 0 && parts.some(Boolean);
+}
+
+function ChipButton({
+  id,
+  active,
+  label,
+  onToggle,
+}: {
+  id: string;
+  active: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [marqueeDist, setMarqueeDist] = useState(0);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const text = textRef.current;
+    if (!container || !text) return;
+    const update = () => {
+      const dist = text.scrollWidth - container.clientWidth;
+      setMarqueeDist(dist > 1 ? dist : 0);
+    };
+    update();
+    document.fonts?.ready.then(update);
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [label]);
+
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onToggle}
+      className={cn(
+        "flex shrink-0 max-w-[8rem] items-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground shadow-sm"
+          : "border-border bg-card text-foreground hover:bg-muted/80"
+      )}
+    >
+      {id === "openNow" && (
+        <span
+          className={cn(
+            "shrink-0 inline-block h-1.5 w-1.5 rounded-full",
+            active ? "bg-green-300" : "bg-green-500"
+          )}
+        />
+      )}
+      <span ref={containerRef} className="block min-w-0 flex-1 overflow-hidden">
+        <span
+          ref={textRef}
+          className={cn(
+            "block whitespace-nowrap text-xs",
+            marqueeDist > 0 && "marquee-on-overflow"
+          )}
+          style={
+            marqueeDist > 0
+              ? ({ "--marquee-distance": `${marqueeDist}px` } as CSSProperties)
+              : undefined
+          }
+        >
+          {label}
+        </span>
+      </span>
+    </button>
+  );
 }
 
 const Main = () => {
@@ -1349,33 +1420,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     ariaLabel: string
   ) => (
     <div className={className} role="toolbar" aria-label={ariaLabel}>
-      {order.map((id) => {
-        const active = activeChips.has(id);
-        return (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onToggle(id)}
-            className={cn(
-              "flex shrink-0 max-w-[8rem] items-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
-              active
-                ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                : "border-border bg-card text-foreground hover:bg-muted/80"
-            )}
-          >
-            {id === "openNow" && (
-              <span className={cn("shrink-0 inline-block h-1.5 w-1.5 rounded-full", active ? "bg-green-300" : "bg-green-500")} />
-            )}
-            <AutoFitMarquee
-              text={chipLabelMap[id]}
-              className="min-w-0 flex-1"
-              textClassName={cn("font-medium", active ? "text-primary-foreground" : "text-foreground")}
-              fontSizeClasses={["text-xs"]}
-            />
-          </button>
-        );
-      })}
+      {order.map((id) => (
+        <ChipButton
+          key={id}
+          id={id}
+          active={activeChips.has(id)}
+          label={chipLabelMap[id]}
+          onToggle={() => onToggle(id)}
+        />
+      ))}
     </div>
   );
 
