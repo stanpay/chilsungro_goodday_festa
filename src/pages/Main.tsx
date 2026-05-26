@@ -1308,8 +1308,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       }
 
       if (id === "all") {
-        next.delete("all");
+        const hasOpenNow = next.has("openNow");
+        next.clear();
         next.add("all");
+        if (hasOpenNow) next.add("openNow");
         return next;
       }
 
