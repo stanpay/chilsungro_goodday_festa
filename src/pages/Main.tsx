@@ -1632,27 +1632,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         });
         mapInstanceRef.current = map;
 
-        // 제주 원도심 영역 폴리곤 그리기
-        const downtownPolygonPath = [
-          new kakao.maps.LatLng(33.5165, 126.5145), // 북서쪽
-          new kakao.maps.LatLng(33.5165, 126.5293), // 북동쪽
-          new kakao.maps.LatLng(33.5031, 126.5293), // 남동쪽
-          new kakao.maps.LatLng(33.5031, 126.5145), // 남서쪽
-        ];
-
-        const downtownPolygon = new kakao.maps.Polygon({
-          map: map,
-          path: downtownPolygonPath,
-          strokeWeight: 3,
-          strokeColor: '#2D8CFF',
-          strokeOpacity: 0.8,
-          strokeStyle: 'solid',
-          fillColor: '#2D8CFF',
-          fillOpacity: 0.1,
-        });
-
-        overlays.push(downtownPolygon);
-
         const bounds = new kakao.maps.LatLngBounds();
         storeOverlaysRef.current = [];
 
