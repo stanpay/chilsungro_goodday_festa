@@ -1564,6 +1564,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         const map = new kakao.maps.Map(mapContainerRef.current, {
           center: jejuDowntownCenter,
           level: 6,
+          minLevel: 1,
         });
         mapInstanceRef.current = map;
 
