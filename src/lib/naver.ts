@@ -21,7 +21,7 @@ export async function loadNaverMaps(): Promise<void> {
       const script = document.createElement("script");
       script.setAttribute("data-naver-maps", "true");
       script.async = true;
-      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&submodules=geocoder`;
+      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
       script.onload = () => resolve();
       script.onerror = () =>
         reject(
