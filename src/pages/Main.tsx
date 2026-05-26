@@ -255,6 +255,7 @@ interface StoreData {
   const selectStoreOnMapRef = useRef<(id: string) => void>(() => {});
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null);
   const [showResearchButton, setShowResearchButton] = useState(false);
+  const allFetchedStoresRef = useRef<any[]>([]);
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
   const storesWithCoordsRef = useRef<any[]>([]);
@@ -429,6 +430,7 @@ interface StoreData {
                 try {
                   const storesData = JSON.parse(savedStores);
                   setStores(storesData);
+                  allFetchedStoresRef.current = storesData;
                   setIsLoadingStores(false);
                   console.log("✅ [위치 캐시] 저장된 매장 정보 사용");
                   cacheFullyApplied = true;
@@ -725,7 +727,25 @@ interface StoreData {
     const kakao = (window as any).kakao;
     if (!kakao?.maps) return;
     const center = map.getCenter();
-    void fetchNearbyStores(center.getLat(), center.getLng());
+    const centerLat = center.getLat();
+    const centerLng = center.getLng();
+
+    // 캐시된 전체 매장 목록에서 지도 중심 기준 1500m 이내만 필터링 (API 재호출 없음)
+    const NEARBY_FILTER_RADIUS_M = 1500;
+    const filtered = allFetchedStoresRef.current.flatMap((s: any) => {
+      if (typeof s.lat !== "number" || typeof s.lon !== "number") return [];
+      const distM = calculateDistance(centerLat, centerLng, s.lat, s.lon) * 1000;
+      if (distM > NEARBY_FILTER_RADIUS_M) return [];
+      return [{
+        ...s,
+        distance: distM < 1000 ? `${Math.round(distM)}m` : `${(distM / 1000).toFixed(1)}km`,
+        distanceNum: Math.round(distM),
+      }];
+    });
+
+    console.log(`🔍 [재검색] 지도 중심 (${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}) 기준 ${NEARBY_FILTER_RADIUS_M}m 이내: ${filtered.length}개`);
+    setStores(filtered);
+    setShowResearchButton(false);
   };
 
   const handleRefreshLocation = async () => {
@@ -837,7 +857,8 @@ interface StoreData {
       setShowResearchButton(false);
       console.log("🏪 [매장 검색] 시작:", { latitude, longitude });
 
-      const radius = 1500; // 실제 매장 API 기본 검색 반경 (미터 단위)
+      // 초기 1회 fetch로 전체 매장 확보 (이후 재검색은 캐시 필터링)
+      const radius = 100000; // 100km — 전체 매장 로드
       console.log("📏 [매장 검색] 검색 반경:", radius, "미터");
 
       const mapNearbyStoreToStore = (store: NearbyStore) => {
@@ -937,13 +958,10 @@ interface StoreData {
               maxDiscount: null,
               discountNum: 0,
               maxDiscountPercent: null,
-              local_currency_available: preloadedStoreData?.local_currency_available || false,
               local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
-              high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
               parking_available: preloadedStoreData?.parking_available || false,
               free_parking: preloadedStoreData?.free_parking || false,
               parking_size: preloadedStoreData?.parking_size || null,
-              hasGifticonDiscount: false,
             };
           }
 
@@ -1022,72 +1040,72 @@ interface StoreData {
             if (storeData) {
               // 지역화폐 할인율
               localCurrencyDiscount = (storeData as any).local_currency_discount_rate || 0;
+            }
 
-              // 기프티콘 할인율 조회 (추천 기프티콘 로직과 동일: 천원대별로 하나씩, 할인효율 순)
-              if ((storeData as any).gifticon_available) {
-                try {
-                  // 천원대별로 그룹화하는 헬퍼 함수
-                  const getPriceRange = (price: number): number => {
-                    return Math.floor(price / 1000) * 1000;
-                  };
+            // 기프티콘 할인율 조회 (실제 API의 downtown_coupon 기준)
+            if (store.hasGifticonDiscount) {
+              try {
+                // 천원대별로 그룹화하는 헬퍼 함수
+                const getPriceRange = (price: number): number => {
+                  return Math.floor(price / 1000) * 1000;
+                };
 
-                  // 할인효율 계산 함수: (원가-할인가)/할인가
-                  const getDiscountEfficiency = (originalPrice: number, salePrice: number): number => {
-                    if (salePrice === 0) return 0;
-                    return (originalPrice - salePrice) / salePrice;
-                  };
+                // 할인효율 계산 함수: (원가-할인가)/할인가
+                const getDiscountEfficiency = (originalPrice: number, salePrice: number): number => {
+                  if (salePrice === 0) return 0;
+                  return (originalPrice - salePrice) / salePrice;
+                };
 
-                  // 정렬 함수 (마감일 임박순 최우선, 그 다음 할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
-                  const sortByDiscountEfficiency = (a: any, b: any): number => {
-                    // 1순위: 마감일 임박순 (expiry_date 오름차순)
-                    const expiryA = new Date(a.expiry_date).getTime();
-                    const expiryB = new Date(b.expiry_date).getTime();
-                    if (expiryA !== expiryB) {
-                      return expiryA - expiryB; // 마감일 임박순 (오름차순)
-                    }
-                    
-                    // 2순위: 할인효율 내림차순
-                    const efficiencyA = getDiscountEfficiency(a.original_price, a.sale_price);
-                    const efficiencyB = getDiscountEfficiency(b.original_price, b.sale_price);
-                    if (efficiencyA !== efficiencyB) {
-                      return efficiencyB - efficiencyA; // 할인효율 내림차순
-                    }
-                    
-                    // 3순위: 같은 효율일 경우 판매가 오름차순
-                    return a.sale_price - b.sale_price;
-                  };
-
-                  // 모든 판매중 기프티콘 조회
-                  const gifticonsData = await gifticonsApi.getUsedGifticons(brandName);
-                  const gifticonsError = null;
-
-                  if (!gifticonsError && gifticonsData && gifticonsData.length > 0) {
-                    // 할인효율 기준으로 정렬
-                    const sortedData = [...gifticonsData].sort(sortByDiscountEfficiency);
-
-                    // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
-                    const groupedByThousand = new Map<number, any>();
-                    sortedData.forEach((item: any) => {
-                      const priceRange = getPriceRange(item.original_price);
-                      // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
-                      if (!groupedByThousand.has(priceRange)) {
-                        groupedByThousand.set(priceRange, item);
-                      }
-                    });
-
-                    // 그룹화된 항목들의 할인율 계산 (추천 기프티콘에서 처음 가져오는 기프티콘들)
-                    const selectedGifticons = Array.from(groupedByThousand.values());
-                    if (selectedGifticons.length > 0) {
-                      const discounts = selectedGifticons.map((g: any) => {
-                        const discountAmount = g.original_price - g.sale_price;
-                        return Math.round((discountAmount / g.original_price) * 100);
-                      });
-                      maxGifticonDiscount = Math.max(...discounts);
-                    }
+                // 정렬 함수 (마감일 임박순 최우선, 그 다음 할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
+                const sortByDiscountEfficiency = (a: any, b: any): number => {
+                  // 1순위: 마감일 임박순 (expiry_date 오름차순)
+                  const expiryA = new Date(a.expiry_date).getTime();
+                  const expiryB = new Date(b.expiry_date).getTime();
+                  if (expiryA !== expiryB) {
+                    return expiryA - expiryB; // 마감일 임박순 (오름차순)
                   }
-                } catch (e) {
-                  console.log(`⚠️ [할인 정보] ${store.name}: 기프티콘 정보 조회 실패`);
+
+                  // 2순위: 할인효율 내림차순
+                  const efficiencyA = getDiscountEfficiency(a.original_price, a.sale_price);
+                  const efficiencyB = getDiscountEfficiency(b.original_price, b.sale_price);
+                  if (efficiencyA !== efficiencyB) {
+                    return efficiencyB - efficiencyA; // 할인효율 내림차순
+                  }
+
+                  // 3순위: 같은 효율일 경우 판매가 오름차순
+                  return a.sale_price - b.sale_price;
+                };
+
+                // 모든 판매중 기프티콘 조회
+                const gifticonsData = await gifticonsApi.getUsedGifticons(brandName);
+                const gifticonsError = null;
+
+                if (!gifticonsError && gifticonsData && gifticonsData.length > 0) {
+                  // 할인효율 기준으로 정렬
+                  const sortedData = [...gifticonsData].sort(sortByDiscountEfficiency);
+
+                  // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+                  const groupedByThousand = new Map<number, any>();
+                  sortedData.forEach((item: any) => {
+                    const priceRange = getPriceRange(item.original_price);
+                    // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
+                    if (!groupedByThousand.has(priceRange)) {
+                      groupedByThousand.set(priceRange, item);
+                    }
+                  });
+
+                  // 그룹화된 항목들의 할인율 계산 (추천 기프티콘에서 처음 가져오는 기프티콘들)
+                  const selectedGifticons = Array.from(groupedByThousand.values());
+                  if (selectedGifticons.length > 0) {
+                    const discounts = selectedGifticons.map((g: any) => {
+                      const discountAmount = g.original_price - g.sale_price;
+                      return Math.round((discountAmount / g.original_price) * 100);
+                    });
+                    maxGifticonDiscount = Math.max(...discounts);
+                  }
                 }
+              } catch (e) {
+                console.log(`⚠️ [할인 정보] ${store.name}: 기프티콘 정보 조회 실패`);
               }
             }
           } catch (e) {
@@ -1096,7 +1114,7 @@ interface StoreData {
 
           // 4. 최대 할인율 계산 (프랜차이즈 적립/할인, 지역화폐 할인율, 기프티콘 할인율 중 최대값)
           const maxDiscountPercent = Math.max(franchiseDiscountRate, localCurrencyDiscount, maxGifticonDiscount);
-          
+
           if (maxDiscountPercent > 0) {
             const discountDetails = [];
             if (franchiseDiscountRate > 0) {
@@ -1116,13 +1134,10 @@ interface StoreData {
             maxDiscount: maxDiscountPercent > 0 ? `최대 ${maxDiscountPercent}% 할인` : null,
             discountNum: maxDiscountPercent,
             maxDiscountPercent: maxDiscountPercent > 0 ? maxDiscountPercent : null,
-            local_currency_available: storeData?.local_currency_available || false,
             local_currency_discount_rate: storeData?.local_currency_discount_rate || null,
             parking_available: storeData?.parking_available || false,
             free_parking: storeData?.free_parking || false,
             parking_size: storeData?.parking_size || null,
-            hasGifticonDiscount: maxGifticonDiscount > 0,
-            high_oil_support_available: storeData?.high_oil_support_available || false,
           };
         } catch (error) {
           console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
@@ -1131,13 +1146,10 @@ interface StoreData {
             maxDiscount: null,
             discountNum: 0,
             maxDiscountPercent: null,
-            local_currency_available: false,
             local_currency_discount_rate: null,
             parking_available: false,
             free_parking: false,
             parking_size: null,
-            hasGifticonDiscount: false,
-            high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
           };
         }
       }));
@@ -1146,6 +1158,7 @@ interface StoreData {
       
       // 초기 8개 먼저 표시
       setStores(initialStoresWithDiscount);
+      allFetchedStoresRef.current = initialStoresWithDiscount;
       setIsLoadingStores(false);
       
       // localStorage에 초기 매장 정보 저장 (Payment 페이지에서 사용)
@@ -1175,13 +1188,10 @@ interface StoreData {
                 maxDiscount: null,
                 discountNum: 0,
                 maxDiscountPercent: null,
-                local_currency_available: preloadedStoreData?.local_currency_available || false,
                 local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
-                high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
                 parking_available: preloadedStoreData?.parking_available || false,
                 free_parking: preloadedStoreData?.free_parking || false,
                 parking_size: preloadedStoreData?.parking_size || null,
-                hasGifticonDiscount: false,
               };
             }
 
@@ -1258,72 +1268,72 @@ interface StoreData {
               if (storeData) {
                 // 지역화폐 할인율
                 localCurrencyDiscount = (storeData as any).local_currency_discount_rate || 0;
+              }
 
-                // 기프티콘 할인율 조회 (추천 기프티콘 로직과 동일: 천원대별로 하나씩, 할인효율 순)
-                if ((storeData as any).gifticon_available) {
-                  try {
-                    // 천원대별로 그룹화하는 헬퍼 함수
-                    const getPriceRange = (price: number): number => {
-                      return Math.floor(price / 1000) * 1000;
-                    };
+              // 기프티콘 할인율 조회 (실제 API의 downtown_coupon 기준)
+              if (store.hasGifticonDiscount) {
+                try {
+                  // 천원대별로 그룹화하는 헬퍼 함수
+                  const getPriceRange = (price: number): number => {
+                    return Math.floor(price / 1000) * 1000;
+                  };
 
-                    // 할인효율 계산 함수: (원가-할인가)/할인가
-                    const getDiscountEfficiency = (originalPrice: number, salePrice: number): number => {
-                      if (salePrice === 0) return 0;
-                      return (originalPrice - salePrice) / salePrice;
-                    };
+                  // 할인효율 계산 함수: (원가-할인가)/할인가
+                  const getDiscountEfficiency = (originalPrice: number, salePrice: number): number => {
+                    if (salePrice === 0) return 0;
+                    return (originalPrice - salePrice) / salePrice;
+                  };
 
-                    // 정렬 함수 (마감일 임박순 최우선, 그 다음 할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
-                    const sortByDiscountEfficiency = (a: any, b: any): number => {
-                      // 1순위: 마감일 임박순 (expiry_date 오름차순)
-                      const expiryA = new Date(a.expiry_date).getTime();
-                      const expiryB = new Date(b.expiry_date).getTime();
-                      if (expiryA !== expiryB) {
-                        return expiryA - expiryB; // 마감일 임박순 (오름차순)
-                      }
-                      
-                      // 2순위: 할인효율 내림차순
-                      const efficiencyA = getDiscountEfficiency(a.original_price, a.sale_price);
-                      const efficiencyB = getDiscountEfficiency(b.original_price, b.sale_price);
-                      if (efficiencyA !== efficiencyB) {
-                        return efficiencyB - efficiencyA; // 할인효율 내림차순
-                      }
-                      
-                      // 3순위: 같은 효율일 경우 판매가 오름차순
-                      return a.sale_price - b.sale_price;
-                    };
-
-                    // 모든 판매중 기프티콘 조회
-                    const gifticonsData = await gifticonsApi.getUsedGifticons(brandName);
-                    const gifticonsError = null;
-
-                    if (!gifticonsError && gifticonsData && gifticonsData.length > 0) {
-                      // 할인효율 기준으로 정렬
-                      const sortedData = [...gifticonsData].sort(sortByDiscountEfficiency);
-
-                      // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
-                      const groupedByThousand = new Map<number, any>();
-                      sortedData.forEach((item: any) => {
-                        const priceRange = getPriceRange(item.original_price);
-                        // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
-                        if (!groupedByThousand.has(priceRange)) {
-                          groupedByThousand.set(priceRange, item);
-                        }
-                      });
-
-                      // 그룹화된 항목들의 할인율 계산 (추천 기프티콘에서 처음 가져오는 기프티콘들)
-                      const selectedGifticons = Array.from(groupedByThousand.values());
-                      if (selectedGifticons.length > 0) {
-                        const discounts = selectedGifticons.map((g: any) => {
-                          const discountAmount = g.original_price - g.sale_price;
-                          return Math.round((discountAmount / g.original_price) * 100);
-                        });
-                        maxGifticonDiscount = Math.max(...discounts);
-                      }
+                  // 정렬 함수 (마감일 임박순 최우선, 그 다음 할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
+                  const sortByDiscountEfficiency = (a: any, b: any): number => {
+                    // 1순위: 마감일 임박순 (expiry_date 오름차순)
+                    const expiryA = new Date(a.expiry_date).getTime();
+                    const expiryB = new Date(b.expiry_date).getTime();
+                    if (expiryA !== expiryB) {
+                      return expiryA - expiryB; // 마감일 임박순 (오름차순)
                     }
-                  } catch (e) {
-                    console.log(`⚠️ [할인 정보] ${store.name}: 기프티콘 정보 조회 실패`);
+
+                    // 2순위: 할인효율 내림차순
+                    const efficiencyA = getDiscountEfficiency(a.original_price, a.sale_price);
+                    const efficiencyB = getDiscountEfficiency(b.original_price, b.sale_price);
+                    if (efficiencyA !== efficiencyB) {
+                      return efficiencyB - efficiencyA; // 할인효율 내림차순
+                    }
+
+                    // 3순위: 같은 효율일 경우 판매가 오름차순
+                    return a.sale_price - b.sale_price;
+                  };
+
+                  // 모든 판매중 기프티콘 조회
+                  const gifticonsData = await gifticonsApi.getUsedGifticons(brandName);
+                  const gifticonsError = null;
+
+                  if (!gifticonsError && gifticonsData && gifticonsData.length > 0) {
+                    // 할인효율 기준으로 정렬
+                    const sortedData = [...gifticonsData].sort(sortByDiscountEfficiency);
+
+                    // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+                    const groupedByThousand = new Map<number, any>();
+                    sortedData.forEach((item: any) => {
+                      const priceRange = getPriceRange(item.original_price);
+                      // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
+                      if (!groupedByThousand.has(priceRange)) {
+                        groupedByThousand.set(priceRange, item);
+                      }
+                    });
+
+                    // 그룹화된 항목들의 할인율 계산 (추천 기프티콘에서 처음 가져오는 기프티콘들)
+                    const selectedGifticons = Array.from(groupedByThousand.values());
+                    if (selectedGifticons.length > 0) {
+                      const discounts = selectedGifticons.map((g: any) => {
+                        const discountAmount = g.original_price - g.sale_price;
+                        return Math.round((discountAmount / g.original_price) * 100);
+                      });
+                      maxGifticonDiscount = Math.max(...discounts);
+                    }
                   }
+                } catch (e) {
+                  console.log(`⚠️ [할인 정보] ${store.name}: 기프티콘 정보 조회 실패`);
                 }
               }
             } catch (e) {
@@ -1332,7 +1342,7 @@ interface StoreData {
 
             // 4. 최대 할인율 계산 (프랜차이즈 적립/할인, 지역화폐 할인율, 기프티콘 할인율 중 최대값)
             const maxDiscountPercent = Math.max(franchiseDiscountRate, localCurrencyDiscount, maxGifticonDiscount);
-            
+
             if (maxDiscountPercent > 0) {
               const discountDetails = [];
               if (franchiseDiscountRate > 0) {
@@ -1352,13 +1362,10 @@ interface StoreData {
               maxDiscount: maxDiscountPercent > 0 ? `최대 ${maxDiscountPercent}% 할인` : null,
               discountNum: maxDiscountPercent,
               maxDiscountPercent: maxDiscountPercent > 0 ? maxDiscountPercent : null,
-              local_currency_available: storeData?.local_currency_available || false,
               local_currency_discount_rate: storeData?.local_currency_discount_rate || null,
               parking_available: storeData?.parking_available || false,
               free_parking: storeData?.free_parking || false,
               parking_size: storeData?.parking_size || null,
-              hasGifticonDiscount: maxGifticonDiscount > 0,
-              high_oil_support_available: storeData?.high_oil_support_available || false,
             };
           } catch (error) {
             console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
@@ -1367,13 +1374,10 @@ interface StoreData {
               maxDiscount: null,
               discountNum: 0,
               maxDiscountPercent: null,
-              local_currency_available: false,
               local_currency_discount_rate: null,
               parking_available: false,
               free_parking: false,
               parking_size: null,
-              hasGifticonDiscount: false,
-              high_oil_support_available: preloadedStoreData?.high_oil_support_available || false,
             };
           }
         }));
@@ -1389,6 +1393,7 @@ interface StoreData {
         }
         
         setStores(allStoresWithDiscount);
+        allFetchedStoresRef.current = allStoresWithDiscount;
         setIsLoadingMoreStores(false);
         console.log("✅ [추가 로딩] 완료 - 전체 매장 데이터 표시");
       }
