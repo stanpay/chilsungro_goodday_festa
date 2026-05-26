@@ -33,6 +33,7 @@ import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { Skeleton } from "@/components/ui/skeleton";
 import TutorialModal from "@/components/TutorialModal";
+import LocationPermissionModal from "@/components/LocationPermissionModal";
 import { shouldShowTutorial } from "@/lib/tutorial";
 import {
   mainStrings,
@@ -247,6 +248,7 @@ interface StoreData {
   );
   const { locale, setLocale } = useAppLocale();
   const [showTutorialModal, setShowTutorialModal] = useState(false);
+  const [showLocationPermModal, setShowLocationPermModal] = useState(false);
   const isMapView = searchParams.get("map") === "1";
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -480,6 +482,20 @@ interface StoreData {
       
       // 직접 설정한 위치가 없으면 기본적으로 현재 위치 가져오기
       console.log("🌍 [위치 정보] 현재 위치 가져오기 시작");
+
+      // 권한 상태 확인 — prompt 상태면 모달로 먼저 안내
+      if (navigator.permissions) {
+        try {
+          const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+          if (perm.state === "prompt") {
+            setShowLocationPermModal(true);
+            return; // 모달에서 허용 후 onGranted 콜백으로 이어짐
+          }
+        } catch {
+          // permissions API 미지원 브라우저는 바로 요청
+        }
+      }
+
       await fetchBrowserLocation();
     };
 
@@ -692,6 +708,27 @@ interface StoreData {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     const distance = R * c;
     return distance;
+  };
+
+  const handleLocationGranted = async ({ latitude, longitude }: { latitude: number; longitude: number }) => {
+    setShowLocationPermModal(false);
+    setIsLoadingLocation(true);
+    try {
+      const address = await getAddressFromCoords(latitude, longitude);
+      localStorage.setItem("selectedLocation", address);
+      localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+      localStorage.removeItem("isManualLocation");
+      setIsManualLocation(false);
+      setCurrentLocation(address);
+      setCurrentCoords({ latitude, longitude });
+      setIsLoadingLocation(false);
+      await fetchNearbyStores(latitude, longitude);
+    } catch (error) {
+      console.error("위치 처리 오류:", error);
+      setCurrentLocation("위치 불러올 수 없음");
+      setIsLoadingLocation(false);
+      setIsLoadingStores(false);
+    }
   };
 
   const fetchNearbyStores = async (latitude: number, longitude: number) => {
@@ -1739,9 +1776,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           : "min-h-screen pb-20"
       )}
     >
-      <TutorialModal 
-        open={showTutorialModal} 
+      <TutorialModal
+        open={showTutorialModal}
         onClose={() => setShowTutorialModal(false)}
+      />
+      <LocationPermissionModal
+        open={showLocationPermModal}
+        onGranted={handleLocationGranted}
       />
       {/* Header — 지도뷰에서는 숨기고 지도 위 FAB로 위치만 조정 */}
       {!isMapView && (
