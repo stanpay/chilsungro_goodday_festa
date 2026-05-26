@@ -1358,16 +1358,21 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             aria-pressed={active}
             onClick={() => onToggle(id)}
             className={cn(
-              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+              "flex shrink-0 max-w-[8rem] items-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
               active
                 ? "border-primary bg-primary text-primary-foreground shadow-sm"
                 : "border-border bg-card text-foreground hover:bg-muted/80"
             )}
           >
             {id === "openNow" && (
-              <span className={cn("mr-1 inline-block h-1.5 w-1.5 rounded-full", active ? "bg-green-300" : "bg-green-500")} />
+              <span className={cn("shrink-0 inline-block h-1.5 w-1.5 rounded-full", active ? "bg-green-300" : "bg-green-500")} />
             )}
-            {chipLabelMap[id]}
+            <AutoFitMarquee
+              text={chipLabelMap[id]}
+              className="min-w-0 flex-1"
+              textClassName={cn("font-medium", active ? "text-primary-foreground" : "text-foreground")}
+              fontSizeClasses={["text-xs"]}
+            />
           </button>
         );
       })}
@@ -1938,14 +1943,14 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           </div>
           <div className="space-y-2 -mr-4">
             {renderFilterChipRow(
-              "flex w-full gap-2 overflow-x-auto pb-0.5 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              "flex w-full gap-2 overflow-x-auto py-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               BENEFIT_FILTER_CHIP_ORDER,
               benefitFilterChips,
               toggleBenefitFilterChip,
               (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria
             )}
             {renderFilterChipRow(
-              "flex w-full gap-2 overflow-x-auto pb-0.5 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              "flex w-full gap-2 overflow-x-auto py-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               STORE_CATEGORY_CHIP_ORDER,
               categoryFilterChips,
               toggleCategoryFilterChip,
