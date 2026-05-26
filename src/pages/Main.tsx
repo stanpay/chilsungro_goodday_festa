@@ -1641,7 +1641,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           if (!allPins.length) return;
 
           const proj = map.getProjection();
-          const CLUSTER_DISTANCE_PX = 45;
+          const currentLevel = map.getLevel();
+          const CLUSTER_DISTANCE_PX =
+            currentLevel <= 2 ? 18 :
+            currentLevel <= 3 ? 28 : 45;
 
           const pins = allPins.map(({ id, overlay }) => {
             const pos = overlay.getPosition();
@@ -1657,12 +1660,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           // projection이 아직 준비 안 된 경우(모두 0,0) 클러스터링 스킵
           const projectionReady = pins.some((p) => p.px !== 0 || p.py !== 0);
           if (!projectionReady) {
-            allPins.forEach(({ overlay }) => { try { overlay.setMap(map); } catch {} });
-            return;
-          }
-
-          const currentLevel = map.getLevel();
-          if (currentLevel <= 2) {
             allPins.forEach(({ overlay }) => { try { overlay.setMap(map); } catch {} });
             return;
           }
