@@ -46,7 +46,7 @@ export interface FranchisePaymentMethod {
 }
 
 const STORE_API_BASE_URL =
-  import.meta.env.VITE_STORE_API_BASE_URL ?? "http://mac.kurl.kr:5001";
+  import.meta.env.VITE_STORE_API_BASE_URL ?? "https://mac.kurl.kr:5001";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${STORE_API_BASE_URL}${path}`);
