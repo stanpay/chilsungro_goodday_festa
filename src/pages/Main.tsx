@@ -1949,8 +1949,8 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 <AutoFitMarquee
                   text={LOCALE_MENU_LABELS[locale]}
                   className="flex-1"
-                  textClassName="text-left text-xs font-medium !leading-4"
-                  fontSizeClasses={["text-xs"]}
+                  textClassName="text-left text-sm font-medium !leading-4"
+                  fontSizeClasses={["text-sm", "text-xs"]}
                 />
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
               </Button>
