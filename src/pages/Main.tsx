@@ -1618,7 +1618,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           overlays.push(curOverlay);
         }
 
-        storesWithCoords.forEach((store) => {
+        storesWithCoordsRef.current.forEach((store) => {
           const position = new naver.maps.LatLng(store.lat!, store.lon!);
           const content = buildStorePin(store);
           const overlay = new NaverCustomOverlay({ map, position, content, zIndex: 10, clickable: true });
