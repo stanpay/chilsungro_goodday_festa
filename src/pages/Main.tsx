@@ -1818,18 +1818,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     });
   }, [selectedMapStoreId]);
 
-  useEffect(() => {
-    if (!isMapView || !selectedMapStoreId || !mapInstanceRef.current) return;
-    const kakao = (window as any).kakao;
-    if (!kakao?.maps) return;
-    const store = storesWithCoords.find((s) => s.id === selectedMapStoreId);
-    if (!store || typeof store.lat !== "number" || typeof store.lon !== "number") return;
-    try {
-      mapInstanceRef.current.panTo(new kakao.maps.LatLng(store.lat, store.lon));
-    } catch {
-      /* ignore */
-    }
-  }, [selectedMapStoreId, isMapView, storesWithCoords]);
 
   const showMapFillLayer = isMapView;
 
