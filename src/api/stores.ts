@@ -15,6 +15,22 @@ export interface Store {
   parking_available: boolean;
   free_parking: boolean;
   parking_size: string | null;
+  high_oil_support_available?: boolean;
+}
+
+export interface NearbyStore {
+  business_hours_today: string | null;
+  category: string | null;
+  distance: string;
+  distance_m: number;
+  downtown_coupon: boolean;
+  id: number;
+  image_url: string | null;
+  latitude: number;
+  localpay: boolean;
+  longitude: number;
+  name: string;
+  oil_subsidy: boolean;
 }
 
 export interface Franchise {
@@ -29,7 +45,45 @@ export interface FranchisePaymentMethod {
   rate: number | null;
 }
 
+const STORE_API_BASE_URL =
+  import.meta.env.VITE_STORE_API_BASE_URL ?? "http://mac.kurl.kr:5001";
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${STORE_API_BASE_URL}${path}`);
+  if (!response.ok) {
+    throw new Error(`Store API request failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+function normalizeNearbyResponse(payload: unknown): NearbyStore[] {
+  if (Array.isArray(payload)) return payload as NearbyStore[];
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "value" in payload &&
+    Array.isArray((payload as { value: unknown }).value)
+  ) {
+    return (payload as { value: NearbyStore[] }).value;
+  }
+  return [];
+}
+
 export const storesApi = {
+  getNearbyStores: async (
+    latitude: number,
+    longitude: number,
+    radius = 1500
+  ): Promise<NearbyStore[]> => {
+    const payload = await fetchJson<unknown>(
+      `/nearby/${latitude}/${longitude}?radius=${radius}`
+    );
+    return normalizeNearbyResponse(payload);
+  },
+
+  getStoreRedirectUrl: (storeId: string | number): string =>
+    `${STORE_API_BASE_URL}/redirect/${storeId}`,
+
   getStoreByKakaoPlaceId: async (
     kakaoPlaceId: string
   ): Promise<Store | null> => {

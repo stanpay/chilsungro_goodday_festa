@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
-import { openNaverMapsApp } from "@/lib/mapDirectionLinks";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -33,6 +32,7 @@ interface StoreCardProps {
   tutorialMode?: boolean;
   isHighlighted?: boolean;
   disabled?: boolean;
+  detailUrl?: string;
 }
 
 const brandLogos: Record<string, string> = {
@@ -69,6 +69,7 @@ const StoreCard = ({
   tutorialMode = false,
   isHighlighted = false,
   disabled = false,
+  detailUrl,
 }: StoreCardProps) => {
   const { locale } = useAppLocale();
   const sc = storeCardStrings(locale);
@@ -148,11 +149,13 @@ const StoreCard = ({
       return;
     }
 
-    openNaverMapsApp({ name, address, lat, lon });
+    if (detailUrl) {
+      window.open(detailUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   // 지역화폐 칩 표시 여부
-  const showLocalCurrencyChip = local_currency_available && local_currency_discount_rate !== null && local_currency_discount_rate > 0;
+  const showLocalCurrencyChip = local_currency_available;
   
   // 주차 칩 표시 여부
   const showParkingChip = parking_available;
@@ -275,9 +278,11 @@ const StoreCard = ({
             <div className="flex h-5 flex-nowrap items-center gap-1 overflow-x-auto scrollbar-hide">
               {(showLocalCurrencyChip || hasGifticonDiscount || showParkingChip) && (
                 <>
-                {showLocalCurrencyChip && local_currency_discount_rate != null && (
+                {showLocalCurrencyChip && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
-                    {sc.localCurrencyDiscount(local_currency_discount_rate)}
+                    {local_currency_discount_rate != null && local_currency_discount_rate > 0
+                      ? sc.localCurrencyDiscount(local_currency_discount_rate)
+                      : sc.localCurrency}
                   </span>
                 )}
                 {hasGifticonDiscount && (

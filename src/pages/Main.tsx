@@ -27,7 +27,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { paymentHistoryApi } from "@/api/paymentHistory";
-import { storesApi } from "@/api/stores";
+import { storesApi, type NearbyStore } from "@/api/stores";
 import { gifticonsApi } from "@/api/gifticons";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
@@ -140,6 +140,22 @@ function storeHasChilsungroCoupon(store: StoreLikeForChip): boolean {
   return store.hasGifticonDiscount === true;
 }
 
+function imageFromStoreCategory(category?: string | null): string {
+  if (!category) return "restaurant";
+  if (category.includes("카페") || category.includes("디저트")) return "cafe";
+  if (category.includes("쇼핑")) return "shopping";
+  if (category.includes("음식")) return "restaurant";
+  return "restaurant";
+}
+
+function categoryGroupCodeFromStoreCategory(category?: string | null): string {
+  if (!category) return "";
+  if (category.includes("카페") || category.includes("디저트")) return "CE7";
+  if (category.includes("쇼핑")) return "MT1";
+  if (category.includes("음식")) return "FD6";
+  return "";
+}
+
 function storeChipIsOther(store: StoreLikeForChip): boolean {
   return (
     !storeChipIsRestaurant(store) &&
@@ -213,6 +229,7 @@ interface StoreData {
   todayHours?: DayHours | null;
   photos?: string[];
   closedDayNote?: string;
+  detailUrl?: string;
 }
 
   const [stores, setStores] = useState<StoreData[]>([]);
@@ -820,59 +837,19 @@ interface StoreData {
       setShowResearchButton(false);
       console.log("🏪 [매장 검색] 시작:", { latitude, longitude });
 
-      // Kakao SDK 로드 보장
-      try {
-        const { loadKakaoMaps } = await import("@/lib/kakao");
-        await loadKakaoMaps();
-      } catch (error: any) {
-        console.error("❌ [매장 검색] Kakao SDK 로드 실패:", error);
-        throw new Error(error.message || "Kakao SDK를 로드할 수 없습니다. VITE_KAKAO_APP_KEY 환경 변수를 확인해주세요.");
-      }
-      
-      const kakao = (window as any).kakao;
-      if (!kakao?.maps) {
-        console.error("❌ [매장 검색] Kakao SDK를 찾을 수 없습니다");
-        throw new Error("Kakao SDK가 로드되지 않았습니다");
-      }
-      
-      // services 라이브러리 확인
-      if (!kakao.maps.services) {
-        console.error("❌ [매장 검색] Kakao Maps services를 찾을 수 없습니다");
-        throw new Error("Kakao Maps services 라이브러리가 로드되지 않았습니다");
-      }
-      
-      console.log("✅ [매장 검색] Kakao SDK 확인 완료");
-
-      const radius = 10000; // 10km (미터 단위)
+      const radius = 1500; // 실제 매장 API 기본 검색 반경 (미터 단위)
       console.log("📏 [매장 검색] 검색 반경:", radius, "미터");
 
-      // 검색할 브랜드 목록
-      const brands = [
-        { keyword: "스타벅스", image: "starbucks" },
-        { keyword: "베스킨라빈스", image: "baskin" },
-        { keyword: "메가커피", image: "mega" },
-        { keyword: "파스쿠찌", image: "pascucci" },
-        { keyword: "투썸플레이스", image: "twosome" },
-      ];
-      console.log("🔍 [매장 검색] 검색할 브랜드:", brands.map(b => b.keyword));
-
-      // Places 서비스 객체 생성 (SDK 로드 이후 안전)
-      console.log("🗺️ [매장 검색] Places 서비스 객체 생성");
-      const ps = new kakao.maps.services.Places();
-      console.log("✅ [매장 검색] Places 서비스 준비 완료");
-
-      const mapKakaoPlaceToStore = (place: any, image: string) => {
+      const mapNearbyStoreToStore = (store: NearbyStore) => {
         const distanceNum =
-          calculateDistance(
-            latitude,
-            longitude,
-            parseFloat(place.y),
-            parseFloat(place.x)
-          ) * 1000;
+          typeof store.distance_m === "number"
+            ? store.distance_m
+            : calculateDistance(latitude, longitude, store.latitude, store.longitude) * 1000;
+        const image = imageFromStoreCategory(store.category);
         const { isOpen, todayHours, photos, closedDayNote } = getStoreOpenStatus(image);
         return {
-          id: place.id,
-          name: place.place_name,
+          id: String(store.id),
+          name: store.name,
           distance:
             distanceNum < 1000
               ? `${Math.round(distanceNum)}m`
@@ -882,102 +859,40 @@ interface StoreData {
           maxDiscount: null,
           discountNum: 0,
           maxDiscountPercent: null,
-          lat: parseFloat(place.y),
-          lon: parseFloat(place.x),
-          address: place.road_address_name || place.address_name,
-          categoryGroupCode: place.category_group_code || "",
-          categoryName: place.category_name || "",
-          isOpen,
+          lat: store.latitude,
+          lon: store.longitude,
+          address: "",
+          categoryGroupCode: categoryGroupCodeFromStoreCategory(store.category),
+          categoryName: store.category || "",
+          isOpen: store.business_hours_today ? !store.business_hours_today.includes("정기휴무") : isOpen,
           todayHours,
-          photos,
-          closedDayNote,
+          photos: store.image_url ? [store.image_url] : photos,
+          closedDayNote: store.business_hours_today || closedDayNote,
+          local_currency_available: store.localpay,
+          local_currency_discount_rate: null,
+          high_oil_support_available: store.oil_subsidy,
+          parking_available: false,
+          free_parking: false,
+          parking_size: null,
+          hasGifticonDiscount: store.downtown_coupon,
+          detailUrl: storesApi.getStoreRedirectUrl(store.id),
+          apiStoreData: {
+            local_currency_available: store.localpay,
+            local_currency_discount_rate: null,
+            gifticon_available: store.downtown_coupon,
+            parking_available: false,
+            free_parking: false,
+            parking_size: null,
+            high_oil_support_available: store.oil_subsidy,
+          },
         };
       };
 
-      // 모든 브랜드를 병렬로 검색
-      console.log("🔄 [매장 검색] 병렬 검색 시작");
-      const searchPromises = brands.map((brand) => {
-        return new Promise<any[]>((resolve) => {
-          console.log(`🔍 [${brand.keyword}] 검색 시작`);
-          const options = {
-            location: new kakao.maps.LatLng(latitude, longitude),
-            radius: radius,
-            size: 15,
-          };
-          console.log(`⚙️ [${brand.keyword}] 검색 옵션:`, options);
+      console.log("⏳ [매장 검색] 실제 주변 매장 API 요청 중...");
+      const nearbyStores = await storesApi.getNearbyStores(latitude, longitude, radius);
+      console.log("✅ [매장 검색] 실제 API 응답:", nearbyStores.length, "개");
 
-          ps.keywordSearch(
-            brand.keyword,
-            (data: any[], status: any) => {
-              console.log(`📊 [${brand.keyword}] 응답 상태:`, status);
-              if (status === kakao.maps.services.Status.OK) {
-                console.log(`✅ [${brand.keyword}] 검색 성공 - 결과 ${data.length}개:`, data);
-
-                const stores = data.map((place: any) =>
-                  mapKakaoPlaceToStore(place, brand.image)
-                );
-
-                console.log(`📍 [${brand.keyword}] 처리된 매장 데이터:`, stores);
-                resolve(stores);
-              } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-                console.log(`⚠️ [${brand.keyword}] 검색 결과 없음`);
-                resolve([]);
-              } else {
-                console.error(`❌ [${brand.keyword}] 검색 실패 - 상태:`, status);
-                resolve([]);
-              }
-            },
-            options
-          );
-        });
-      });
-
-      const categoryGroupCodes = ["FD6", "MT1", "CE7"] as const;
-      const categorySearchPromises = categoryGroupCodes.map(
-        (code) =>
-          new Promise<any[]>((resolve) => {
-            ps.categorySearch(
-              code,
-              (data: any[], status: any) => {
-                if (status === kakao.maps.services.Status.OK) {
-                  const stores = data.map((place: any) =>
-                    mapKakaoPlaceToStore(place, categoryDefaultImage(place))
-                  );
-                  resolve(stores);
-                } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-                  resolve([]);
-                } else {
-                  console.error(`❌ [카테고리 ${code}] 검색 실패:`, status);
-                  resolve([]);
-                }
-              },
-              {
-                location: new kakao.maps.LatLng(latitude, longitude),
-                radius,
-                size: 12,
-              }
-            );
-          })
-      );
-
-      console.log("⏳ [매장 검색] 키워드·카테고리 검색 대기 중...");
-
-      const [keywordResults, categoryResults] = await Promise.all([
-        Promise.all(searchPromises),
-        Promise.all(categorySearchPromises),
-      ]);
-
-      console.log("✅ [매장 검색] 키워드 검색 완료");
-      console.log(
-        "📊 [매장 검색] 브랜드별 결과:",
-        keywordResults.map((r, i) => `${brands[i].keyword}: ${r.length}개`)
-      );
-      console.log(
-        "📊 [매장 검색] 카테고리별 결과:",
-        categoryGroupCodes.map((code, i) => `${code}: ${categoryResults[i].length}개`)
-      );
-
-      const mergedRaw = [...keywordResults.flat(), ...categoryResults.flat()];
+      const mergedRaw = nearbyStores.map(mapNearbyStoreToStore);
       mergedRaw.sort((a, b) => a.distanceNum - b.distanceNum);
       const seenIds = new Set<string>();
       const allStores: any[] = [];
@@ -996,6 +911,7 @@ interface StoreData {
 
       const getStoreDataByPlaceId = async (store: any): Promise<any | null> => {
         try {
+          if (store.apiStoreData) return store.apiStoreData;
           const isNumeric = /^\d+$/.test(store.id);
           if (!isNumeric) return null;
           return await storesApi.getStoreByKakaoPlaceId(store.id);
