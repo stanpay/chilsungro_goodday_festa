@@ -282,16 +282,16 @@ const StoreCard = ({
             <div className="flex h-5 flex-nowrap items-center gap-1 overflow-x-auto scrollbar-hide">
               {(showLocalCurrencyChip || hasGifticonDiscount || high_oil_support_available || showParkingChip) && (
                 <>
+                {hasGifticonDiscount && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/50 whitespace-nowrap shrink-0">
+                    {sc.chilsungroCoupon}
+                  </span>
+                )}
                 {showLocalCurrencyChip && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
                     {local_currency_discount_rate != null && local_currency_discount_rate > 0
                       ? sc.localCurrencyDiscount(local_currency_discount_rate)
                       : sc.localCurrency}
-                  </span>
-                )}
-                {hasGifticonDiscount && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/50 whitespace-nowrap shrink-0">
-                    {sc.chilsungroCoupon}
                   </span>
                 )}
                 {high_oil_support_available && (
