@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { searchAddress, NaverSearchResult as KakaoSearchResult } from "@/lib/naver";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
+import { useAppLocale } from "@/contexts/AppLocaleContext";
 
 interface RecentLocation {
   name: string;
@@ -17,6 +18,7 @@ interface RecentLocation {
 const Location = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { locale } = useAppLocale();
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [searchResults, setSearchResults] = useState<KakaoSearchResult[]>([]);
@@ -138,7 +140,7 @@ const Location = () => {
         const { latitude, longitude } = position.coords;
 
         // 좌표 → 실제 주소 변환
-        const address = await getAddressFromCoords(latitude, longitude);
+        const address = await getAddressFromCoords(latitude, longitude, locale);
         const displayName = address !== "위치를 확인할 수 없음" ? address : "현재 위치";
 
         localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));

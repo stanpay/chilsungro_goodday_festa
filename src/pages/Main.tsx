@@ -418,24 +418,19 @@ interface StoreData {
         }
       }
 
-      // Naver Maps SDK 로드 보장
+      // Naver Maps SDK 로드 (실패해도 GPS 위치 조회는 계속 진행)
       try {
         const { loadNaverMaps } = await import("@/lib/naver");
-        await loadNaverMaps();
+        await loadNaverMaps(locale);
       } catch (error: any) {
         console.error("❌ [위치 초기화] Naver Maps SDK 로드 실패:", error);
-        setIsLoadingLocation(false);
-        setCurrentLocation("위치 불러올 수 없음");
-        localStorage.removeItem("selectedLocation");
-        localStorage.removeItem("currentCoordinates");
         toast({
-          title: "위치 기반 검색 불가",
-          description: error.message || "네이버 지도 SDK 설정 오류입니다. 배포 환경에 VITE_NAVER_CLIENT_ID 환경 변수를 설정해주세요.",
+          title: "지도 서비스 경고",
+          description:
+            error.message ||
+            "네이버 지도 SDK를 불러오지 못했습니다. 네이버 클라우드 콘솔에서 Dynamic Map·Geocoding 및 Web 서비스 URL(http://localhost)을 확인해주세요.",
           variant: "destructive",
         });
-        setIsLoadingStores(false);
-        setStores([]);
-        return;
       }
 
       // Main 페이지 최초 접근 시 위치 정보 확인
@@ -465,7 +460,7 @@ interface StoreData {
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
-                const formattedAddress = await getAddressFromCoords(latitude, longitude);
+                const formattedAddress = await getAddressFromCoords(latitude, longitude, locale);
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
@@ -513,7 +508,7 @@ interface StoreData {
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
-                const formattedAddress = await getAddressFromCoords(latitude, longitude);
+                const formattedAddress = await getAddressFromCoords(latitude, longitude, locale);
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
@@ -583,7 +578,7 @@ interface StoreData {
               
               // 좌표를 주소로 변환
               console.log("🏠 [주소 변환] 시작");
-              const address = await getAddressFromCoords(latitude, longitude);
+              const address = await getAddressFromCoords(latitude, longitude, locale);
               console.log("✅ [주소 변환] 완료:", address);
               
               // 저장 및 표시 (현재 위치는 자동으로 가져온 것이므로 isManualLocation 플래그 없음)
@@ -650,7 +645,7 @@ interface StoreData {
     checkAuthAndInitLocation();
 
     return () => {};
-  }, [toast, navigate]);
+  }, [toast, navigate, locale]);
 
   const handleResearch = () => {
     const map = mapInstanceRef.current;
@@ -702,7 +697,7 @@ interface StoreData {
         async (position) => {
           try {
             const { latitude, longitude } = position.coords;
-            const address = await getAddressFromCoords(latitude, longitude);
+            const address = await getAddressFromCoords(latitude, longitude, locale);
             
             localStorage.setItem("selectedLocation", address);
             localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
@@ -784,12 +779,16 @@ interface StoreData {
     setShowLocationPermModal(false);
     setIsLoadingLocation(true);
     try {
-      const address = await getAddressFromCoords(latitude, longitude);
-      localStorage.setItem("selectedLocation", address);
+      const address = await getAddressFromCoords(latitude, longitude, locale);
+      const displayAddress =
+        address === "위치를 확인할 수 없음"
+          ? headerStrings(locale).locationUnknownGeo
+          : address;
+      localStorage.setItem("selectedLocation", displayAddress);
       localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
       localStorage.removeItem("isManualLocation");
       setIsManualLocation(false);
-      setCurrentLocation(address);
+      setCurrentLocation(displayAddress);
       setCurrentCoords({ latitude, longitude });
       setIsLoadingLocation(false);
       await fetchNearbyStores(latitude, longitude);
@@ -1550,7 +1549,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     const initializeMap = async () => {
       try {
         const { loadNaverMaps } = await import("@/lib/naver");
-        await loadNaverMaps();
+        await loadNaverMaps(locale);
 
         if (isCancelled || !mapContainerRef.current) return;
 
@@ -1608,6 +1607,19 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           minZoom: 9,
         });
         mapInstanceRef.current = map;
+
+        window.setTimeout(() => {
+          if (isCancelled || !mapContainerRef.current) return;
+          const authFailed = mapContainerRef.current.innerHTML.includes("auth_fail");
+          if (authFailed) {
+            toast({
+              title: "네이버 지도 인증 실패",
+              description:
+                "네이버 클라우드 콘솔 > Maps > Application에서 Dynamic Map을 켜고, Web 서비스 URL에 http://localhost 를 등록하세요(포트/경로 제외). 저장 후 Ctrl+F5로 새로고침하세요.",
+              variant: "destructive",
+            });
+          }
+        }, 800);
 
         storeOverlaysRef.current = [];
 
@@ -1769,7 +1781,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         mapContainerRef.current.innerHTML = "";
       }
     };
-  }, [isMapView, currentCoords]);
+  }, [isMapView, currentCoords, locale]);
 
   // storesWithCoords 변경 시 ref 업데이트 + 지도 핀 교체 (지도 재생성 없음)
   useEffect(() => {
@@ -1898,7 +1910,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       >
         {showMapFillLayer && (
           <div className="fixed inset-x-0 top-0 z-[5] h-[calc(100dvh-4rem)] w-full bg-card">
-            <div ref={mapContainerRef} className="h-full w-full overflow-hidden" />
+            <div ref={mapContainerRef} className="map-container h-full w-full overflow-hidden" />
           </div>
         )}
         {!isMapView && <MainPromoBanner locale={locale} />}

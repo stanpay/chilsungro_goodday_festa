@@ -1,32 +1,71 @@
 let naverLoaded = false;
 
-export async function loadNaverMaps(): Promise<void> {
+function normalizeNaverLanguageTag(input?: string | null): string {
+  const tag = (input ?? "").trim().toLowerCase().replace(/_/g, "-");
+  if (tag.startsWith("ko")) return "ko";
+  if (tag.startsWith("ja")) return "ja";
+  if (tag.startsWith("zh")) return "zh";
+  if (tag.startsWith("en")) return "en";
+  return "en";
+}
+
+function resolveNaverLanguage(preferredLanguage?: string): string {
+  if (preferredLanguage) return normalizeNaverLanguageTag(preferredLanguage);
+  if (typeof document !== "undefined" && document.documentElement.lang) {
+    return normalizeNaverLanguageTag(document.documentElement.lang);
+  }
+  if (typeof navigator !== "undefined") {
+    const first = navigator.languages?.[0] ?? navigator.language;
+    return normalizeNaverLanguageTag(first);
+  }
+  return "en";
+}
+
+function buildNaverMapsScriptUrl(clientId: string, language: string): string {
+  return `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}&submodules=geocoder&language=${encodeURIComponent(language)}`;
+}
+
+export async function loadNaverMaps(preferredLanguage?: string): Promise<void> {
   if (typeof window === "undefined") throw new Error("Window is undefined");
   const w = window as any;
-  if (w.naver?.maps && naverLoaded) return;
-
-  const clientId = (import.meta as any).env?.VITE_NAVER_CLIENT_ID;
+  const env = (import.meta as any).env ?? {};
+  const clientId =
+    env.VITE_NAVER_NCP_KEY_ID ??
+    env.VITE_NAVER_CLIENT_ID ??
+    env.VITE_NAVER_MAP_CLIENT_ID ??
+    env.VITE_NAVER_NCP_CLIENT_ID;
   if (!clientId) {
     throw new Error(
-      "VITE_NAVER_CLIENT_ID is not set. 배포 환경에 환경 변수를 설정해주세요."
+      "VITE_NAVER_CLIENT_ID(또는 VITE_NAVER_NCP_KEY_ID)가 설정되지 않았습니다."
     );
   }
 
-  const existing = document.querySelector(
+  const language = resolveNaverLanguage(preferredLanguage);
+  const scriptUrl = buildNaverMapsScriptUrl(clientId, language);
+  let existing = document.querySelector(
     'script[data-naver-maps="true"]'
   ) as HTMLScriptElement | null;
+
+  if (existing && existing.src !== scriptUrl) {
+    existing.remove();
+    delete w.naver;
+    naverLoaded = false;
+    existing = null;
+  }
+
+  if (w.naver?.maps && naverLoaded) return;
 
   if (!existing) {
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement("script");
       script.setAttribute("data-naver-maps", "true");
       script.async = true;
-      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
+      script.src = scriptUrl;
       script.onload = () => resolve();
       script.onerror = () =>
         reject(
           new Error(
-            "Naver Maps SDK 로드 실패 — 도메인 등록 여부 및 Client ID를 확인해주세요."
+            "Naver Maps SDK 로드 실패 — Web 서비스 URL(http://localhost) 등록 및 ncpKeyId를 확인해주세요."
           )
         );
       document.head.appendChild(script);
@@ -47,6 +86,17 @@ export async function loadNaverMaps(): Promise<void> {
     retries++;
   }
   if (!w.naver?.maps) throw new Error("Naver Maps SDK 초기화 실패");
+
+  retries = 0;
+  while (!w.naver?.maps?.Service && retries < 50) {
+    await new Promise((r) => setTimeout(r, 100));
+    retries++;
+  }
+  if (!w.naver?.maps?.Service) {
+    throw new Error(
+      "Naver Maps Geocoder(submodules=geocoder) 로드 실패 — 콘솔에서 Geocoding 서비스를 활성화해주세요."
+    );
+  }
 
   naverLoaded = true;
 }
