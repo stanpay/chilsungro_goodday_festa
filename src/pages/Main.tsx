@@ -75,6 +75,9 @@ const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
   "other",
 ];
 
+/** 카카오 지도 초기 줌: 레벨 3 ≈ 50m 스케일 */
+const MAP_VIEW_INITIAL_LEVEL = 3;
+
 function inferChainImageFromPlaceName(placeName: string): string | null {
   const rules: [string, string][] = [
     ["스타벅스", "starbucks"],
@@ -1558,12 +1561,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         const kakao = (window as any).kakao;
         if (!kakao?.maps) return;
 
-        // 제주 원도심 중심 좌표 (제주시청 기준)
+        // 제주 원도심 중심 좌표 (제주시청 기준) — 현재 위치 없을 때 fallback
         const jejuDowntownCenter = new kakao.maps.LatLng(33.5098, 126.5219);
+        const mapCenter = currentCoords
+          ? new kakao.maps.LatLng(currentCoords.latitude, currentCoords.longitude)
+          : jejuDowntownCenter;
 
         const map = new kakao.maps.Map(mapContainerRef.current, {
-          center: jejuDowntownCenter,
-          level: 6,
+          center: mapCenter,
+          level: MAP_VIEW_INITIAL_LEVEL,
           minLevel: 1,
         });
         mapInstanceRef.current = map;
@@ -1604,9 +1610,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           bounds.extend(position);
         });
 
-        // 항상 제주 원도심 중심으로 고정
-        map.setCenter(jejuDowntownCenter);
-        map.setLevel(6);
+        // 현재 위치 기준 중심 (없으면 제주 원도심 fallback)
+        map.setCenter(mapCenter);
+        map.setLevel(MAP_VIEW_INITIAL_LEVEL);
 
         const updateStoreLabels = () => {
           storeOverlaysRef.current.forEach(({ id, overlay }) => {
