@@ -323,8 +323,8 @@ interface StoreData {
   const isMapView = searchParams.get("map") === "1";
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
-  const storeOverlaysRef = useRef<{ id: string; overlay: any }[]>([]);
-  const clusterOverlaysRef = useRef<any[]>([]);
+  const storeMarkersRef = useRef<{ id: string; marker: any }[]>([]);
+  const clusterMarkersRef = useRef<any[]>([]);
   const selectStoreOnMapRef = useRef<(id: string) => void>(() => {});
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null);
   const [showResearchButton, setShowResearchButton] = useState(false);
@@ -334,6 +334,15 @@ interface StoreData {
   const mapPinLabelsRef = useRef<Record<string, string>>({});
   const storesWithCoordsRef = useRef<any[]>([]);
   const rebuildStoreOverlaysRef = useRef<(() => void) | null>(null);
+  const fitMapToStoresRef = useRef<(() => void) | null>(null);
+  const mapOverlaysReadyRef = useRef(false);
+  const mapClusteringEnabledRef = useRef(false);
+  const mapBootstrapFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const getMarkerPinContent = (marker: any): HTMLElement | null => {
+    const icon = marker?.getIcon?.();
+    return (icon?.content as HTMLElement) ?? null;
+  };
 
   const mapPinTranslationKey = useMemo(
     () =>
@@ -494,12 +503,20 @@ interface StoreData {
           try {
             console.log("🔍 [위치 정보] 주소 검색으로 좌표 가져오기:", savedLocation);
             const { searchAddress } = await import("@/lib/naver");
-            const searchResult = await searchAddress(savedLocation);
+            const searchResult = await searchAddress(savedLocation, locale);
             
             if (searchResult.documents && searchResult.documents.length > 0) {
               const firstResult = searchResult.documents[0];
               const latitude = parseFloat(firstResult.y);
               const longitude = parseFloat(firstResult.x);
+
+              if (searchResult.usedFallbackCoords) {
+                toast({
+                  title: "대략 위치로 설정",
+                  description:
+                    "Geocoding API가 꺼져 있어 제주 원도심 기준 좌표를 사용합니다. 콘솔에서 Geocoding을 활성화하면 정확해집니다.",
+                });
+              }
               
               // 좌표 저장
               localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
@@ -525,17 +542,28 @@ interface StoreData {
               return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
             } else {
               console.warn("⚠️ [위치 정보] 주소 검색 결과 없음:", savedLocation);
-              // 이전 사용자 위치값 표시
-              setCurrentLocation(savedLocation || "위치 불러올 수 없음");
-              setIsLoadingLocation(false);
-              return; // 수동 위치 설정이므로 브라우저 위치 가져오기 건너뛰기
+              toast({
+                title: "주소 검색 실패",
+                description: searchResult.geocodingForbidden
+                  ? "네이버 콘솔에서 Geocoding을 켜고 저장해주세요. (Reverse Geocoding만으로는 주소 검색 불가) GPS로 재시도합니다."
+                  : "주소를 찾지 못했습니다. 현재 위치(GPS)로 다시 시도합니다.",
+                variant: "destructive",
+              });
+              localStorage.removeItem("isManualLocation");
+              setIsManualLocation(false);
+              setCurrentLocation(savedLocation);
+              // Geocoding 실패 시 GPS로 폴백
             }
           } catch (error) {
             console.error("❌ [위치 초기화] 주소 검색 오류:", error);
-            // 이전 사용자 위치값 표시
+            toast({
+              title: "주소 검색 오류",
+              description: "현재 위치(GPS)로 다시 시도합니다.",
+              variant: "destructive",
+            });
+            localStorage.removeItem("isManualLocation");
+            setIsManualLocation(false);
             setCurrentLocation(savedLocation || "위치 불러올 수 없음");
-            setIsLoadingLocation(false);
-            return; // 수동 위치 설정이므로 브라우저 위치 가져오기 건너뛰기
           }
         }
       } else if (isManualLocationValue && !savedLocation) {
@@ -651,8 +679,8 @@ interface StoreData {
     const map = mapInstanceRef.current;
     if (!map) return;
     const center = map.getCenter();
-    const centerLat = center.getLat();
-    const centerLng = center.getLng();
+    const centerLat = center.lat();
+    const centerLng = center.lng();
 
     // 캐시된 전체 매장 목록에서 지도 중심 기준 1500m 이내만 필터링 (API 재호출 없음)
     const NEARBY_FILTER_RADIUS_M = 1500;
@@ -1463,15 +1491,18 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     [openStores, sortBy]
   );
 
+  const hasStoreCoords = (store: StoreData) =>
+    Number.isFinite(store.lat) && Number.isFinite(store.lon);
+
   const storesWithCoords = useMemo(() => {
-    // 지도뷰 재검색 결과가 있으면 그것만, 없으면 전체 필터 체인에서 좌표 있는 것만
+    // 지도뷰: 재검색 결과 또는 불러온 매장 중 좌표 있는 것 (영업중 필터는 시트에서만 적용 가능)
     const base = mapFilteredStores
-      ? mapFilteredStores
-      : openStores.filter((store) => typeof store.lat === "number" && typeof store.lon === "number");
+      ? mapFilteredStores.filter(hasStoreCoords)
+      : categoryFilteredStores.filter(hasStoreCoords);
     return [...base].sort((a, b) =>
       sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
     );
-  }, [mapFilteredStores, openStores, sortBy]);
+  }, [mapFilteredStores, categoryFilteredStores, sortBy]);
 
   useEffect(() => {
     if (!isMapView || !mapContainerRef.current) return;
@@ -1556,57 +1587,89 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         const naver = (window as any).naver;
         if (!naver?.maps) return;
 
-        // Naver Maps OverlayView 기반 커스텀 오버레이 클래스 생성
-        function makeOverlayClass() {
-          const NaverOV: any = function(this: any, { position, content, zIndex = 10, clickable = true, map: initMap }: any) {
-            this._position = position;
-            this._content = content;
-            this._zIndex = zIndex;
-            this._clickable = clickable;
-            this._content.style.zIndex = String(zIndex);
-            naver.maps.OverlayView.call(this);
-            if (initMap) this.setMap(initMap);
-          };
-          NaverOV.prototype = Object.create(naver.maps.OverlayView.prototype);
-          NaverOV.prototype.constructor = NaverOV;
-          NaverOV.prototype.onAdd = function(this: any) {
-            const pane = this._clickable
-              ? this.getPanes().overlayMouseTarget
-              : this.getPanes().overlayLayer;
-            pane.appendChild(this._content);
-          };
-          NaverOV.prototype.draw = function(this: any) {
-            const proj = this.getProjection();
-            if (!proj) return;
-            const pt = proj.fromCoordToOffset(this._position);
-            this._content.style.left = Math.round(pt.x) + "px";
-            this._content.style.top = Math.round(pt.y) + "px";
-          };
-          NaverOV.prototype.onRemove = function(this: any) {
-            if (this._content?.parentNode) {
-              this._content.parentNode.removeChild(this._content);
-            }
-          };
-          NaverOV.prototype.getContent = function(this: any) { return this._content; };
-          NaverOV.prototype.getPosition = function(this: any) { return this._position; };
-          NaverOV.prototype.setZIndex = function(this: any, n: number) {
-            this._zIndex = n;
-            if (this._content) this._content.style.zIndex = String(n);
-          };
-          return NaverOV;
-        }
-        const NaverCustomOverlay = makeOverlayClass();
+        const createStoreMarker = (store: StoreData, targetMap: any) => {
+          const content = buildStorePin(store);
+          const marker = new naver.maps.Marker({
+            position: new naver.maps.LatLng(store.lat!, store.lon!),
+            map: targetMap,
+            zIndex: 10,
+            clickable: true,
+            icon: {
+              content,
+              anchor: new naver.maps.Point(0, 0),
+            },
+          });
+          naver.maps.Event.addListener(marker, "click", () => {
+            selectStoreOnMapRef.current(store.id);
+          });
+          return marker;
+        };
 
-        // 제주 원도심 중심 좌표 (제주시청 기준)
+        const clearClusterMarkers = () => {
+          clusterMarkersRef.current.forEach((marker) => {
+            try {
+              marker.setMap(null);
+            } catch {}
+          });
+          clusterMarkersRef.current = [];
+        };
+
+        const showAllStoreMarkers = () => {
+          clearClusterMarkers();
+          storeMarkersRef.current.forEach(({ marker }) => {
+            try {
+              marker.setMap(map);
+            } catch {}
+          });
+        };
+
+        let clusterRetryCount = 0;
+
         const jejuDowntownCenter = new naver.maps.LatLng(33.5098, 126.5219);
+        const initialCenter = currentCoords
+          ? new naver.maps.LatLng(currentCoords.latitude, currentCoords.longitude)
+          : jejuDowntownCenter;
 
         const map = new naver.maps.Map(mapContainerRef.current, {
-          center: jejuDowntownCenter,
-          zoom: 13,
+          center: initialCenter,
+          zoom: currentCoords ? 14 : 13,
           maxZoom: 19,
           minZoom: 9,
         });
         mapInstanceRef.current = map;
+
+        const fitMapToStores = () => {
+          const list = storesWithCoordsRef.current.filter(
+            (s: StoreData) => Number.isFinite(s.lat) && Number.isFinite(s.lon)
+          );
+          const latLngs: any[] = list.map(
+            (s: StoreData) => new naver.maps.LatLng(s.lat!, s.lon!)
+          );
+          if (currentCoords) {
+            latLngs.push(
+              new naver.maps.LatLng(currentCoords.latitude, currentCoords.longitude)
+            );
+          }
+          if (latLngs.length === 0) {
+            map.setCenter(jejuDowntownCenter);
+            map.setZoom(13);
+            return;
+          }
+          if (latLngs.length === 1) {
+            map.setCenter(latLngs[0]);
+            map.setZoom(15);
+            return;
+          }
+          const bounds = new naver.maps.LatLngBounds(latLngs[0], latLngs[0]);
+          for (let i = 1; i < latLngs.length; i++) bounds.extend(latLngs[i]);
+          map.fitBounds(bounds, {
+            top: 100,
+            right: 48,
+            bottom: 220,
+            left: 48,
+          });
+        };
+        fitMapToStoresRef.current = fitMapToStores;
 
         window.setTimeout(() => {
           if (isCancelled || !mapContainerRef.current) return;
@@ -1621,72 +1684,90 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           }
         }, 800);
 
-        storeOverlaysRef.current = [];
+        storeMarkersRef.current = [];
 
-        if (currentCoords) {
-          const pos = new naver.maps.LatLng(currentCoords.latitude, currentCoords.longitude);
-          const el = buildMyLocationPin(headerStrings(locale).mapCurrentLocationTitle);
-          const curOverlay = new NaverCustomOverlay({ map, position: pos, content: el, zIndex: 50, clickable: false });
-          overlays.push(curOverlay);
-        }
+        const syncStorePinsToMap = () => {
+          if (isCancelled) return;
 
-        storesWithCoordsRef.current.forEach((store) => {
-          const position = new naver.maps.LatLng(store.lat!, store.lon!);
-          const content = buildStorePin(store);
-          const overlay = new NaverCustomOverlay({ map, position, content, zIndex: 10, clickable: true });
-          overlays.push(overlay);
-          storeOverlaysRef.current.push({ id: store.id, overlay });
-        });
+          storeMarkersRef.current.forEach(({ marker }) => {
+            try {
+              marker.setMap(null);
+            } catch {}
+          });
+          storeMarkersRef.current = [];
+          clearClusterMarkers();
 
-        // 항상 제주 원도심 중심으로 고정
-        map.setCenter(jejuDowntownCenter);
-        map.setZoom(13);
+          storesWithCoordsRef.current.forEach((store: StoreData) => {
+            if (!Number.isFinite(store.lat) || !Number.isFinite(store.lon)) return;
+            const marker = createStoreMarker(store, map);
+            storeMarkersRef.current.push({ id: store.id, marker });
+          });
+        };
 
         const updateStoreLabels = () => {
-          storeOverlaysRef.current.forEach(({ id, overlay }) => {
-            const root = overlay.getContent() as HTMLElement | undefined;
+          storeMarkersRef.current.forEach(({ id, marker }) => {
+            const root = getMarkerPinContent(marker);
             const el = root?.querySelector("[data-store-label]") as HTMLElement | null;
             if (!el) return;
             el.textContent =
               mapPinLabelsRef.current[id] ?? storesWithCoordsRef.current.find((s: any) => s.id === id)?.name ?? "";
           });
         };
-        updateStoreLabels();
 
         const updateClusters = () => {
           if (isCancelled) return;
 
-          clusterOverlaysRef.current.forEach((o) => {
-            try { o.setMap(null); } catch {}
-          });
-          clusterOverlaysRef.current = [];
-
-          const allPins = storeOverlaysRef.current;
+          const allPins = storeMarkersRef.current;
           if (!allPins.length) return;
 
+          if (!mapClusteringEnabledRef.current) {
+            showAllStoreMarkers();
+            return;
+          }
+
+          clearClusterMarkers();
+
           const proj = map.getProjection();
+          if (!proj) {
+            if (clusterRetryCount < 12) {
+              clusterRetryCount += 1;
+              setTimeout(() => {
+                if (!isCancelled) updateClusters();
+              }, 80);
+            }
+            return;
+          }
+
           const currentZoom = map.getZoom();
           const CLUSTER_DISTANCE_PX =
-            currentZoom >= 18 ? 18 :
-            currentZoom >= 16 ? 28 : 45;
+            currentZoom >= 18 ? 18 : currentZoom >= 16 ? 28 : 45;
 
-          const pins = allPins.map(({ id, overlay }) => {
-            const pos = overlay.getPosition();
-            let px = 0, py = 0;
+          const pins = allPins.map(({ id, marker }) => {
+            const pos = marker.getPosition();
+            let px = 0,
+              py = 0;
             try {
               const pt = proj.fromCoordToOffset(pos);
               px = pt.x;
               py = pt.y;
             } catch {}
-            return { id, overlay, pos, px, py };
+            return { id, marker, pos, px, py };
           });
 
-          // projection이 아직 준비 안 된 경우(모두 0,0) 클러스터링 스킵
-          const projectionReady = pins.some((p) => p.px !== 0 || p.py !== 0);
+          const allStackedAtOrigin =
+            pins.length > 1 && pins.every((p) => p.px === 0 && p.py === 0);
+          const projectionReady = pins.length > 0 && !allStackedAtOrigin;
           if (!projectionReady) {
-            allPins.forEach(({ overlay }) => { try { overlay.setMap(map); } catch {} });
+            showAllStoreMarkers();
+            if (clusterRetryCount < 12) {
+              clusterRetryCount += 1;
+              setTimeout(() => {
+                if (!isCancelled) updateClusters();
+              }, 80);
+            }
             return;
           }
+          clusterRetryCount = 0;
 
           const assigned = new Set<string>();
           const clusters: (typeof pins)[] = [];
@@ -1709,21 +1790,24 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
           clusters.forEach((cluster) => {
             if (cluster.length === 1) {
-              cluster[0].overlay.setMap(map);
+              cluster[0].marker.setMap(map);
             } else {
-              cluster.forEach(({ overlay }) => overlay.setMap(null));
-              const avgLat = cluster.reduce((s, p) => s + p.pos.getLat(), 0) / cluster.length;
-              const avgLng = cluster.reduce((s, p) => s + p.pos.getLng(), 0) / cluster.length;
+              cluster.forEach(({ marker }) => marker.setMap(null));
+              const avgLat = cluster.reduce((s, p) => s + p.pos.lat(), 0) / cluster.length;
+              const avgLng = cluster.reduce((s, p) => s + p.pos.lng(), 0) / cluster.length;
               const centroid = new naver.maps.LatLng(avgLat, avgLng);
               const { root: clusterRoot, el: clusterEl } = buildClusterPin(cluster.length);
-              const clusterOverlay = new NaverCustomOverlay({
-                map,
+              const clusterMarker = new naver.maps.Marker({
                 position: centroid,
-                content: clusterRoot,
+                map,
                 zIndex: 20,
                 clickable: true,
+                icon: {
+                  content: clusterRoot,
+                  anchor: new naver.maps.Point(0, 0),
+                },
               });
-              clusterOverlaysRef.current.push(clusterOverlay);
+              clusterMarkersRef.current.push(clusterMarker);
               clusterEl.addEventListener("click", (ev) => {
                 ev.stopPropagation();
                 const zoom = map.getZoom();
@@ -1734,25 +1818,82 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           });
         };
 
-        // 매장 목록만 바뀔 때(검색 등) 지도 재생성 없이 핀만 교체
-        rebuildStoreOverlaysRef.current = () => {
+        const applyPinsToMap = () => {
           if (isCancelled) return;
-          storeOverlaysRef.current.forEach(({ overlay }) => { try { overlay.setMap(null); } catch {} });
-          storeOverlaysRef.current = [];
-          clusterOverlaysRef.current.forEach((o) => { try { o.setMap(null); } catch {} });
-          clusterOverlaysRef.current = [];
-          storesWithCoordsRef.current.forEach((store: any) => {
-            const position = new naver.maps.LatLng(store.lat, store.lon);
-            const content = buildStorePin(store);
-            const overlay = new NaverCustomOverlay({ map, position, content, zIndex: 10, clickable: true });
-            storeOverlaysRef.current.push({ id: store.id, overlay });
-          });
+          clusterRetryCount = 0;
+          mapClusteringEnabledRef.current = false;
+
+          if (currentCoords) {
+            const pos = new naver.maps.LatLng(currentCoords.latitude, currentCoords.longitude);
+            const el = buildMyLocationPin(headerStrings(locale).mapCurrentLocationTitle);
+            const curMarker = new naver.maps.Marker({
+              position: pos,
+              map,
+              zIndex: 50,
+              clickable: false,
+              icon: {
+                content: el,
+                anchor: new naver.maps.Point(0, 0),
+              },
+            });
+            overlays.push(curMarker);
+          }
+
+          syncStorePinsToMap();
           updateStoreLabels();
-          setTimeout(() => { if (!isCancelled) updateClusters(); }, 100);
+          showAllStoreMarkers();
+          window.setTimeout(() => {
+            if (!isCancelled) {
+              mapClusteringEnabledRef.current = true;
+              updateClusters();
+            }
+          }, 150);
         };
 
-        naver.maps.Event.addListener(map, "idle", updateClusters);
-        setTimeout(() => { if (!isCancelled) updateClusters(); }, 400);
+        rebuildStoreOverlaysRef.current = () => {
+          if (isCancelled || !mapOverlaysReadyRef.current) return;
+          clusterRetryCount = 0;
+          mapClusteringEnabledRef.current = false;
+          syncStorePinsToMap();
+          updateStoreLabels();
+          showAllStoreMarkers();
+          fitMapToStores();
+          naver.maps.Event.once(map, "idle", () => {
+            if (!isCancelled) {
+              mapClusteringEnabledRef.current = true;
+              updateClusters();
+            }
+          });
+        };
+
+        let mapBootstrapped = false;
+        const bootstrapMapOverlays = () => {
+          if (isCancelled || mapBootstrapped) return;
+          mapBootstrapped = true;
+          mapOverlaysReadyRef.current = true;
+          applyPinsToMap();
+          fitMapToStores();
+        };
+
+        const onMapIdle = () => {
+          if (!mapBootstrapped) {
+            bootstrapMapOverlays();
+            return;
+          }
+          if (mapClusteringEnabledRef.current) {
+            updateClusters();
+          }
+        };
+
+        naver.maps.Event.addListener(map, "idle", onMapIdle);
+        naver.maps.Event.once(map, "init", bootstrapMapOverlays);
+        if (mapBootstrapFallbackTimerRef.current !== null) {
+          clearTimeout(mapBootstrapFallbackTimerRef.current);
+        }
+        mapBootstrapFallbackTimerRef.current = setTimeout(() => {
+          mapBootstrapFallbackTimerRef.current = null;
+          bootstrapMapOverlays();
+        }, 400);
 
         // 초기 로드 후 600ms 지나면 사용자 이동 감지 시작
         readyTimer = setTimeout(() => { mapReady = true; }, 600);
@@ -1769,14 +1910,21 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
     return () => {
       isCancelled = true;
+      mapOverlaysReadyRef.current = false;
+      mapClusteringEnabledRef.current = false;
       rebuildStoreOverlaysRef.current = null;
+      fitMapToStoresRef.current = null;
       if (readyTimer !== null) clearTimeout(readyTimer);
+      if (mapBootstrapFallbackTimerRef.current !== null) {
+        clearTimeout(mapBootstrapFallbackTimerRef.current);
+        mapBootstrapFallbackTimerRef.current = null;
+      }
       mapInstanceRef.current = null;
-      storeOverlaysRef.current.forEach(({ overlay }) => { try { overlay.setMap(null); } catch {} });
-      storeOverlaysRef.current = [];
-      clusterOverlaysRef.current.forEach((o) => { try { o.setMap(null); } catch {} });
-      clusterOverlaysRef.current = [];
-      overlays.forEach((o) => { try { o.setMap(null); } catch {} });
+      storeMarkersRef.current.forEach(({ marker }) => { try { marker.setMap(null); } catch {} });
+      storeMarkersRef.current = [];
+      clusterMarkersRef.current.forEach((m) => { try { m.setMap(null); } catch {} });
+      clusterMarkersRef.current = [];
+      overlays.forEach((m) => { try { m.setMap(null); } catch {} });
       if (mapContainerRef.current) {
         mapContainerRef.current.innerHTML = "";
       }
@@ -1786,15 +1934,43 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   // storesWithCoords 변경 시 ref 업데이트 + 지도 핀 교체 (지도 재생성 없음)
   useEffect(() => {
     storesWithCoordsRef.current = storesWithCoords;
-    if (isMapView && mapInstanceRef.current) {
+    if (!isMapView || !mapInstanceRef.current) return;
+
+    const map = mapInstanceRef.current;
+    const naver = (window as any).naver;
+
+    const run = () => {
       rebuildStoreOverlaysRef.current?.();
+      fitMapToStoresRef.current?.();
+    };
+
+    if (mapOverlaysReadyRef.current) {
+      run();
+      return;
+    }
+
+    if (naver?.maps?.Event) {
+      naver.maps.Event.once(map, "idle", run);
     }
   }, [isMapView, storesWithCoords]);
 
+  // 핀 선택 시 해당 매장으로 지도 이동
+  useEffect(() => {
+    if (!isMapView || !selectedMapStoreId || !mapInstanceRef.current) return;
+    const naver = (window as any).naver;
+    if (!naver?.maps) return;
+    const store = storesWithCoords.find((s) => s.id === selectedMapStoreId);
+    if (!store || !hasStoreCoords(store)) return;
+    const map = mapInstanceRef.current;
+    map.setCenter(new naver.maps.LatLng(store.lat!, store.lon!));
+    const zoom = map.getZoom();
+    if (zoom < 15) map.setZoom(15);
+  }, [isMapView, selectedMapStoreId, storesWithCoords]);
+
   useEffect(() => {
     if (!isMapView) return;
-    storeOverlaysRef.current.forEach(({ id, overlay }) => {
-      const root = overlay.getContent() as HTMLElement | undefined;
+    storeMarkersRef.current.forEach(({ id, marker }) => {
+      const root = getMarkerPinContent(marker);
       const el = root?.querySelector("[data-store-label]") as HTMLElement | null;
       if (!el) return;
       const translated = mapPinLabels[id];
@@ -1804,9 +1980,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   }, [isMapView, mapPinLabels, stores]);
 
   useEffect(() => {
-    storeOverlaysRef.current.forEach(({ id, overlay }) => {
-      overlay.setZIndex(id === selectedMapStoreId ? 45 : 10);
-      const el = overlay.getContent() as HTMLElement | undefined;
+    storeMarkersRef.current.forEach(({ id, marker }) => {
+      try {
+        marker.setZIndex(id === selectedMapStoreId ? 45 : 10);
+      } catch {}
+      const el = getMarkerPinContent(marker);
       if (!el) return;
       const balloon = el.querySelector("[data-pin-dot]") as HTMLElement | null;
       const tail = el.querySelector("[data-pin-tail]") as HTMLElement | null;

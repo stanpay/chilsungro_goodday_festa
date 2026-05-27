@@ -1,5 +1,5 @@
-import { loadNaverMaps } from "@/lib/naver";
 import type { AppLocale } from "@/lib/locale";
+import { loadNaverMaps } from "@/lib/naver";
 
 export const UNKNOWN_ADDRESS = "위치를 확인할 수 없음";
 
@@ -29,9 +29,9 @@ function formatReverseGeocodeItem(item: any): string {
 
 function pickAddressFromReverseResponse(response: any): string | null {
   const results: any[] =
+    response?.results ??
     response?.v2?.results ??
     response?.result?.results ??
-    response?.results ??
     [];
 
   for (const type of ["roadaddr", "addr", "admcode", "legalcode"]) {
@@ -43,31 +43,45 @@ function pickAddressFromReverseResponse(response: any): string | null {
   return null;
 }
 
-function getNaverApiCredentials(): { clientId: string; clientSecret: string } | null {
-  const env = (import.meta as any).env ?? {};
-  const clientId =
-    env.VITE_NAVER_NCP_KEY_ID ??
-    env.VITE_NAVER_CLIENT_ID ??
-    env.VITE_NAVER_MAP_CLIENT_ID ??
-    env.VITE_NAVER_NCP_CLIENT_ID;
-  const clientSecret = env.VITE_NAVER_CLIENT_SECRET ?? env.VITE_NAVER_NCP_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
-  return { clientId, clientSecret };
+async function reverseGeocodeWithNaverProxy(
+  latitude: number,
+  longitude: number
+): Promise<string | null> {
+  const url = new URL("/api/naver/reverse-geocode", window.location.origin);
+  url.searchParams.set("coords", `${longitude},${latitude}`);
+  url.searchParams.set("orders", REVERSE_GEOCODE_ORDERS);
+  url.searchParams.set("output", "json");
+  url.searchParams.set("sourcecrs", "epsg:4326");
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    console.warn(
+      "[geocoding] reverse-geocode proxy HTTP",
+      res.status,
+      await res.text().catch(() => "")
+    );
+    return null;
+  }
+
+  const data = await res.json();
+  if (data?.status?.code !== 0) {
+    console.warn("[geocoding] reverse-geocode status:", data?.status);
+    return null;
+  }
+
+  return pickAddressFromReverseResponse(data);
 }
 
-async function reverseGeocodeWithNaverJs(
+async function reverseGeocodeWithJs(
   latitude: number,
   longitude: number,
   locale?: AppLocale
 ): Promise<string | null> {
-  await loadNaverMaps(locale);
+  await loadNaverMaps(locale, { geocoder: true });
   const naver = (window as any).naver;
-  if (!naver?.maps?.Service) {
-    console.warn("[geocoding] naver.maps.Service unavailable after SDK load");
-    return null;
-  }
+  if (!naver?.maps?.Service) return null;
 
-  return new Promise<string | null>((resolve) => {
+  return new Promise((resolve) => {
     const timeoutId = window.setTimeout(() => resolve(null), 10000);
 
     naver.maps.Service.reverseGeocode(
@@ -77,52 +91,15 @@ async function reverseGeocodeWithNaverJs(
       },
       (status: any, response: any) => {
         window.clearTimeout(timeoutId);
-
         if (status !== naver.maps.Service.Status.OK) {
-          console.warn("[geocoding] reverseGeocode status:", status, response);
+          console.warn("[geocoding] JS reverseGeocode status:", status);
           resolve(null);
           return;
         }
-
-        resolve(pickAddressFromReverseResponse(response));
+        resolve(pickAddressFromReverseResponse(response?.v2 ?? response));
       }
     );
   });
-}
-
-/** 네이버 클라우드 Reverse Geocoding REST (동일 Maps API, Geocoding 서비스) */
-async function reverseGeocodeWithNaverRest(
-  latitude: number,
-  longitude: number
-): Promise<string | null> {
-  const creds = getNaverApiCredentials();
-  if (!creds) return null;
-
-  const url = new URL("https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc");
-  url.searchParams.set("coords", `${longitude},${latitude}`);
-  url.searchParams.set("output", "json");
-  url.searchParams.set("orders", REVERSE_GEOCODE_ORDERS);
-
-  const res = await fetch(url.toString(), {
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": creds.clientId,
-      "X-NCP-APIGW-API-KEY": creds.clientSecret,
-      Accept: "application/json",
-    },
-  });
-
-  if (!res.ok) {
-    console.warn("[geocoding] REST reverseGeocode HTTP", res.status, await res.text().catch(() => ""));
-    return null;
-  }
-
-  const data = await res.json();
-  if (data?.status?.code !== 0) {
-    console.warn("[geocoding] REST reverseGeocode status:", data?.status);
-    return null;
-  }
-
-  return pickAddressFromReverseResponse(data);
 }
 
 export async function getAddressFromCoords(
@@ -131,17 +108,17 @@ export async function getAddressFromCoords(
   locale?: AppLocale
 ): Promise<string> {
   try {
-    const fromJs = await reverseGeocodeWithNaverJs(latitude, longitude, locale);
-    if (fromJs) return fromJs;
+    const fromProxy = await reverseGeocodeWithNaverProxy(latitude, longitude);
+    if (fromProxy) return fromProxy;
   } catch (error) {
-    console.warn("[geocoding] JS reverseGeocode error:", error);
+    console.warn("[geocoding] reverse-geocode proxy error:", error);
   }
 
   try {
-    const fromRest = await reverseGeocodeWithNaverRest(latitude, longitude);
-    if (fromRest) return fromRest;
+    const fromJs = await reverseGeocodeWithJs(latitude, longitude, locale);
+    if (fromJs) return fromJs;
   } catch (error) {
-    console.warn("[geocoding] REST reverseGeocode error:", error);
+    console.warn("[geocoding] JS reverseGeocode error:", error);
   }
 
   return UNKNOWN_ADDRESS;

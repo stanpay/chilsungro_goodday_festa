@@ -13,6 +13,8 @@ import { useAppLocale } from "@/contexts/AppLocaleContext";
 interface RecentLocation {
   name: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 const Location = () => {
@@ -47,7 +49,7 @@ const Location = () => {
 
       setIsSearching(true);
       try {
-        const result = await searchAddress(searchQuery);
+        const result = await searchAddress(searchQuery, locale);
         setSearchResults(result.documents);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "주소 검색 중 오류가 발생했습니다.";
@@ -66,18 +68,31 @@ const Location = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]); // toast는 안정적인 참조를 가지므로 dependency에서 제외
 
-  const saveToRecentLocations = useCallback((name: string, address: string) => {
-    setRecentLocations((prev) => {
-      const newLocation: RecentLocation = { name, address };
-      const updated = [
-        newLocation,
-        ...prev.filter((loc) => loc.name !== name),
-      ].slice(0, 5); // 최대 5개까지만 저장
+  const saveToRecentLocations = useCallback(
+    (
+      name: string,
+      address: string,
+      coordinates?: { latitude: number; longitude: number }
+    ) => {
+      setRecentLocations((prev) => {
+        const newLocation: RecentLocation = {
+          name,
+          address,
+          ...(coordinates
+            ? { latitude: coordinates.latitude, longitude: coordinates.longitude }
+            : {}),
+        };
+        const updated = [
+          newLocation,
+          ...prev.filter((loc) => loc.name !== name),
+        ].slice(0, 5);
 
-      localStorage.setItem("recentLocations", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+        localStorage.setItem("recentLocations", JSON.stringify(updated));
+        return updated;
+      });
+    },
+    []
+  );
 
   const handleLocationSelect = (name: string, address?: string, coordinates?: { latitude: number; longitude: number }) => {
     localStorage.setItem("selectedLocation", name);
@@ -96,7 +111,7 @@ const Location = () => {
     
     // 최근 위치에 추가
     if (address) {
-      saveToRecentLocations(name, address);
+      saveToRecentLocations(name, address, coordinates);
     }
     
     toast({
@@ -306,7 +321,15 @@ const Location = () => {
                 <Card
                   key={`${location.name}-${index}`}
                   className="p-4 cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => handleLocationSelect(location.name, location.address)}
+                  onClick={() =>
+                    handleLocationSelect(
+                      location.name,
+                      location.address,
+                      location.latitude != null && location.longitude != null
+                        ? { latitude: location.latitude, longitude: location.longitude }
+                        : undefined
+                    )
+                  }
                 >
                   <div className="flex items-start">
                     <MapPin className="w-4 h-4 mr-3 mt-1 text-muted-foreground flex-shrink-0" />
