@@ -1842,11 +1842,18 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
     return (
       <div
-        className={cn("flex w-full py-1 pr-4", chipScrollClassName)}
+        className="-mx-4 w-[calc(100%+2rem)] py-1"
         role="toolbar"
         aria-label={ariaLabel}
       >
-        {chips}
+        <div
+          className={cn(
+            "w-full overflow-x-auto pl-4 pr-4",
+            chipScrollClassName
+          )}
+        >
+          <div className="flex w-max flex-nowrap gap-2">{chips}</div>
+        </div>
       </div>
     );
   };

@@ -668,16 +668,23 @@ const MapViewBottomSheet = ({
 
       {showContent && (
         <>
-          <div className="flex h-10 shrink-0 items-center justify-between px-3">
+          <div
+            className="flex h-10 shrink-0 cursor-grab touch-none items-center justify-between px-3 active:cursor-grabbing"
+            onPointerDown={onPointerDownHandle}
+            onPointerMove={onPointerMoveHandle}
+            onPointerUp={onPointerUpHandle}
+            onPointerCancel={onPointerUpHandle}
+          >
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => onSortChange(sortBy === "distance" ? "discount" : "distance")}
+                onPointerDown={(e) => e.stopPropagation()}
                 onPointerLeave={(event) => event.currentTarget.blur()}
                 onPointerCancel={(event) => event.currentTarget.blur()}
                 onPointerUp={(event) => event.currentTarget.blur()}
-                className="flex items-center gap-1 rounded-full border border-border/60 bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus:bg-muted/60 focus:text-foreground focus:outline-none active:bg-muted/60 active:text-foreground"
+                className="flex cursor-pointer items-center gap-1 rounded-full border border-border/60 bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus:bg-muted/60 focus:text-foreground focus:outline-none active:bg-muted/60 active:text-foreground"
               >
                 <ArrowUpDown className="h-3 w-3" />
                 {sortBy === "distance" ? sortDistanceLabel : sortDiscountLabel}
