@@ -4,20 +4,30 @@ import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
-const BOTTOM_NAV_PX = 64;
+export const MAP_VIEW_SHEET_BOTTOM_NAV_PX = 64;
+export const MAP_VIEW_SHEET_PEEK_HEIGHT = 60;
+const BOTTOM_NAV_PX = MAP_VIEW_SHEET_BOTTOM_NAV_PX;
 /** 상단(노치·패딩) 최소 여백 — 시트를 최대로 올려도 이 정도는 남김 */
 const TOP_RESERVE_PX = 16;
 /** 당기기 전: 핸들(슬라이더) 줄만 노출 */
-const PEEK_HEIGHT = 60;
+const PEEK_HEIGHT = MAP_VIEW_SHEET_PEEK_HEIGHT;
+/** 펼침 후: 핸들 막대만 노출 (h-4 py-1) */
+const EXPANDED_HANDLE_HEIGHT = 16;
 const CONTENT_REVEAL_EXTRA = 36;
-const CARD_ROW_FALLBACK_PX = 240;
 const MIN_EXPANDED = 280;
 /** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
 const SLIGHT_EXPAND_FROM_PEEK_PX = 10;
 /** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 (핸들 드래그) */
 const COLLAPSE_FROM_EXPANDED_PX = 30;
-/** 매장 선택 시 한 줄 스냅 — 카드 위·아래 여백 (py-2) */
-const SINGLE_ROW_VERTICAL_PAD_PX = 16;
+/** StoreCard 고정 높이: h-28(112) + 본문 그리드·패딩(128) */
+const STORE_CARD_HEIGHT_PX = 240;
+/** 1행 스냅 시트 높이 = 핸들 + 헤더 + 스크롤(pt-2 + 카드 240, gap은 클립) */
+const MAP_VIEW_SHEET_HEADER_PX = 40;
+/** py-2(16) + 카드 240 — 그리드 gap-3(12)는 overflow로 잘림 */
+const MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX = 256;
+/** 카드 1행만 보이도록 고정 (동적 측정 없음) */
+export const MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT =
+  EXPANDED_HANDLE_HEIGHT + MAP_VIEW_SHEET_HEADER_PX + MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX;
 
 export type MapSheetStore = {
   id: string;
@@ -54,6 +64,8 @@ type MapViewBottomSheetProps = {
   onSortChange: (sort: "distance" | "discount") => void;
   sortDistanceLabel: string;
   sortDiscountLabel: string;
+  /** 시트 높이 변경 시 (지도 핀 위치 보정용) */
+  onPanelHeightChange?: (height: number) => void;
   className?: string;
   "aria-hidden"?: boolean;
 };
@@ -69,6 +81,7 @@ const MapViewBottomSheet = ({
   onSortChange,
   sortDistanceLabel,
   sortDiscountLabel,
+  onPanelHeightChange,
   className,
   "aria-hidden": ariaHidden,
 }: MapViewBottomSheetProps) => {
@@ -90,11 +103,10 @@ const MapViewBottomSheet = ({
   } | null>(null);
   const cardWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const scrollBodyRef = useRef<HTMLDivElement>(null);
-  const headerSectionRef = useRef<HTMLDivElement>(null);
-  const singleRowHeightRef = useRef(PEEK_HEIGHT + CONTENT_REVEAL_EXTRA + CARD_ROW_FALLBACK_PX);
   /** 선택 매장으로 스크롤은 매장당 최초 1회만 */
   const scrollSyncedStoreIdRef = useRef<string | null>(null);
   const prevSelectedStoreIdRef = useRef<string | null>(null);
+  const reportedPanelHeightRef = useRef(panelHeight);
   const maxHeightRef = useRef(0);
   const bodyGestureRef = useRef<{
     startY: number;
@@ -115,66 +127,22 @@ const MapViewBottomSheet = ({
   const contentRevealThreshold = PEEK_HEIGHT + CONTENT_REVEAL_EXTRA;
   const showContent = panelHeight > contentRevealThreshold;
   const isSingleRowPanel =
-    Boolean(selectedStoreId) &&
-    showContent &&
-    panelHeight <= singleRowHeightRef.current + 8;
+    showContent && panelHeight <= MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT + 8;
 
-  const measureRowHeightPx = useCallback(
-    (rowIndex: number) => {
-      const lead = rowIndex * 2;
-      const ids = [stores[lead]?.id, stores[lead + 1]?.id].filter(Boolean) as string[];
-      let rowH = 0;
-      for (const id of ids) {
-        const node = cardWrapRefs.current.get(id);
-        if (node && node.offsetHeight > 0) {
-          rowH = Math.max(rowH, node.offsetHeight);
-        }
-      }
-      return rowH > 0 ? rowH : CARD_ROW_FALLBACK_PX;
+  /** 1행 스냅 상태에서도 목록 스크롤 우선 (맨 위에서 아래로 당길 때만 시트 드래그) */
+  const shouldPreferCardScroll = useCallback(
+    (sb: HTMLDivElement, currentH: number) => {
+      const atSingleRowSnap = currentH <= MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT + 8;
+      return atSingleRowSnap && sb.scrollHeight > sb.clientHeight + 2;
     },
-    [stores]
+    []
   );
 
-  /**
-   * 단일행 스냅 높이는 "행마다 다른 카드 높이" 영향이 없도록
-   * 모든 행 중 최대 높이를 기준으로 고정한다.
-   */
-  const measureRepresentativeRowHeightPx = useCallback(() => {
-    const rowCount = Math.ceil(stores.length / 2);
-    if (rowCount <= 0) return CARD_ROW_FALLBACK_PX;
-
-    let maxRowH = 0;
-    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-      maxRowH = Math.max(maxRowH, measureRowHeightPx(rowIndex));
-    }
-
-    return maxRowH > 0 ? maxRowH : CARD_ROW_FALLBACK_PX;
-  }, [measureRowHeightPx, stores.length]);
-
-  /** 시트가 올라올 높이 = 핸들 + 헤더 + 카드 1행 (목록은 그대로, 잘려 보일 뿐) */
-  const measureSingleRowPanelHeight = useCallback(() => {
-    const headerH = headerSectionRef.current?.offsetHeight ?? 36;
-    const rowH = measureRepresentativeRowHeightPx();
-    const measured = Math.round(PEEK_HEIGHT + headerH + rowH + SINGLE_ROW_VERTICAL_PAD_PX);
-    const capped = Math.min(measured, expandedCap());
-    singleRowHeightRef.current = capped;
-    return capped;
-  }, [expandedCap, measureRepresentativeRowHeightPx]);
-
   const snapToSingleRow = useCallback(() => {
-    const target = measureSingleRowPanelHeight();
+    const target = Math.min(MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT, expandedCap());
     panelHeightRef.current = target;
     setPanelHeight(target);
-  }, [measureSingleRowPanelHeight]);
-
-  const expandThenSnapToSingleRow = useCallback(() => {
-    const cap = expandedCap();
-    panelHeightRef.current = cap;
-    setPanelHeight(cap);
-    requestAnimationFrame(() => {
-      snapToSingleRow();
-    });
-  }, [expandedCap, snapToSingleRow]);
+  }, [expandedCap]);
 
   useEffect(() => {
     if (!showContent) {
@@ -183,16 +151,11 @@ const MapViewBottomSheet = ({
   }, [showContent]);
 
   useEffect(() => {
-    if (!showContent || stores.length === 0) return;
-    measureSingleRowPanelHeight();
-  }, [showContent, stores, measureSingleRowPanelHeight]);
-
-  useEffect(() => {
     const onResize = () => {
       const cap = expandedCap();
       setPanelHeight((h) => Math.min(h, cap));
-      if (Math.abs(panelHeightRef.current - singleRowHeightRef.current) <= 8) {
-        const target = Math.min(measureSingleRowPanelHeight(), cap);
+      if (Math.abs(panelHeightRef.current - MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT) <= 8) {
+        const target = Math.min(MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT, cap);
         panelHeightRef.current = target;
         setPanelHeight(target);
       }
@@ -203,7 +166,7 @@ const MapViewBottomSheet = ({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
     };
-  }, [expandedCap, measureSingleRowPanelHeight]);
+  }, [expandedCap]);
 
   const scrollSelectedStoreRowIntoView = useCallback(() => {
     if (!selectedStoreId || !showContent) return;
@@ -239,19 +202,8 @@ const MapViewBottomSheet = ({
     prevSelectedStoreIdRef.current = selectedStoreId;
     scrollSyncedStoreIdRef.current = null;
 
-    if (panelHeightRef.current <= contentRevealThreshold) {
-      expandThenSnapToSingleRow();
-      return;
-    }
-
     snapToSingleRow();
-  }, [
-    selectedStoreId,
-    highlightSelectedCard,
-    contentRevealThreshold,
-    snapToSingleRow,
-    expandThenSnapToSingleRow,
-  ]);
+  }, [selectedStoreId, highlightSelectedCard, snapToSingleRow]);
 
   // 핀 선택 시에만 해당 행으로 스크롤 (최초 1회)
   useEffect(() => {
@@ -268,6 +220,12 @@ const MapViewBottomSheet = ({
     });
     return () => cancelAnimationFrame(frame);
   }, [selectedStoreId, highlightSelectedCard, showContent, stores, scrollSelectedStoreRowIntoView]);
+
+  useLayoutEffect(() => {
+    if (reportedPanelHeightRef.current === panelHeight) return;
+    reportedPanelHeightRef.current = panelHeight;
+    onPanelHeightChange?.(panelHeight);
+  }, [panelHeight, onPanelHeightChange]);
 
   const maxHeight = Math.max(MIN_EXPANDED, expandedCap());
   maxHeightRef.current = maxHeight;
@@ -343,9 +301,17 @@ const MapViewBottomSheet = ({
     const isSheetNotFull = currentH < maxH - 2;
     const isAtTop = sb.scrollTop <= 1;
     const draggingDown = dyFromStart > 0;
+    const preferCardScroll = shouldPreferCardScroll(sb, currentH);
 
     if (g.mode === "pending") {
-      if (isSheetNotFull) {
+      if (preferCardScroll) {
+        if (isAtTop && draggingDown) {
+          g.mode = "sheet";
+          startDrag(g.startY);
+        } else {
+          g.mode = "scroll";
+        }
+      } else if (isSheetNotFull) {
         g.mode = "sheet";
         dragRef.current = {
           startY: g.startY,
@@ -395,7 +361,7 @@ const MapViewBottomSheet = ({
     const startedPeek = startH <= PEEK_HEIGHT + 2;
 
     if (startedPeek && h >= startH + SLIGHT_EXPAND_FROM_PEEK_PX) {
-      expandThenSnapToSingleRow();
+      snapToSingleRow();
       return;
     }
 
@@ -406,7 +372,7 @@ const MapViewBottomSheet = ({
       return;
     }
 
-    const singleRow = singleRowHeightRef.current;
+    const singleRow = Math.min(MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT, max);
     const peekMid = (PEEK_HEIGHT + singleRow) / 2;
     const expandMid = (singleRow + max) / 2;
 
@@ -521,11 +487,17 @@ const MapViewBottomSheet = ({
 
       const isSheetNotFull = currentH < max - 2;
       const isAtTop = sb.scrollTop <= 1;
-
       const draggingDown = totalDy > 0;
+      const preferCardScroll = shouldPreferCardScroll(sb, currentH);
 
       if (mode === "idle") {
-        if (isSheetNotFull) {
+        if (preferCardScroll) {
+          if (isAtTop && draggingDown) {
+            startSheetDrag(startY, startH);
+          } else {
+            mode = "scroll";
+          }
+        } else if (isSheetNotFull) {
           startSheetDrag(startY, startH);
         } else if (isAtTop && draggingDown) {
           startSheetDrag(startY, startH);
@@ -576,7 +548,7 @@ const MapViewBottomSheet = ({
       sb.removeEventListener("touchend", onTouchEnd);
       sb.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [showContent]);
+  }, [showContent, shouldPreferCardScroll]);
 
   return (
     <div
@@ -600,31 +572,42 @@ const MapViewBottomSheet = ({
         aria-valuenow={Math.round(panelHeight)}
         aria-label={dragHint}
         className={cn(
-          "flex h-[60px] shrink-0 cursor-grab touch-none flex-col items-center justify-center px-2 py-1.5 active:cursor-grabbing",
-          showContent && "border-b border-border/50"
+          "flex shrink-0 cursor-grab touch-none flex-col items-center justify-center px-2 active:cursor-grabbing",
+          showContent
+            ? "h-4 py-1"
+            : "h-[60px] py-1.5"
         )}
         onPointerDown={onPointerDownHandle}
         onPointerMove={onPointerMoveHandle}
         onPointerUp={onPointerUpHandle}
         onPointerCancel={onPointerUpHandle}
       >
-        <div className="mb-0.5 h-1 w-10 rounded-full bg-muted-foreground/35" />
-        <GripHorizontal className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden />
-        <AutoFitMarquee
-          as="p"
-          text={dragHint}
-          className="mt-0.5 w-full"
-          textClassName="text-center text-muted-foreground"
-          fontSizeClasses={["text-[10px]"]}
+        <div
+          className={cn(
+            "h-1 w-10 shrink-0 rounded-full bg-muted-foreground/35",
+            !showContent && "mb-0.5"
+          )}
         />
+        {!showContent && (
+          <>
+            <GripHorizontal
+              className="h-4 w-4 shrink-0 text-muted-foreground/70"
+              aria-hidden
+            />
+            <AutoFitMarquee
+              as="p"
+              text={dragHint}
+              className="mt-0.5 w-full"
+              textClassName="text-center text-muted-foreground"
+              fontSizeClasses={["text-[10px]"]}
+            />
+          </>
+        )}
       </div>
 
       {showContent && (
         <>
-          <div
-            ref={headerSectionRef}
-            className="flex shrink-0 items-center justify-between px-3 pb-1 pt-1"
-          >
+          <div className="flex h-10 shrink-0 items-center justify-between px-3">
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
             <div className="flex items-center gap-2">
               <button
@@ -645,8 +628,8 @@ const MapViewBottomSheet = ({
           <div
             ref={scrollBodyRef}
             className={cn(
-              "scrollbar-show min-h-0 flex-1 overflow-y-auto overscroll-contain px-3",
-              isSingleRowPanel ? "py-2 pb-2" : "pb-3"
+              "scrollbar-show min-h-0 overflow-y-auto overscroll-contain px-3",
+              isSingleRowPanel ? "h-[256px] shrink-0 py-2" : "flex-1 pb-3"
             )}
             style={{
               WebkitOverflowScrolling: "touch",

@@ -9,85 +9,73 @@ import { toast } from "sonner";
 import { recognizeGifticon } from "@/lib/gifticonRecognition";
 import { useCreateRecognitionJob, useUpdateRecognitionJob } from "@/hooks/use-recognition-jobs";
 import { useAuth } from "@/contexts/AuthContext";
-
 const Sell = () => {
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [currentJobId, setCurrentJobId] = useState<string | undefined>();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
-  const createJob = useCreateRecognitionJob();
-  const updateJob = useUpdateRecognitionJob(currentJobId);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
-
-    await processImage(file);
-  };
-
-  const processImage = async (file: File) => {
-    if (!user) {
-      toast.error("세션이 필요합니다. 페이지를 새로고침해주세요.");
-      return;
-    }
-    try {
-      setIsProcessing(true);
-
-      // 1. Base64 변환
-      const base64Image = await new Promise<string>((resolve, reject) => {
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [currentJobId, setCurrentJobId] = useState<string | undefined>();
+    const navigate = useNavigate();
+    const { user } = useAuth();
+    const createJob = useCreateRecognitionJob();
+    const updateJob = useUpdateRecognitionJob(currentJobId);
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file)
+            return;
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
+        reader.onloadend = () => setImagePreview(reader.result as string);
         reader.readAsDataURL(file);
-      });
-
-      // 2. 인식 작업 생성
-      const job = await createJob.mutateAsync();
-      setCurrentJobId(job.id);
-      localStorage.setItem(`gifticon_image_${job.id}`, base64Image);
-
-      // 3. 이미지 인식
-      const recognitionResult = await recognizeGifticon(file);
-
-      // 4. 인식 결과 업데이트
-      await updateJob.mutateAsync({
-        status: "completed",
-        recognition_result: recognitionResult,
-        completed_at: new Date().toISOString(),
-      });
-
-      localStorage.setItem("pending_recognition_job_id", job.id);
-      navigate(`/sell/result/${job.id}`);
-      toast.success("이미지 인식이 완료되었습니다!");
-    } catch (error: any) {
-      console.error("이미지 처리 오류:", error);
-      toast.error(error.message || "이미지 처리 중 오류가 발생했습니다.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-background pb-20">
+        await processImage(file);
+    };
+    const processImage = async (file: File) => {
+        if (!user) {
+            toast.error("세션이 필요합니다. 페이지를 새로고침해주세요.");
+            return;
+        }
+        try {
+            setIsProcessing(true);
+            // 1. Base64 변환
+            const base64Image = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            // 2. 인식 작업 생성
+            const job = await createJob.mutateAsync();
+            setCurrentJobId(job.id);
+            localStorage.setItem(`gifticon_image_${job.id}`, base64Image);
+            // 3. 이미지 인식
+            const recognitionResult = await recognizeGifticon(file);
+            // 4. 인식 결과 업데이트
+            await updateJob.mutateAsync({
+                status: "completed",
+                recognition_result: recognitionResult,
+                completed_at: new Date().toISOString(),
+            });
+            localStorage.setItem("pending_recognition_job_id", job.id);
+            navigate(`/sell/result/${job.id}`);
+            toast.success("이미지 인식이 완료되었습니다!");
+        }
+        catch (error: any) {
+            toast.error(error.message || "이미지 처리 중 오류가 발생했습니다.");
+        }
+        finally {
+            setIsProcessing(false);
+        }
+    };
+    return (<div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-40 bg-card border-b border-border">
         <div className="max-w-md mx-auto px-4 py-4 flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0">
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5"/>
           </Button>
           <h1 className="text-xl font-bold">기프티콘 판매</h1>
         </div>
       </header>
 
       <main className="max-w-md mx-auto px-4 py-6">
-        {isProcessing ? (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
-            <Loader2 className="w-16 h-16 text-primary animate-spin" />
+        {isProcessing ? (<div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+            <Loader2 className="w-16 h-16 text-primary animate-spin"/>
             <div className="text-center space-y-2">
               <p className="text-lg font-semibold">이미지 인식중입니다.</p>
               <p className="text-muted-foreground">인식이 끝나면 알려드릴게요</p>
@@ -95,37 +83,26 @@ const Sell = () => {
             <Button onClick={() => navigate("/main")} variant="outline" className="mt-4">
               메인으로 이동
             </Button>
-          </div>
-        ) : (
-          <div className="space-y-6">
+          </div>) : (<div className="space-y-6">
             <div>
               <Label htmlFor="image" className="text-base font-semibold mb-3 block">기프티콘 이미지</Label>
               <Card className="border-2 border-dashed border-border hover:border-primary transition-colors cursor-pointer">
                 <label htmlFor="image" className="cursor-pointer">
                   <div className="aspect-video flex flex-col items-center justify-center p-8 relative">
-                    {imagePreview ? (
-                      <img src={imagePreview} alt="Preview" className="max-h-full max-w-full object-contain" />
-                    ) : (
-                      <>
-                        <Upload className="w-12 h-12 text-muted-foreground mb-4" />
+                    {imagePreview ? (<img src={imagePreview} alt="Preview" className="max-h-full max-w-full object-contain"/>) : (<>
+                        <Upload className="w-12 h-12 text-muted-foreground mb-4"/>
                         <p className="text-muted-foreground text-center">이미지를 업로드하세요</p>
-                      </>
-                    )}
+                      </>)}
                   </div>
                 </label>
-                <input id="image" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isProcessing} />
+                <input id="image" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isProcessing}/>
               </Card>
-              {imagePreview && (
-                <p className="text-sm text-muted-foreground mt-2 text-center">이미지를 업로드하면 자동으로 인식됩니다</p>
-              )}
+              {imagePreview && (<p className="text-sm text-muted-foreground mt-2 text-center">이미지를 업로드하면 자동으로 인식됩니다</p>)}
             </div>
-          </div>
-        )}
+          </div>)}
       </main>
 
       <BottomNav />
-    </div>
-  );
+    </div>);
 };
-
 export default Sell;

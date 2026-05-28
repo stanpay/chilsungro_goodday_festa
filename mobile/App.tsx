@@ -211,14 +211,12 @@ export default function App() {
 
   const handleError = (syntheticEvent: any) => {
     const { nativeEvent } = syntheticEvent;
-    console.error('WebView error: ', nativeEvent);
     setError('페이지를 불러오는 중 오류가 발생했습니다.');
     setLoading(false);
   };
 
   const handleHttpError = (syntheticEvent: any) => {
     const { nativeEvent } = syntheticEvent;
-    console.error('WebView HTTP error: ', nativeEvent);
     if (nativeEvent.statusCode >= 400) {
       setError(`서버 오류가 발생했습니다. (${nativeEvent.statusCode})`);
     }
@@ -292,7 +290,6 @@ export default function App() {
         }
       };
     } catch (error: any) {
-      console.error('위치 정보 가져오기 실패:', error);
       return {
         success: false,
         error: 'POSITION_UNAVAILABLE',
@@ -307,40 +304,8 @@ export default function App() {
       const message = JSON.parse(event.nativeEvent.data);
       
       if (message.type === 'WEB_CONSOLE') {
-        const level = typeof message.level === 'string' ? message.level.toLowerCase() : 'log';
-        const payload = Array.isArray(message.payload) ? message.payload : [];
-        const fallbackMessage = typeof message.message === 'string' ? message.message : '';
-        const parts = payload.map((item) => {
-          if (typeof item === 'string') return item;
-          if (item instanceof Error) return item.stack || item.message;
-          try {
-            return JSON.stringify(item);
-          } catch {
-            return String(item);
-          }
-        });
-        if (!parts.length && fallbackMessage) {
-          parts.push(fallbackMessage);
-        }
-        
-        switch (level) {
-          case 'info':
-            console.info('[WEB]', ...parts);
-            break;
-          case 'warn':
-            console.warn('[WEB]', ...parts);
-            break;
-          case 'error':
-            console.error('[WEB]', ...parts);
-            break;
-          case 'debug':
-            console.debug('[WEB]', ...parts);
-            break;
-          default:
-            console.log('[WEB]', ...parts);
-        }
+        // no-op
       } else if (message.type === 'REQUEST_LOCATION') {
-        console.log('📍 [React Native] 위치 정보 요청 받음');
         const locationResult = await getCurrentLocation();
         
         // 결과를 WebView로 전송
@@ -352,7 +317,6 @@ export default function App() {
         webViewRef.current?.postMessage(response);
       } else if (message.type === 'PAGE_LOADED') {
         // 페이지 로드 완료 메시지 수신 시 로딩 상태 해제
-        console.log('✅ [React Native] 페이지 로드 완료 메시지 수신');
         if (loadEndTimeoutRef.current) {
           clearTimeout(loadEndTimeoutRef.current);
         }
@@ -362,11 +326,9 @@ export default function App() {
         }, 200);
       } else if (message.type === 'HAS_BACK_BUTTON') {
         // 웹 앱에서 뒤로가기 버튼 존재 여부 수신
-        console.log('🔙 [React Native] 뒤로가기 버튼 존재 여부:', message.hasBackButton);
         setHasBackButton(message.hasBackButton || false);
       } else if (message.type === 'LOAD_STORAGE_DATA') {
         // AsyncStorage에서 모든 위치 관련 데이터 로드하여 WebView에 전송
-        console.log('💾 [React Native] AsyncStorage 데이터 로드 요청');
         const loadStorageData = async () => {
           try {
             const keys = [
@@ -382,7 +344,6 @@ export default function App() {
             for (const key of keys) {
               const value = await AsyncStorage.getItem(key);
               data[key] = value;
-              console.log(`📖 [AsyncStorage] ${key}:`, value);
             }
 
             // WebView에 데이터 전송
@@ -398,37 +359,28 @@ export default function App() {
                 }
               })();
             `);
-
-            console.log('✅ [React Native] AsyncStorage 데이터 WebView에 전송 완료');
           } catch (error) {
-            console.error('❌ [React Native] AsyncStorage 데이터 로드 실패:', error);
           }
         };
         loadStorageData();
       } else if (message.type === 'SAVE_STORAGE_DATA') {
         // AsyncStorage에 데이터 저장
-        console.log('💾 [React Native] AsyncStorage 데이터 저장:', message.key, '=', message.value);
         const saveStorageData = async () => {
           try {
             if (message.value === null || message.value === undefined) {
               await AsyncStorage.removeItem(message.key);
-              console.log(`🗑️ [AsyncStorage] ${message.key} 삭제됨`);
             } else {
               await AsyncStorage.setItem(message.key, String(message.value));
-              console.log(`💾 [AsyncStorage] ${message.key} 저장됨:`, message.value);
             }
           } catch (error) {
-            console.error('❌ [React Native] AsyncStorage 데이터 저장 실패:', error);
           }
         };
         saveStorageData();
       } else if (message.type === 'GET_STORAGE_DATA') {
         // AsyncStorage에서 특정 키의 데이터 조회하여 WebView에 전송
-        console.log('📖 [React Native] AsyncStorage 데이터 조회:', message.key);
         const getStorageData = async () => {
           try {
             const value = await AsyncStorage.getItem(message.key);
-            console.log(`📖 [AsyncStorage] ${message.key}:`, value);
 
             webViewRef.current?.injectJavaScript(`
               (function() {
@@ -438,13 +390,11 @@ export default function App() {
               })();
             `);
           } catch (error) {
-            console.error('❌ [React Native] AsyncStorage 데이터 조회 실패:', error);
           }
         };
         getStorageData();
       }
     } catch (error) {
-      console.error('메시지 처리 오류:', error);
     }
   };
 
@@ -542,71 +492,23 @@ export default function App() {
 
         // AsyncStorage에서 로드된 데이터를 localStorage에 설정하는 함수
         window.receiveStorageData = function(data) {
-          console.log('📨 [WebView] AsyncStorage 데이터 수신:', data);
           Object.keys(data).forEach(key => {
             const value = data[key];
             if (value !== null && value !== undefined) {
               localStorage.setItem(key, String(value));
-              console.log(`💾 [WebView] localStorage에 복원: ${key} = ${value}`);
             }
           });
-          console.log('✅ [WebView] AsyncStorage 데이터 localStorage 복원 완료');
         };
 
         // AsyncStorage에서 조회된 개별 데이터를 localStorage에 설정하는 함수
         window.receiveStorageValue = function(key, value) {
-          console.log(`📨 [WebView] AsyncStorage 개별 데이터 수신: ${key} = ${value}`);
           if (value !== null && value !== undefined) {
             localStorage.setItem(key, String(value));
-            console.log(`💾 [WebView] localStorage에 복원: ${key} = ${value}`);
           }
         };
 
         // 초기 로드 시 AsyncStorage에서 데이터 복원
         loadFromAsyncStorage();
-
-        console.log('✅ [localStorage 브리징] AsyncStorage 연동 설정 완료');
-      })();
-      
-      // 웹 콘솔 로그를 React Native로 브릿징
-      (function() {
-        const originalConsole = { ...console };
-        const levels = ['log', 'info', 'warn', 'error', 'debug'];
-        
-        function serialize(value) {
-          if (typeof value === 'string') return value;
-          if (value instanceof Error) return value.stack || value.message;
-          try {
-            return JSON.stringify(value);
-          } catch (err) {
-            try {
-              return String(value);
-            } catch {
-              return '[Unserializable]';
-            }
-          }
-        }
-        
-        levels.forEach((level) => {
-          const original = originalConsole[level] || originalConsole.log;
-          console[level] = function(...args) {
-            // 원래 콘솔 호출
-            original.apply(console, args);
-            
-            // React Native로 전달
-            try {
-              if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'WEB_CONSOLE',
-                  level,
-                  payload: args.map(serialize)
-                }));
-              }
-            } catch (err) {
-              originalConsole.warn('콘솔 브릿지 실패:', err);
-            }
-          };
-        });
       })();
       
       // User-Agent를 모바일로 설정 (카카오 OAuth 인식용)
@@ -713,8 +615,6 @@ export default function App() {
         };
       }
       
-      console.log('✅ [React Native] 위치 서비스 초기화 완료');
-      
       // 뒤로가기 버튼 존재 여부 확인 함수
       function checkBackButton() {
         try {
@@ -793,7 +693,6 @@ export default function App() {
             }));
           }
         } catch (error) {
-          console.error('뒤로가기 버튼 확인 오류:', error);
           // 오류 발생 시 기본값으로 false 전송
           if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
             window.ReactNativeWebView.postMessage(JSON.stringify({

@@ -681,11 +681,10 @@ interface StoreData {
   const bumpMapFocusRef = useRef<() => void>(() => {});
   const mapOverlaysReadyRef = useRef(false);
   const mapClusteringEnabledRef = useRef(false);
-  const clusterExpansionFocusRef = useRef<string[] | null>(null);
-  const mapStoreFocusPinRef = useRef<string | null>(null);
+  /** 클러스터/spiderfy 레이아웃이 적용된 zoom — 같은 zoom에서는 pan만으로 재계산하지 않음 */
+  const lastClusterLayoutZoomRef = useRef<number | null>(null);
   const activeClusterExpansionRef = useRef<{ memberIds: string[]; centroid: any } | null>(null);
   const clusterExpansionSessionRef = useRef(0);
-  const lastClusterUpdateZoomRef = useRef<number | null>(null);
   const mapBootstrapFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rebuildStoreOverlaysTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const myLocationMarkerRef = useRef<any>(null);
@@ -2451,17 +2450,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           const sessionId = ++mapStoreFocusSessionRef.current;
           clusterExpansionSessionRef.current += 1;
           activeClusterExpansionRef.current = null;
-          clusterExpansionFocusRef.current = null;
 
           const coord = new naver.maps.LatLng(store.lat!, store.lon!);
           const isActive = () =>
             !isCancelled && mapStoreFocusSessionRef.current === sessionId;
-
-          /** pan/focus 직후 같은 zoom에서 idle → updateClusters로 핀 위치가 바뀌는 것 방지 */
-          const lockClusterLayoutAtCurrentZoom = () => {
-            mapStoreFocusPinRef.current = storeId;
-            lastClusterUpdateZoomRef.current = map.getZoom();
-          };
 
           const finish = () => {
             if (!isActive()) return;
@@ -2479,7 +2471,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 selectedMarker
               );
               applySelectedPinStylesRef.current();
-              lockClusterLayoutAtCurrentZoom();
             });
           };
 
@@ -2513,7 +2504,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             });
           };
 
-          lockClusterLayoutAtCurrentZoom();
           map.setCenter(coord);
           applySelectedPinStylesRef.current();
 
@@ -2535,8 +2525,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         const expandCluster = (memberIds: string[], centroid: any) => {
           const sessionId = ++clusterExpansionSessionRef.current;
           activeClusterExpansionRef.current = { memberIds, centroid };
-          clusterExpansionFocusRef.current = null;
-          lastClusterUpdateZoomRef.current = null;
 
           const isActive = () =>
             !isCancelled && clusterExpansionSessionRef.current === sessionId;
@@ -2544,8 +2532,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           const finishExpansion = () => {
             if (!isActive()) return;
             activeClusterExpansionRef.current = null;
-            clusterExpansionFocusRef.current = [...memberIds];
-            lastClusterUpdateZoomRef.current = map.getZoom();
             updateClusters();
           };
 
@@ -2616,8 +2602,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           const allPins = storeMarkersRef.current;
           if (!allPins.length) return;
 
+          const commitClusterLayout = () => {
+            lastClusterLayoutZoomRef.current = map.getZoom();
+          };
+
           if (!mapClusteringEnabledRef.current) {
             showAllStoreMarkers();
+            commitClusterLayout();
             return;
           }
 
@@ -2634,6 +2625,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               }, 80);
             } else {
               showAllStoreMarkers();
+              commitClusterLayout();
             }
             return;
           }
@@ -2666,6 +2658,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               }, 80);
             } else {
               showAllStoreMarkers();
+              commitClusterLayout();
             }
             return;
           }
@@ -2698,6 +2691,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 spreadClusterMarkers(cluster);
               }
             });
+            commitClusterLayout();
             return;
           }
 
@@ -2711,6 +2705,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               addClusterBubble(cluster);
             }
           });
+          commitClusterLayout();
         };
 
         const applyPinsToMap = () => {
@@ -2718,9 +2713,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           clusterRetryCount = 0;
           mapClusteringEnabledRef.current = false;
           activeClusterExpansionRef.current = null;
-          clusterExpansionFocusRef.current = null;
-          mapStoreFocusPinRef.current = null;
-          lastClusterUpdateZoomRef.current = null;
+          lastClusterLayoutZoomRef.current = null;
 
           syncStorePinsToMap();
           updateStoreLabels();
@@ -2748,9 +2741,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             clusterRetryCount = 0;
             mapClusteringEnabledRef.current = false;
             activeClusterExpansionRef.current = null;
-            clusterExpansionFocusRef.current = null;
-            mapStoreFocusPinRef.current = null;
-            lastClusterUpdateZoomRef.current = null;
+            lastClusterLayoutZoomRef.current = null;
             syncStorePinsToMap();
             updateStoreLabels();
             applySelectedPinStylesRef.current();
@@ -2781,22 +2772,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             return;
           }
           if (activeClusterExpansionRef.current) return;
-          if (mapClusteringEnabledRef.current) {
-            const zoom = map.getZoom();
-            const skipClusterUpdateAtSameZoom =
-              lastClusterUpdateZoomRef.current !== null &&
-              Math.abs(zoom - lastClusterUpdateZoomRef.current) < 1e-6 &&
-              (!!clusterExpansionFocusRef.current || !!mapStoreFocusPinRef.current);
-            if (skipClusterUpdateAtSameZoom) return;
-            if (
-              lastClusterUpdateZoomRef.current !== null &&
-              Math.abs(zoom - lastClusterUpdateZoomRef.current) >= 1e-6
-            ) {
-              mapStoreFocusPinRef.current = null;
-            }
-            lastClusterUpdateZoomRef.current = zoom;
-            updateClusters();
+          if (!mapClusteringEnabledRef.current) return;
+          const zoom = map.getZoom();
+          if (
+            lastClusterLayoutZoomRef.current !== null &&
+            Math.abs(zoom - lastClusterLayoutZoomRef.current) < 1e-6
+          ) {
+            return;
           }
+          updateClusters();
         };
 
         naver.maps.Event.addListener(map, "idle", onMapIdle);
@@ -2827,9 +2811,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       mapOverlaysReadyRef.current = false;
       mapClusteringEnabledRef.current = false;
       activeClusterExpansionRef.current = null;
-      clusterExpansionFocusRef.current = null;
-      mapStoreFocusPinRef.current = null;
-      lastClusterUpdateZoomRef.current = null;
+      lastClusterLayoutZoomRef.current = null;
       rebuildStoreOverlaysRef.current = null;
       fitMapToStoresRef.current = null;
       focusStoreOnMapRef.current = () => {};

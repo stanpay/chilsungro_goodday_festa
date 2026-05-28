@@ -2,47 +2,34 @@ import { useState } from "react";
 import { getBrowserPosition } from "@/lib/geolocation";
 import { MapPin, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, } from "@/components/ui/dialog";
 interface LocationPermissionModalProps {
-  open: boolean;
-  onGranted: (coords: { latitude: number; longitude: number }) => void;
-  onDenied?: () => void;
+    open: boolean;
+    onGranted: (coords: {
+        latitude: number;
+        longitude: number;
+    }) => void;
+    onDenied?: () => void;
 }
-
 const LocationPermissionModal = ({ open, onGranted, onDenied }: LocationPermissionModalProps) => {
-  const [status, setStatus] = useState<"idle" | "loading" | "denied">("idle");
-
-  const handleAllow = async () => {
-    setStatus("loading");
-    try {
-      const coords = await getBrowserPosition();
-      setStatus("idle");
-      onGranted(coords);
-    } catch (err) {
-      console.warn("위치 권한 거부 또는 타임아웃:", err);
-      setStatus("denied");
-      onDenied?.();
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent
-        className="sm:max-w-sm"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        hideClose
-      >
+    const [status, setStatus] = useState<"idle" | "loading" | "denied">("idle");
+    const handleAllow = async () => {
+        setStatus("loading");
+        try {
+            const coords = await getBrowserPosition();
+            setStatus("idle");
+            onGranted(coords);
+        }
+        catch (err) {
+            setStatus("denied");
+            onDenied?.();
+        }
+    };
+    return (<Dialog open={open} onOpenChange={() => { }}>
+      <DialogContent className="sm:max-w-sm" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()} hideClose>
         <DialogHeader className="items-center gap-3 pt-2">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-            <MapPin className="h-7 w-7 text-primary" />
+            <MapPin className="h-7 w-7 text-primary"/>
           </div>
           <DialogTitle className="text-center text-lg font-bold">
             위치 권한이 필요합니다
@@ -54,26 +41,18 @@ const LocationPermissionModal = ({ open, onGranted, onDenied }: LocationPermissi
           </DialogDescription>
         </DialogHeader>
 
-        {status === "denied" && (
-          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        {status === "denied" && (<div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>
             <span>
               위치 권한이 거부되었습니다. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 위치
               권한을 허용한 뒤 새로고침해 주세요.
             </span>
-          </div>
-        )}
+          </div>)}
 
-        <Button
-          className="w-full"
-          onClick={handleAllow}
-          disabled={status === "loading" || status === "denied"}
-        >
+        <Button className="w-full" onClick={handleAllow} disabled={status === "loading" || status === "denied"}>
           {status === "loading" ? "확인 중…" : "위치 허용하기"}
         </Button>
       </DialogContent>
-    </Dialog>
-  );
+    </Dialog>);
 };
-
 export default LocationPermissionModal;
