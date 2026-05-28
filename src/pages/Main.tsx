@@ -81,8 +81,16 @@ const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
 /** 위치를 알 수 없을 때 매장 목록을 불러오는 기본 좌표 (제주 원도심) */
 const JEJU_DOWNTOWN_COORDS = { latitude: 33.5098, longitude: 126.5219 };
 const MAP_MAX_ZOOM = 21;
-/** 지도 축척 ~100m 이상(가까이)에서는 클러스터링하지 않음 */
-const MAP_CLUSTER_CUTOFF_ZOOM = 17;
+
+function getMapMaxZoom(map: { getMaxZoom?: () => number }): number {
+  const max = map.getMaxZoom?.();
+  if (typeof max === "number" && Number.isFinite(max)) return max;
+  return MAP_MAX_ZOOM;
+}
+
+function isMapAtMaxZoom(map: { getMaxZoom?: () => number; getZoom: () => number }): boolean {
+  return map.getZoom() >= getMapMaxZoom(map) - 1e-6;
+}
 const MAP_SPIDERFY_RADIUS_PX = 32;
 const MAP_SPIDERFY_MAX_RADIUS_PX = 96;
 const MAP_VIEW_PADDING = { top: 100, right: 48, bottom: 220, left: 48 };
@@ -498,18 +506,28 @@ interface StoreData {
   const [mapFilteredStores, setMapFilteredStores] = useState<any[] | null>(null);
   const allFetchedStoresRef = useRef<any[]>([]);
   const fetchNearbyStoresRef = useRef<
-    ((latitude: number, longitude: number, options?: { sortAlphabetically?: boolean }) => Promise<void>) | null
+    ((
+      latitude: number,
+      longitude: number,
+      options?: { sortAlphabetically?: boolean; bootstrap?: boolean }
+    ) => Promise<void>) | null
   >(null);
-  const fallbackStoresLoadStartedRef = useRef(false);
+  const storesFetchGenerationRef = useRef(0);
+  const jejuPreloadStartedRef = useRef(false);
 
-  const loadFallbackStores = () => {
-    if (fallbackStoresLoadStartedRef.current) return;
-    fallbackStoresLoadStartedRef.current = true;
+  const preloadJejuStores = () => {
+    if (jejuPreloadStartedRef.current) return;
+    jejuPreloadStartedRef.current = true;
     void fetchNearbyStoresRef.current?.(
       JEJU_DOWNTOWN_COORDS.latitude,
       JEJU_DOWNTOWN_COORDS.longitude,
-      { sortAlphabetically: true }
+      { sortAlphabetically: true, bootstrap: true }
     );
+  };
+
+  const ensureJejuStores = () => {
+    if (allFetchedStoresRef.current.length > 0) return;
+    preloadJejuStores();
   };
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
@@ -749,7 +767,7 @@ interface StoreData {
             localStorage.removeItem("isManualLocation");
             setIsManualLocation(false);
             setCurrentLocation(LOCATION_FETCH_FAILED_KO);
-            loadFallbackStores();
+            ensureJejuStores();
           }
         }
       } else if (isManualLocationValue && !savedLocation) {
@@ -772,7 +790,7 @@ interface StoreData {
             setShowLocationPermModal(true);
             setIsLoadingLocation(false);
             setCurrentLocation(LOCATION_FETCH_FAILED_KO);
-            loadFallbackStores();
+            ensureJejuStores();
             return; // 모달에서 허용 후 onGranted 콜백으로 이어짐
           }
         } catch {
@@ -810,7 +828,7 @@ interface StoreData {
         clearAutoSavedLocation();
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
         setIsLoadingLocation(false);
-        loadFallbackStores();
+        ensureJejuStores();
         return;
       }
 
@@ -830,7 +848,7 @@ interface StoreData {
           console.warn("⚠️ [위치 권한] 사용자가 위치 권한을 거부했습니다");
           setCurrentLocation(LOCATION_FETCH_FAILED_KO);
           setIsLoadingLocation(false);
-          loadFallbackStores();
+          ensureJejuStores();
           toast({
             title: "위치 권한 필요",
             description: "위치 권한을 허용하면 자동으로 현재 위치가 설정됩니다.",
@@ -841,7 +859,7 @@ interface StoreData {
 
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
         setIsLoadingLocation(false);
-        loadFallbackStores();
+        ensureJejuStores();
         toast({
           title: "위치를 불러올 수 없습니다",
           description: "현재 위치를 확인하지 못했습니다. 상단에서 위치를 직접 설정해 주세요.",
@@ -899,7 +917,7 @@ interface StoreData {
         clearAutoSavedLocation();
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
         setIsLoadingLocation(false);
-        loadFallbackStores();
+        ensureJejuStores();
 
         toast({
           title: "위치 업데이트 실패",
@@ -910,7 +928,7 @@ interface StoreData {
       }
     } else {
       setIsLoadingLocation(false);
-      loadFallbackStores();
+      ensureJejuStores();
       toast({
         title: "위치 서비스 미지원",
         description: "이 환경에서는 위치를 가져올 수 없습니다.",
@@ -955,15 +973,18 @@ interface StoreData {
       clearAutoSavedLocation();
       setCurrentLocation(LOCATION_FETCH_FAILED_KO);
       setIsLoadingLocation(false);
-      loadFallbackStores();
+      ensureJejuStores();
     }
   };
 
   const fetchNearbyStores = async (
     latitude: number,
     longitude: number,
-    options?: { sortAlphabetically?: boolean }
+    options?: { sortAlphabetically?: boolean; bootstrap?: boolean }
   ) => {
+    const generation = ++storesFetchGenerationRef.current;
+    const isStale = () => generation !== storesFetchGenerationRef.current;
+
     try {
       setIsLoadingStores(true);
       setShowResearchButton(false);
@@ -1273,6 +1294,7 @@ interface StoreData {
       console.log("✅ [할인 정보 조회] 초기 8개 완료");
       
       // 초기 8개 먼저 표시
+      if (isStale()) return;
       setStores(initialStoresWithDiscount);
       allFetchedStoresRef.current = initialStoresWithDiscount;
       setIsLoadingStores(false);
@@ -1493,6 +1515,7 @@ interface StoreData {
         // 전체 매장 데이터 합치기
         const allStoresWithDiscount = [...initialStoresWithDiscount, ...remainingStoresWithDiscount];
 
+        if (isStale()) return;
         setStores(allStoresWithDiscount);
         allFetchedStoresRef.current = allStoresWithDiscount;
         setIsLoadingMoreStores(false);
@@ -1501,10 +1524,12 @@ interface StoreData {
     } catch (error) {
       console.error("❌ [매장 검색] 실패:", error);
       console.error("에러 스택:", (error as Error).stack);
-      if (options?.sortAlphabetically) {
-        fallbackStoresLoadStartedRef.current = false;
+      if (options?.bootstrap) {
+        jejuPreloadStartedRef.current = false;
       }
-      setIsLoadingStores(false);
+      if (!isStale()) {
+        setIsLoadingStores(false);
+      }
       toast({
         title: "매장 정보 로딩 실패",
         description: "매장 정보를 불러오는데 실패했습니다.",
@@ -1515,11 +1540,27 @@ interface StoreData {
 
   fetchNearbyStoresRef.current = fetchNearbyStores;
 
-  // 위치 조회와 무관하게, 위치 없이 화면에 남았을 때 매장 목록 보장
+  // /main 진입 즉시 제주 시내 기준 매장·핀 선로딩 (수동 좌표 저장 시는 제외)
   useEffect(() => {
-    if (isLoadingLocation || currentCoords || stores.length > 0) return;
-    loadFallbackStores();
-  }, [isLoadingLocation, currentCoords, stores.length]);
+    const isManual = localStorage.getItem("isManualLocation") === "true";
+    const savedCoordsRaw = localStorage.getItem("currentCoordinates");
+    if (isManual && savedCoordsRaw) {
+      try {
+        const { latitude, longitude } = JSON.parse(savedCoordsRaw);
+        if (
+          typeof latitude === "number" &&
+          typeof longitude === "number" &&
+          !isNaN(latitude) &&
+          !isNaN(longitude)
+        ) {
+          return;
+        }
+      } catch {
+        /* 주소 검색 등으로 이어짐 — 제주 선로딩 유지 */
+      }
+    }
+    preloadJejuStores();
+  }, []);
 
   mapPinLabelsRef.current = mapPinLabels;
 
@@ -2058,13 +2099,18 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           let expandStepCount = 0;
           const MAX_EXPAND_STEPS = 16;
 
+          const spreadClusterMembers = () => {
+            const memberIdSet = new Set(memberIds);
+            const members = storeMarkersRef.current.filter(({ id }) => memberIdSet.has(id));
+            spreadClusterMarkers(members);
+            fitClusterMembersInView(memberIds, MAP_SPIDERFY_MAX_RADIUS_PX + 24);
+            naver.maps.Event.once(map, "idle", () => {
+              if (!isCancelled) updateClusters();
+            });
+          };
+
           const finishOrContinue = () => {
             if (isCancelled) return;
-            if (expandStepCount >= MAX_EXPAND_STEPS) {
-              updateClusters();
-              return;
-            }
-            expandStepCount += 1;
 
             const separated = !memberLabelsOverlap(memberIds);
             const inView = allMemberLabelsInView(memberIds);
@@ -2079,20 +2125,28 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               return;
             }
 
-            if (map.getZoom() >= MAP_MAX_ZOOM) {
-              const idSet = new Set(memberIds);
-              const members = storeMarkersRef.current.filter(({ id }) => idSet.has(id));
-              spreadClusterMarkers(members);
-              fitClusterMembersInView(memberIds, MAP_SPIDERFY_MAX_RADIUS_PX + 24);
-              naver.maps.Event.once(map, "idle", () => {
-                if (!isCancelled) updateClusters();
-              });
+            if (isMapAtMaxZoom(map)) {
+              spreadClusterMembers();
               return;
             }
 
-            map.setZoom(Math.min(MAP_MAX_ZOOM, map.getZoom() + 1));
+            expandStepCount += 1;
+            if (expandStepCount >= MAX_EXPAND_STEPS) {
+              spreadClusterMembers();
+              return;
+            }
+
+            const prevZoom = map.getZoom();
+            map.setZoom(Math.min(getMapMaxZoom(map), prevZoom + 1));
             map.setCenter(centroid);
-            naver.maps.Event.once(map, "idle", finishOrContinue);
+            naver.maps.Event.once(map, "idle", () => {
+              if (isCancelled) return;
+              if (map.getZoom() <= prevZoom) {
+                spreadClusterMembers();
+                return;
+              }
+              finishOrContinue();
+            });
           };
 
           map.setCenter(centroid);
@@ -2160,14 +2214,22 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             return;
           }
           clusterRetryCount = 0;
-          storeMarkersRef.current.forEach(({ marker }) => resetMarkerSpiderfy(marker));
 
-          if (currentZoom >= MAP_CLUSTER_CUTOFF_ZOOM) {
-            storeMarkersRef.current.forEach(({ marker }) => {
-              marker.setMap(map);
+          if (isMapAtMaxZoom(map)) {
+            clearClusterMarkers();
+            const maxZoomClusters = groupPinsForClustering(pins, currentZoom);
+            maxZoomClusters.forEach((cluster) => {
+              if (cluster.length === 1) {
+                resetMarkerSpiderfy(cluster[0].marker);
+                cluster[0].marker.setMap(map);
+              } else {
+                spreadClusterMarkers(cluster);
+              }
             });
             return;
           }
+
+          storeMarkersRef.current.forEach(({ marker }) => resetMarkerSpiderfy(marker));
 
           const clusters = groupPinsForClustering(pins, currentZoom);
 
@@ -2175,8 +2237,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             if (cluster.length === 1) {
               resetMarkerSpiderfy(cluster[0].marker);
               cluster[0].marker.setMap(map);
-            } else if (currentZoom >= MAP_MAX_ZOOM) {
-              spreadClusterMarkers(cluster);
             } else {
               cluster.forEach(({ marker }) => marker.setMap(null));
               const avgLat = cluster.reduce((s, p) => s + p.pos.lat(), 0) / cluster.length;
@@ -2320,6 +2380,20 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   useEffect(() => {
     currentCoordsRef.current = currentCoords;
   }, [currentCoords]);
+
+  // 실제 위치 확보 후 지도 중심·핀 범위를 사용자 좌표 기준으로 다시 맞춤
+  useEffect(() => {
+    if (!currentCoords || !isMapView || !mapInstanceRef.current) return;
+    const naver = (window as any).naver;
+    if (!naver?.maps) return;
+    const map = mapInstanceRef.current;
+    map.setCenter(
+      new naver.maps.LatLng(currentCoords.latitude, currentCoords.longitude)
+    );
+    if (mapOverlaysReadyRef.current && !skipNextFitMapRef.current) {
+      fitMapToStoresRef.current?.();
+    }
+  }, [currentCoords, isMapView]);
 
   useEffect(() => {
     if (!isMapView || !mapInstanceRef.current) return;
@@ -2722,8 +2796,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         mapViewControl={{
           active: isMapView,
           onToggle: toggleMapView,
-          // 매장 0건·검색 결과 없음에서도 지도는 열 수 있음(현재 위치/기본 중심). 로딩 중만 막음.
-          disabled: isLoadingStores,
+          disabled: false,
         }}
       />
 
