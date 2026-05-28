@@ -19,12 +19,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import StoreCard from "@/components/StoreCard";
 import StoreCardSkeleton from "@/components/StoreCardSkeleton";
-import MapViewBottomSheet from "@/components/MapViewBottomSheet";
+import MapViewBottomSheet, {
+  MAP_VIEW_SHEET_BOTTOM_NAV_PX,
+  MAP_VIEW_SHEET_PEEK_HEIGHT,
+} from "@/components/MapViewBottomSheet";
 import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { paymentHistoryApi } from "@/api/paymentHistory";
@@ -99,13 +102,93 @@ function isMapAtMaxZoom(map: { getMaxZoom?: () => number; getZoom: () => number 
 const MAP_SPIDERFY_RADIUS_PX = 32;
 const MAP_SPIDERFY_MAX_RADIUS_PX = 96;
 const MAP_VIEW_PADDING = { top: 100, right: 48, bottom: 220, left: 48 };
+/** 선택 매장 핀 — UI 경계(재검색 버튼·시트 핸들)와의 여백 */
+const MAP_PIN_FOCUS_BAND_GAP_PX = 8;
+/** 0=밴드 상단, 1=밴드 하단 — 핀 시각 중심 목표 (시트 쪽으로 치우침) */
+const MAP_PIN_FOCUS_BAND_POSITION = 0.72;
+const PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX = 16;
+
+type MapPinFocusBand = {
+  top: number;
+  bottom: number;
+  targetY: number;
+};
+
+function measureMapPinFocusBand(
+  mapEl: HTMLElement | null,
+  researchButtonEl: HTMLElement | null,
+  sheetHeightPx: number
+): MapPinFocusBand {
+  const mapRect = mapEl?.getBoundingClientRect();
+  const viewportH = window.visualViewport?.height ?? window.innerHeight;
+
+  if (!mapRect?.height) {
+    const mapHeight = mapEl?.clientHeight ?? 600;
+    const fallbackBottom =
+      mapHeight -
+      (MAP_VIEW_SHEET_BOTTOM_NAV_PX + sheetHeightPx + MAP_PIN_FOCUS_BAND_GAP_PX);
+    const fallbackTop = MAP_VIEW_PADDING.top;
+    const fallbackBandBottom = Math.max(fallbackTop, fallbackBottom);
+    return {
+      top: fallbackTop,
+      bottom: fallbackBandBottom,
+      targetY:
+        fallbackTop +
+        (fallbackBandBottom - fallbackTop) * MAP_PIN_FOCUS_BAND_POSITION,
+    };
+  }
+
+  const mapTop = mapRect.top;
+  const mapHeight = mapRect.height;
+
+  let bandTop = MAP_VIEW_PADDING.top;
+  if (researchButtonEl) {
+    const boundaryRect = researchButtonEl.getBoundingClientRect();
+    bandTop = Math.max(
+      bandTop,
+      boundaryRect.bottom - mapTop + MAP_PIN_FOCUS_BAND_GAP_PX
+    );
+  }
+
+  const sheetTopInViewport =
+    viewportH - MAP_VIEW_SHEET_BOTTOM_NAV_PX - sheetHeightPx;
+  const bandBottom = Math.min(
+    mapHeight - MAP_PIN_FOCUS_BAND_GAP_PX,
+    sheetTopInViewport - mapTop - MAP_PIN_FOCUS_BAND_GAP_PX
+  );
+
+  const clampedBottom = Math.max(bandTop + 20, bandBottom);
+  const targetY =
+    bandTop + (clampedBottom - bandTop) * MAP_PIN_FOCUS_BAND_POSITION;
+
+  return {
+    top: bandTop,
+    bottom: clampedBottom,
+    targetY: Math.max(bandTop, Math.min(clampedBottom, targetY)),
+  };
+}
+
+function panMapPinToTargetY(
+  map: { getSize?: () => { height: number }; panBy: (offset: unknown) => void },
+  naver: { maps: { Point: new (x: number, y: number) => unknown } },
+  targetVisualCenterY: number,
+  anchorOffsetBelowVisualCenterPx = PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX
+) {
+  const mapSize = map.getSize?.();
+  if (!mapSize) return;
+  const anchorTargetY = targetVisualCenterY + anchorOffsetBelowVisualCenterPx;
+  const deltaY = mapSize.height / 2 - anchorTargetY;
+  if (Math.abs(deltaY) > 0.5) {
+    map.panBy(new naver.maps.Point(0, deltaY));
+  }
+}
 const PIN_LABEL_GAP_PX = 4;
-const PIN_TAIL_HEIGHT_PX = 5;
-const PIN_BALLOON_PADDING_X = 14;
-const PIN_BALLOON_PADDING_Y = 2;
-const PIN_LABEL_FONT_SIZE_PX = 10;
+const PIN_TAIL_HEIGHT_PX = 8;
+const PIN_BALLOON_PADDING_X = 16;
+const PIN_BALLOON_PADDING_Y = 8;
+const PIN_LABEL_FONT_SIZE_PX = 11;
 const PIN_LABEL_FONT = `700 ${PIN_LABEL_FONT_SIZE_PX}px system-ui, -apple-system, sans-serif`;
-const PIN_LABEL_LINE_HEIGHT = 1.15;
+const PIN_LABEL_LINE_HEIGHT = 1.35;
 const PIN_CLUSTER_SIZE_PX = 30;
 const PIN_CLUSTER_FONT_SIZE_PX = 11;
 const PIN_CLUSTER_BORDER_PX = 2;
@@ -143,6 +226,24 @@ function measurePinLabelRect(
     right: x + width / 2,
     bottom: y,
   };
+}
+
+function computePinAnchorOffsetBelowVisualCenter(
+  marker: any,
+  proj: any,
+  spiderfyOffset = { x: 0, y: 0 }
+): number {
+  try {
+    const pos = marker.getPosition();
+    const pt = proj.fromCoordToOffset(pos);
+    const icon = marker?.getIcon?.();
+    const root = (icon?.content as HTMLElement) ?? null;
+    const text = getPinLabelText(root);
+    const bounds = measurePinLabelRect(pt.x, pt.y, text, spiderfyOffset);
+    return (bounds.bottom - bounds.top) / 2;
+  } catch {
+    return PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX;
+  }
 }
 
 function labelRectsOverlap(a: PinLabelRect, b: PinLabelRect, gap = PIN_LABEL_GAP_PX): boolean {
@@ -236,6 +337,27 @@ function pinLabelRectsOverlap(rects: PinLabelRect[]): boolean {
     }
   }
   return false;
+}
+
+function panMapPinAboveSheet(
+  map: { getSize?: () => { height: number }; panBy: (offset: unknown) => void; getProjection?: () => any },
+  naver: { maps: { Point: new (x: number, y: number) => unknown } },
+  mapEl: HTMLElement | null,
+  researchButtonEl: HTMLElement | null,
+  sheetHeightPx: number,
+  selectedMarker?: any
+) {
+  const band = measureMapPinFocusBand(
+    mapEl,
+    researchButtonEl,
+    sheetHeightPx
+  );
+  let anchorOffset = PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX;
+  const proj = map.getProjection?.();
+  if (proj && selectedMarker) {
+    anchorOffset = computePinAnchorOffsetBelowVisualCenter(selectedMarker, proj);
+  }
+  panMapPinToTargetY(map, naver, band.targetY, anchorOffset);
 }
 
 function pinLabelRectsFitInView(
@@ -513,6 +635,7 @@ interface StoreData {
   const isMapViewRef = useRef(isMapView);
   isMapViewRef.current = isMapView;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapResearchButtonRef = useRef<HTMLButtonElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const storeMarkersRef = useRef<{ id: string; marker: any }[]>([]);
   const clusterMarkersRef = useRef<any[]>([]);
@@ -552,9 +675,14 @@ interface StoreData {
   const storesWithCoordsRef = useRef<any[]>([]);
   const rebuildStoreOverlaysRef = useRef<(() => void) | null>(null);
   const fitMapToStoresRef = useRef<(() => void) | null>(null);
+  const focusStoreOnMapRef = useRef<(storeId: string) => void>(() => {});
+  const mapStoreFocusSessionRef = useRef(0);
+  const [mapFocusGeneration, setMapFocusGeneration] = useState(0);
+  const bumpMapFocusRef = useRef<() => void>(() => {});
   const mapOverlaysReadyRef = useRef(false);
   const mapClusteringEnabledRef = useRef(false);
   const clusterExpansionFocusRef = useRef<string[] | null>(null);
+  const mapStoreFocusPinRef = useRef<string | null>(null);
   const activeClusterExpansionRef = useRef<{ memberIds: string[]; centroid: any } | null>(null);
   const clusterExpansionSessionRef = useRef(0);
   const lastClusterUpdateZoomRef = useRef<number | null>(null);
@@ -564,11 +692,43 @@ interface StoreData {
   const currentCoordsRef = useRef(currentCoords);
   const skipNextFitMapRef = useRef(false);
   const cardScrollYRef = useRef(0);
+  const mapSheetPanelHeightRef = useRef(MAP_VIEW_SHEET_PEEK_HEIGHT);
+
+  const bumpMapFocus = useCallback(() => {
+    setMapFocusGeneration((n) => n + 1);
+  }, []);
+  bumpMapFocusRef.current = bumpMapFocus;
 
   const getMarkerPinContent = (marker: any): HTMLElement | null => {
     const icon = marker?.getIcon?.();
     return (icon?.content as HTMLElement) ?? null;
   };
+
+  const getSelectedStoreMarker = useCallback((storeId: string | null) => {
+    if (!storeId) return null;
+    return (
+      storeMarkersRef.current.find(({ id }) => String(id) === String(storeId))?.marker ??
+      null
+    );
+  }, []);
+
+  const handleMapSheetPanelHeightChange = useCallback((height: number) => {
+    if (mapSheetPanelHeightRef.current === height) return;
+    mapSheetPanelHeightRef.current = height;
+
+    if (!selectedMapStoreIdRef.current) return;
+    const map = mapInstanceRef.current;
+    const naver = (window as any).naver;
+    if (!map || !naver?.maps) return;
+    panMapPinAboveSheet(
+      map,
+      naver,
+      mapContainerRef.current,
+      mapResearchButtonRef.current,
+      height,
+      getSelectedStoreMarker(selectedMapStoreIdRef.current)
+    );
+  }, [getSelectedStoreMarker]);
 
   const selectedMapStoreIdRef = useRef<string | null>(null);
   selectedMapStoreIdRef.current = selectedMapStoreId;
@@ -650,9 +810,12 @@ interface StoreData {
     );
   };
 
+  /** 핀 선택: 시트 1행 + 카드 강조 + 지도 포커스 */
   selectStoreOnMapRef.current = (id: string) => {
+    mapStoreFocusSessionRef.current += 1;
     setSelectedMapStoreId(String(id));
     setHighlightMapSheetCard(true);
+    bumpMapFocusRef.current();
   };
 
   useEffect(() => {
@@ -1893,8 +2056,8 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       const balloon = document.createElement("div");
       balloon.dataset.pinDot = "1";
       balloon.style.cssText = isSelected
-        ? "background:#ea580c;border-radius:6px;padding:1px 7px;box-shadow:0 2px 8px rgba(234,88,12,.45);white-space:nowrap;transform:scale(1.1);transition:background .15s ease,transform .15s ease,box-shadow .15s ease;"
-        : "background:#2D8CFF;border-radius:6px;padding:1px 7px;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transition:background .15s ease,transform .15s ease,box-shadow .15s ease;";
+        ? "display:flex;align-items:center;background:#ea580c;border-radius:8px;padding:4px 8px;box-shadow:0 2px 8px rgba(234,88,12,.45);white-space:nowrap;transform:scale(1.1);transition:background .15s ease,transform .15s ease,box-shadow .15s ease;"
+        : "display:flex;align-items:center;background:#2D8CFF;border-radius:8px;padding:4px 8px;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transition:background .15s ease,transform .15s ease,box-shadow .15s ease;";
 
       const label = document.createElement("span");
       label.setAttribute("data-store-label", "1");
@@ -1906,8 +2069,8 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       const tail = document.createElement("div");
       tail.dataset.pinTail = "1";
       tail.style.cssText = isSelected
-        ? "width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #ea580c;transition:border-top-color .15s ease;"
-        : "width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #2D8CFF;transition:border-top-color .15s ease;";
+        ? "width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #ea580c;transition:border-top-color .15s ease;"
+        : "width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #2D8CFF;transition:border-top-color .15s ease;";
 
       wrapper.appendChild(balloon);
       wrapper.appendChild(tail);
@@ -2279,6 +2442,96 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           });
         };
 
+        const focusStoreOnMap = (storeId: string) => {
+          const store = storesWithCoordsRef.current.find(
+            (s: StoreData) => String(s.id) === String(storeId)
+          );
+          if (!store || !hasStoreCoords(store)) return;
+
+          const sessionId = ++mapStoreFocusSessionRef.current;
+          clusterExpansionSessionRef.current += 1;
+          activeClusterExpansionRef.current = null;
+          clusterExpansionFocusRef.current = null;
+
+          const coord = new naver.maps.LatLng(store.lat!, store.lon!);
+          const isActive = () =>
+            !isCancelled && mapStoreFocusSessionRef.current === sessionId;
+
+          /** pan/focus 직후 같은 zoom에서 idle → updateClusters로 핀 위치가 바뀌는 것 방지 */
+          const lockClusterLayoutAtCurrentZoom = () => {
+            mapStoreFocusPinRef.current = storeId;
+            lastClusterUpdateZoomRef.current = map.getZoom();
+          };
+
+          const finish = () => {
+            if (!isActive()) return;
+            const selectedMarker = storeMarkersRef.current.find(
+              ({ id }) => String(id) === String(storeId)
+            )?.marker;
+            requestAnimationFrame(() => {
+              if (!isActive()) return;
+              panMapPinAboveSheet(
+                map,
+                naver,
+                mapContainerRef.current,
+                mapResearchButtonRef.current,
+                mapSheetPanelHeightRef.current,
+                selectedMarker
+              );
+              applySelectedPinStylesRef.current();
+              lockClusterLayoutAtCurrentZoom();
+            });
+          };
+
+          const zoomStep = () => {
+            if (!isActive()) return;
+
+            const selected = storeMarkersRef.current.find(
+              ({ id }) => String(id) === String(storeId)
+            );
+            // 개별 핀이 이미 노출되면 zoom 유지 + pan만
+            if (selected?.marker.getMap()) {
+              finish();
+              return;
+            }
+
+            if (isMapAtMaxZoom(map)) {
+              finish();
+              return;
+            }
+
+            const prevZoom = map.getZoom();
+            const nextZoom = Math.min(getMapMaxZoom(map), prevZoom + 1);
+            morphMapView(coord, nextZoom, () => {
+              if (!isActive()) return;
+              if (mapClusteringEnabledRef.current) updateClusters();
+              if (map.getZoom() <= prevZoom) {
+                finish();
+                return;
+              }
+              zoomStep();
+            });
+          };
+
+          lockClusterLayoutAtCurrentZoom();
+          map.setCenter(coord);
+          applySelectedPinStylesRef.current();
+
+          if (map.getZoom() < 15) {
+            morphMapView(coord, 15, () => {
+              if (!isActive()) return;
+              if (!mapClusteringEnabledRef.current) applyClustering();
+              zoomStep();
+            });
+            return;
+          }
+
+          if (!mapClusteringEnabledRef.current) applyClustering();
+          zoomStep();
+        };
+
+        focusStoreOnMapRef.current = focusStoreOnMap;
+
         const expandCluster = (memberIds: string[], centroid: any) => {
           const sessionId = ++clusterExpansionSessionRef.current;
           activeClusterExpansionRef.current = { memberIds, centroid };
@@ -2466,6 +2719,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           mapClusteringEnabledRef.current = false;
           activeClusterExpansionRef.current = null;
           clusterExpansionFocusRef.current = null;
+          mapStoreFocusPinRef.current = null;
           lastClusterUpdateZoomRef.current = null;
 
           syncStorePinsToMap();
@@ -2495,6 +2749,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             mapClusteringEnabledRef.current = false;
             activeClusterExpansionRef.current = null;
             clusterExpansionFocusRef.current = null;
+            mapStoreFocusPinRef.current = null;
             lastClusterUpdateZoomRef.current = null;
             syncStorePinsToMap();
             updateStoreLabels();
@@ -2528,11 +2783,17 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           if (activeClusterExpansionRef.current) return;
           if (mapClusteringEnabledRef.current) {
             const zoom = map.getZoom();
-            const skipForFocusedPan =
-              !!clusterExpansionFocusRef.current &&
+            const skipClusterUpdateAtSameZoom =
               lastClusterUpdateZoomRef.current !== null &&
-              Math.abs(zoom - lastClusterUpdateZoomRef.current) < 1e-6;
-            if (skipForFocusedPan) return;
+              Math.abs(zoom - lastClusterUpdateZoomRef.current) < 1e-6 &&
+              (!!clusterExpansionFocusRef.current || !!mapStoreFocusPinRef.current);
+            if (skipClusterUpdateAtSameZoom) return;
+            if (
+              lastClusterUpdateZoomRef.current !== null &&
+              Math.abs(zoom - lastClusterUpdateZoomRef.current) >= 1e-6
+            ) {
+              mapStoreFocusPinRef.current = null;
+            }
             lastClusterUpdateZoomRef.current = zoom;
             updateClusters();
           }
@@ -2567,9 +2828,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       mapClusteringEnabledRef.current = false;
       activeClusterExpansionRef.current = null;
       clusterExpansionFocusRef.current = null;
+      mapStoreFocusPinRef.current = null;
       lastClusterUpdateZoomRef.current = null;
       rebuildStoreOverlaysRef.current = null;
       fitMapToStoresRef.current = null;
+      focusStoreOnMapRef.current = () => {};
+      mapStoreFocusSessionRef.current += 1;
       if (readyTimer !== null) clearTimeout(readyTimer);
       if (mapBootstrapFallbackTimerRef.current !== null) {
         clearTimeout(mapBootstrapFallbackTimerRef.current);
@@ -2675,23 +2939,20 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     }
   }, [isMapView, storesWithCoords]);
 
-  // 매장 선택 시 해당 위치로 지도 이동 (카드·핀 공통)
-  useEffect(() => {
+  // 핀·카드 선택 공통: 개별 매장 핀으로 보일 때까지 확대 + 시트 위 가운데 정렬
+  useLayoutEffect(() => {
     if (!isMapView || !selectedMapStoreId || !mapInstanceRef.current) return;
-    const naver = (window as any).naver;
-    if (!naver?.maps) return;
+    if (!mapOverlaysReadyRef.current) return;
+    if (mapFocusGeneration === 0) return;
+
     const selectedId = String(selectedMapStoreId);
-    const store = storesWithCoords.find((s) => String(s.id) === selectedId);
+    const store = storesWithCoordsRef.current.find(
+      (s: StoreData) => String(s.id) === selectedId
+    );
     if (!store || !hasStoreCoords(store)) return;
-    const map = mapInstanceRef.current;
-    map.setCenter(new naver.maps.LatLng(store.lat!, store.lon!));
-    const zoom = map.getZoom();
-    if (zoom < 15) map.setZoom(15);
-    applySelectedPinStyles();
-    naver.maps.Event.once(map, "idle", () => {
-      applySelectedPinStylesRef.current();
-    });
-  }, [isMapView, selectedMapStoreId, storesWithCoords, applySelectedPinStyles]);
+
+    focusStoreOnMapRef.current(selectedId);
+  }, [isMapView, selectedMapStoreId, mapFocusGeneration]);
 
   useEffect(() => {
     storeMarkersRef.current.forEach(({ id, marker }) => {
@@ -2885,7 +3146,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className={cn("mb-6 space-y-3", isMapView && "relative z-20 px-4 pointer-events-none")}>
+        <div
+          className={cn("mb-6 space-y-3", isMapView && "relative z-20 px-4 pointer-events-none")}
+        >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-2xl font-bold">{t.storesHeading}</h2>
@@ -2922,12 +3185,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             )}
           </div>
           {isMapView && showResearchButton && (
-            <div className="pointer-events-auto flex justify-center pt-0.5">
+            <div className="pointer-events-none flex justify-center pt-0.5">
               <button
+                ref={mapResearchButtonRef}
                 type="button"
                 onClick={handleResearch}
                 disabled={isLoadingStores}
-                className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/95 px-4 py-2 text-sm font-medium shadow-md backdrop-blur-sm transition-all hover:bg-muted active:scale-95 disabled:opacity-50 animate-in fade-in zoom-in-95 duration-200"
+                className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border/60 bg-card/95 px-4 py-2 text-sm font-medium shadow-md backdrop-blur-sm transition-all hover:bg-muted active:scale-95 disabled:opacity-50 animate-in fade-in zoom-in-95 duration-200"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 이 위치에서 재검색
@@ -3011,12 +3275,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         selectedStoreId={selectedMapStoreId}
         highlightSelectedCard={highlightMapSheetCard}
         onSelectStoreFromCard={(store) => {
-          setSelectedMapStoreId(String(store.id));
-          setHighlightMapSheetCard(false);
           if (store.detailUrl) {
             window.open(store.detailUrl, "_blank", "noopener,noreferrer");
           }
+          mapStoreFocusSessionRef.current += 1;
+          setSelectedMapStoreId(String(store.id));
+          setHighlightMapSheetCard(false);
+          bumpMapFocus();
         }}
+        onPanelHeightChange={handleMapSheetPanelHeightChange}
         title={t.mapSheetTitle}
         dragHint={t.mapSheetDragHint}
         sortBy={sortBy}
