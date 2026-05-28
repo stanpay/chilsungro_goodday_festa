@@ -35,6 +35,7 @@ import { storesApi, type NearbyStore } from "@/api/stores";
 import { gifticonsApi } from "@/api/gifticons";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
+import { JEJU_DOWNTOWN_COORDS } from "@/lib/naverGeocodeFallback";
 import { getBrowserPosition } from "@/lib/geolocation";
 import TutorialModal from "@/components/TutorialModal";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
@@ -81,10 +82,9 @@ const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
   "other",
 ];
 
-/** 위치를 알 수 없을 때 매장 목록을 불러오는 기본 좌표 (제주 원도심) */
-const JEJU_DOWNTOWN_COORDS = { latitude: 33.5098, longitude: 126.5219 };
-
 const MAP_MAX_ZOOM = 21;
+/** 지도뷰 첫 화면 기본 줌 */
+const MAP_INITIAL_ZOOM = 16;
 /** 클러스터 확대 시 한 단계 줌 애니메이션 길이(ms) */
 const MAP_CLUSTER_ZOOM_ANIM_MS = 420;
 /** zoomend 미발생 시 다음 줌 단계로 넘기는 폴백 여유(ms) */
@@ -690,6 +690,9 @@ interface StoreData {
   const myLocationMarkerRef = useRef<any>(null);
   const currentCoordsRef = useRef(currentCoords);
   const skipNextFitMapRef = useRef(false);
+  /** 첫 지도 세팅: fitMapToStores 생략, applyInitialMapView로 center+zoom만 적용 */
+  const skipInitialMapFitRef = useRef(true);
+  const applyInitialMapViewRef = useRef<(() => void) | null>(null);
   const cardScrollYRef = useRef(0);
   const mapSheetPanelHeightRef = useRef(MAP_VIEW_SHEET_PEEK_HEIGHT);
 
@@ -829,6 +832,7 @@ interface StoreData {
     if (!isMapView || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
     const naver = (window as any).naver;
+    skipNextFitMapRef.current = true;
     requestAnimationFrame(() => {
       try {
         naver?.maps?.Event?.trigger(map, "resize");
@@ -836,6 +840,8 @@ interface StoreData {
       requestAnimationFrame(() => {
         if (mapOverlaysReadyRef.current) {
           rebuildStoreOverlaysRef.current?.();
+        } else {
+          applyInitialMapViewRef.current?.();
         }
       });
     });
@@ -846,10 +852,8 @@ interface StoreData {
     const prevSessionRef = { current: null as any };
     
     const checkAuthAndInitLocation = async () => {
-      console.log("🔐 [인증 확인] 시작");
       
       // 로그인 상태 확인 (AuthContext에서 관리)
-      console.log(`🔐 [인증 상태] ${isLoggedIn ? '로그인됨' : '로그인 안됨'}`);
 
       // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
       prevSessionRef.current = isLoggedIn ? { user: { id: "user-001" } } : null;
@@ -864,7 +868,6 @@ interface StoreData {
             setShowTutorialModal(true);
           }
         } catch (error) {
-          console.error("튜토리얼 모달 표시 판단 실패:", error);
         }
       }
 
@@ -873,7 +876,6 @@ interface StoreData {
         const { loadNaverMaps } = await import("@/lib/naver");
         await loadNaverMaps(locale);
       } catch (error: any) {
-        console.error("❌ [위치 초기화] Naver Maps SDK 로드 실패:", error);
         toast({
           title: "지도 서비스 경고",
           description:
@@ -906,7 +908,6 @@ interface StoreData {
                 latitude >= -90 && latitude <= 90 &&
                 longitude >= -180 && longitude <= 180) {
               
-              console.log("✅ [위치 정보] 직접 설정한 위치 사용:", { latitude, longitude, location: savedLocation });
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
@@ -914,7 +915,6 @@ interface StoreData {
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
-                console.error("주소 변환 오류:", error);
                 setCurrentLocation(savedLocation);
               }
               setIsManualLocation(true);
@@ -922,17 +922,14 @@ interface StoreData {
               setIsLoadingLocation(false);
               
               // 매장 정보 가져오기
-              console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
               await fetchNearbyStoresRef.current?.(latitude, longitude);
               return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
             } else {
-              console.warn("⚠️ [위치 정보] 저장된 좌표가 유효하지 않음:", { latitude, longitude });
               // 유효하지 않은 좌표는 제거하고 주소 검색으로 좌표 가져오기
               localStorage.removeItem("currentCoordinates");
               savedCoordinates = null; // 변수 업데이트하여 fallback 로직이 실행되도록 함
             }
           } catch (error) {
-            console.error("❌ [위치 초기화] 저장된 좌표 파싱 오류:", error);
             // 저장된 좌표가 잘못되었으면 제거하고 주소 검색으로 좌표 가져오기
             localStorage.removeItem("currentCoordinates");
             savedCoordinates = null; // 변수 업데이트하여 fallback 로직이 실행되도록 함
@@ -942,7 +939,6 @@ interface StoreData {
         // 좌표가 없으면 주소 검색으로 좌표 가져오기 (최근 위치 선택 시)
         if (!savedCoordinates) {
           try {
-            console.log("🔍 [위치 정보] 주소 검색으로 좌표 가져오기:", savedLocation);
             const { searchAddress } = await import("@/lib/naver");
             const searchResult = await searchAddress(savedLocation, locale);
             
@@ -962,7 +958,6 @@ interface StoreData {
               // 좌표 저장
               localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
               
-              console.log("✅ [위치 정보] 주소 검색으로 좌표 획득:", { latitude, longitude });
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
@@ -970,7 +965,6 @@ interface StoreData {
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
-                console.error("주소 변환 오류:", error);
                 setCurrentLocation(savedLocation);
               }
               setIsManualLocation(true);
@@ -978,11 +972,9 @@ interface StoreData {
               setIsLoadingLocation(false);
               
               // 매장 정보 가져오기
-              console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
               await fetchNearbyStoresRef.current?.(latitude, longitude);
               return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
             } else {
-              console.warn("⚠️ [위치 정보] 주소 검색 결과 없음:", savedLocation);
               toast({
                 title: "주소 검색 실패",
                 description: searchResult.geocodingForbidden
@@ -996,7 +988,6 @@ interface StoreData {
               // Geocoding 실패 시 GPS로 폴백
             }
           } catch (error) {
-            console.error("❌ [위치 초기화] 주소 검색 오류:", error);
             toast({
               title: "주소 검색 오류",
               description: "현재 위치(GPS)로 다시 시도합니다.",
@@ -1009,24 +1000,17 @@ interface StoreData {
           }
         }
       } else if (isManualLocationValue && !savedLocation) {
-        console.warn(
-          "⚠️ [위치 정보] 수동 위치 플래그만 남아 있음 — 플래그 제거 후 현재 위치 재조회"
-        );
         localStorage.removeItem("isManualLocation");
         localStorage.removeItem("currentCoordinates");
         setIsManualLocation(false);
       }
       
       // 직접 설정한 위치가 없으면 GPS 시도
-      console.log("🌍 [위치 정보] 현재 위치 가져오기 시작");
       await fetchBrowserLocation();
     };
 
     const applyDetectedLocation = async (latitude: number, longitude: number) => {
-      console.log("✅ [위치 정보] 좌표 적용:", { latitude, longitude });
-      console.log("🏠 [주소 변환] 시작");
       const address = await getAddressFromCoords(latitude, longitude, locale);
-      console.log("✅ [주소 변환] 완료:", address);
       const displayAddress =
         address === "위치를 확인할 수 없음"
           ? headerStrings(locale).locationUnknownGeo
@@ -1040,7 +1024,6 @@ interface StoreData {
       setCurrentCoords({ latitude, longitude });
       setIsLoadingLocation(false);
 
-      console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
       await fetchNearbyStoresRef.current?.(latitude, longitude);
     };
 
@@ -1053,15 +1036,11 @@ interface StoreData {
         return;
       }
 
-      console.log("🌍 [위치 정보] 브라우저 위치 정보 요청 시작");
       try {
         const { latitude, longitude } = await getBrowserPosition();
         await applyDetectedLocation(latitude, longitude);
       } catch (error) {
         const geoError = error as GeolocationPositionError;
-        console.error("❌ [위치 정보] 획득 실패:", geoError);
-        if (geoError?.code != null) console.log("에러 코드:", geoError.code);
-        if (geoError?.message) console.log("에러 메시지:", geoError.message);
 
         clearAutoSavedLocation();
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
@@ -1123,7 +1102,6 @@ interface StoreData {
   };
 
   const handleRefreshLocation = async () => {
-    console.log("🔄🔄🔄 [수동 새로고침] 위치 재조회 시작 🔄🔄🔄");
 
     localStorage.setItem("lastLocationFetchTime", Date.now().toString());
 
@@ -1148,7 +1126,6 @@ interface StoreData {
         toastMessage: "현재 위치가 업데이트되었습니다.",
       });
     } catch (error) {
-      console.error("❌ [위치 새로고침] GPS 실패:", error);
       clearAutoSavedLocation();
       setCurrentLocation(LOCATION_FETCH_FAILED_KO);
       ensureJejuStores();
@@ -1195,7 +1172,6 @@ interface StoreData {
       setIsLoadingLocation(false);
       await fetchNearbyStores(latitude, longitude);
     } catch (error) {
-      console.error("위치 처리 오류:", error);
       clearAutoSavedLocation();
       setCurrentLocation(LOCATION_FETCH_FAILED_KO);
       setIsLoadingLocation(false);
@@ -1214,11 +1190,9 @@ interface StoreData {
     try {
       setIsLoadingStores(true);
       setShowResearchButton(false);
-      console.log("🏪 [매장 검색] 시작:", { latitude, longitude });
 
       // 초기 1회 fetch로 전체 매장 확보 (이후 재검색은 캐시 필터링)
       const radius = 100000; // 100km — 전체 매장 로드
-      console.log("📏 [매장 검색] 검색 반경:", radius, "미터");
 
       const mapNearbyStoreToStore = (store: NearbyStore) => {
         const distanceNum =
@@ -1268,9 +1242,7 @@ interface StoreData {
         };
       };
 
-      console.log("⏳ [매장 검색] 실제 주변 매장 API 요청 중...");
       const nearbyStores = await storesApi.getNearbyStores(latitude, longitude, radius);
-      console.log("✅ [매장 검색] 실제 API 응답:", nearbyStores.length, "개");
 
       const mergedRaw = nearbyStores.map(mapNearbyStoreToStore);
       if (options?.sortAlphabetically) {
@@ -1286,8 +1258,6 @@ interface StoreData {
         allStores.push(s);
       }
 
-      console.log("🏪 [매장 검색] 총 매장 수 (중복 제거 후):", allStores.length);
-      console.log("📋 [매장 검색] 최종 매장 목록:", allStores);
 
       // 지도 재검색용: 할인 정보 조회 전에도 전체 매장 좌표를 즉시 캐시
       allFetchedStoresRef.current = allStores;
@@ -1303,15 +1273,12 @@ interface StoreData {
           if (!isNumeric) return null;
           return await storesApi.getStoreByKakaoPlaceId(store.id);
         } catch (e) {
-          console.log(`⚠️ [매장 정보] ${store.name}: kakao_place_id 매장 정보 조회 실패`);
           return null;
         }
       };
       
-      console.log("🚀 [초기 로딩] 처음 8개 매장만 빠르게 표시");
       
       // 각 매장의 할인 정보 조회 (초기 8개만 먼저 처리)
-      console.log("🔄 [할인 정보 조회] 초기 8개 매장 처리 시작");
       const initialStoresWithDiscount = await Promise.all(initialStores.map(async (store) => {
         let preloadedStoreData: any = null;
 
@@ -1353,7 +1320,6 @@ interface StoreData {
               franchiseData = franchise;
             }
           } catch (e) {
-            console.log(`⚠️ [할인 정보] ${store.name}: 프랜차이즈 정보 조회 실패`);
           }
 
           // 2. 프랜차이즈별 결제 방식 적립/할인 정보 조회
@@ -1376,7 +1342,6 @@ interface StoreData {
                 // 투썸플레이스는 지역화폐 할인율과 기프티콘 할인율만 고려
               }
             } catch (e) {
-              console.log(`⚠️ [할인 정보] ${store.name}: 프랜차이즈 결제 방식 정보 조회 실패`);
             }
           }
 
@@ -1471,29 +1436,13 @@ interface StoreData {
                   }
                 }
               } catch (e) {
-                console.log(`⚠️ [할인 정보] ${store.name}: 기프티콘 정보 조회 실패`);
               }
             }
           } catch (e) {
-            console.log(`⚠️ [할인 정보] ${store.name}: 매장 정보 조회 실패`);
           }
 
           // 4. 최대 할인율 계산 (프랜차이즈 적립/할인, 지역화폐 할인율, 기프티콘 할인율 중 최대값)
           const maxDiscountPercent = Math.max(franchiseDiscountRate, localCurrencyDiscount, maxGifticonDiscount);
-
-          if (maxDiscountPercent > 0) {
-            const discountDetails = [];
-            if (franchiseDiscountRate > 0) {
-              discountDetails.push(`프랜차이즈: ${franchiseDiscountRate}%`);
-            }
-            if (localCurrencyDiscount > 0) {
-              discountDetails.push(`지역화폐: ${localCurrencyDiscount}%`);
-            }
-            if (maxGifticonDiscount > 0) {
-              discountDetails.push(`기프티콘: ${maxGifticonDiscount}%`);
-            }
-            console.log(`✅ [할인 정보] ${store.name} (${store.id}): 최대 ${maxDiscountPercent}% 할인 (${discountDetails.join(', ')})`);
-          }
 
           return {
             ...store,
@@ -1506,7 +1455,6 @@ interface StoreData {
             parking_size: storeData?.parking_size || null,
           };
         } catch (error) {
-          console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
           return {
             ...store,
             maxDiscount: null,
@@ -1520,7 +1468,6 @@ interface StoreData {
         }
       }));
 
-      console.log("✅ [할인 정보 조회] 초기 8개 완료");
       
       // 초기 8개 먼저 표시 (캐시에는 할인 정보가 반영된 항목만 병합)
       if (isStale()) return;
@@ -1530,12 +1477,10 @@ interface StoreData {
         (s) => enrichedById.get(s.id) ?? s
       );
       setIsLoadingStores(false);
-      console.log("✅ [초기 로딩] 완료 - 초기 8개 매장 표시");
       
       // 나머지 매장 데이터 백그라운드 로딩
       if (remainingStores.length > 0) {
         setIsLoadingMoreStores(true);
-        console.log("🔄 [추가 로딩] 나머지 매장 데이터 로딩 시작");
         
         // 나머지 매장의 할인 정보 조회
         const remainingStoresWithDiscount = await Promise.all(remainingStores.map(async (store) => {
@@ -1579,7 +1524,6 @@ interface StoreData {
                 franchiseData = franchise;
               }
             } catch (e) {
-              console.log(`⚠️ [할인 정보] ${store.name}: 프랜차이즈 정보 조회 실패`);
             }
 
             // 2. 프랜차이즈별 결제 방식 적립/할인 정보 조회
@@ -1600,7 +1544,6 @@ interface StoreData {
                   }
                 }
               } catch (e) {
-                console.log(`⚠️ [할인 정보] ${store.name}: 프랜차이즈 결제 방식 정보 조회 실패`);
               }
             }
 
@@ -1695,29 +1638,13 @@ interface StoreData {
                     }
                   }
                 } catch (e) {
-                  console.log(`⚠️ [할인 정보] ${store.name}: 기프티콘 정보 조회 실패`);
                 }
               }
             } catch (e) {
-              console.log(`⚠️ [할인 정보] ${store.name}: 매장 정보 조회 실패`);
             }
 
             // 4. 최대 할인율 계산 (프랜차이즈 적립/할인, 지역화폐 할인율, 기프티콘 할인율 중 최대값)
             const maxDiscountPercent = Math.max(franchiseDiscountRate, localCurrencyDiscount, maxGifticonDiscount);
-
-            if (maxDiscountPercent > 0) {
-              const discountDetails = [];
-              if (franchiseDiscountRate > 0) {
-                discountDetails.push(`프랜차이즈: ${franchiseDiscountRate}%`);
-              }
-              if (localCurrencyDiscount > 0) {
-                discountDetails.push(`지역화폐: ${localCurrencyDiscount}%`);
-              }
-              if (maxGifticonDiscount > 0) {
-                discountDetails.push(`기프티콘: ${maxGifticonDiscount}%`);
-              }
-              console.log(`✅ [할인 정보] ${store.name} (${store.id}): 최대 ${maxDiscountPercent}% 할인 (${discountDetails.join(', ')})`);
-            }
 
             return {
               ...store,
@@ -1730,7 +1657,6 @@ interface StoreData {
               parking_size: storeData?.parking_size || null,
             };
           } catch (error) {
-            console.error(`❌ [할인 정보] ${store.name} 조회 오류:`, error);
             return {
               ...store,
               maxDiscount: null,
@@ -1751,11 +1677,8 @@ interface StoreData {
         setStores(allStoresWithDiscount);
         allFetchedStoresRef.current = allStoresWithDiscount;
         setIsLoadingMoreStores(false);
-        console.log("✅ [추가 로딩] 완료 - 전체 매장 데이터 표시");
       }
     } catch (error) {
-      console.error("❌ [매장 검색] 실패:", error);
-      console.error("에러 스택:", (error as Error).stack);
       if (options?.bootstrap) {
         jejuPreloadStartedRef.current = false;
       }
@@ -1987,7 +1910,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       return [s];
     });
 
-    console.log(`🔍 [재검색] 지도 화면 영역 내 매장: ${filtered.length}개`);
     skipNextFitMapRef.current = true;
     setSelectedMapStoreId(null);
     setHighlightMapSheetCard(false);
@@ -2099,6 +2021,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     };
 
     const initializeMap = async () => {
+      skipInitialMapFitRef.current = true;
       try {
         const { loadNaverMaps } = await import("@/lib/naver");
         await loadNaverMaps(locale);
@@ -2187,7 +2110,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
         const map = new naver.maps.Map(mapContainerRef.current, {
           center: initialCenter,
-          zoom: coords ? 14 : 13,
+          zoom: MAP_INITIAL_ZOOM,
           maxZoom: MAP_MAX_ZOOM,
           minZoom: 9,
           tileTransition: true,
@@ -2195,7 +2118,23 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         });
         mapInstanceRef.current = map;
 
+        const applyInitialMapView = () => {
+          if (isCancelled || !isMapViewRef.current || !skipInitialMapFitRef.current) return;
+          const center = currentCoordsRef.current
+            ? new naver.maps.LatLng(
+                currentCoordsRef.current.latitude,
+                currentCoordsRef.current.longitude
+              )
+            : jejuDowntownCenter;
+          try {
+            map.setCenter(center);
+            map.setZoom(MAP_INITIAL_ZOOM);
+          } catch {}
+        };
+        applyInitialMapViewRef.current = applyInitialMapView;
+
         const fitMapToStores = () => {
+          if (skipInitialMapFitRef.current) return;
           const list = storesWithCoordsRef.current.filter(
             (s: StoreData) => Number.isFinite(s.lat) && Number.isFinite(s.lon)
           );
@@ -2212,12 +2151,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           }
           if (latLngs.length === 0) {
             map.setCenter(jejuDowntownCenter);
-            map.setZoom(13);
+            map.setZoom(MAP_INITIAL_ZOOM);
             return;
           }
           if (latLngs.length === 1) {
             map.setCenter(latLngs[0]);
-            map.setZoom(15);
+            map.setZoom(MAP_INITIAL_ZOOM);
             return;
           }
           const bounds = new naver.maps.LatLngBounds(latLngs[0], latLngs[0]);
@@ -2230,6 +2169,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           });
         };
         fitMapToStoresRef.current = fitMapToStores;
+
+        naver.maps.Event.addListener(map, "dragend", () => {
+          skipInitialMapFitRef.current = false;
+        });
 
         window.setTimeout(() => {
           if (isCancelled || !mapContainerRef.current) return;
@@ -2733,11 +2676,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             rebuildStoreOverlaysTimerRef.current = null;
             if (isCancelled || !mapOverlaysReadyRef.current) return;
 
-            const skipFit = skipNextFitMapRef.current;
-            if (skipFit) {
+            const skipFit =
+              skipNextFitMapRef.current || skipInitialMapFitRef.current;
+            if (skipNextFitMapRef.current) {
               skipNextFitMapRef.current = false;
             }
-
             clusterRetryCount = 0;
             mapClusteringEnabledRef.current = false;
             activeClusterExpansionRef.current = null;
@@ -2752,6 +2695,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             } else {
               // 재검색 등 지도 이동 없이 핀만 바꿀 때 idle이 안 오므로 즉시 클러스터링
               applyClustering();
+              applyInitialMapView();
             }
           }, 100);
         };
@@ -2763,7 +2707,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           mapOverlaysReadyRef.current = true;
           if (!isMapViewRef.current) return;
           applyPinsToMap();
-          fitMapToStores();
+          applyInitialMapView();
         };
 
         const onMapIdle = () => {
@@ -2794,13 +2738,14 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         }, 400);
 
         // 초기 로드 후 600ms 지나면 사용자 이동 감지 시작
-        readyTimer = setTimeout(() => { mapReady = true; }, 600);
+        readyTimer = setTimeout(() => {
+          mapReady = true;
+        }, 600);
         naver.maps.Event.addListener(map, "idle", () => {
           if (!mapReady || isCancelled) return;
           setShowResearchButton(true);
         });
       } catch (error) {
-        console.error("❌ [지도뷰] 초기화 실패:", error);
       }
     };
 
@@ -2814,6 +2759,8 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       lastClusterLayoutZoomRef.current = null;
       rebuildStoreOverlaysRef.current = null;
       fitMapToStoresRef.current = null;
+      applyInitialMapViewRef.current = null;
+      skipInitialMapFitRef.current = true;
       focusStoreOnMapRef.current = () => {};
       mapStoreFocusSessionRef.current += 1;
       if (readyTimer !== null) clearTimeout(readyTimer);
@@ -2846,9 +2793,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     currentCoordsRef.current = currentCoords;
   }, [currentCoords]);
 
-  // 실제 위치 확보 후 지도 중심·핀 범위를 사용자 좌표 기준으로 다시 맞춤
+  // 위치 확보 후: 첫 세팅은 center+zoom만, 이후에는 fit 가능
   useEffect(() => {
     if (!currentCoords || !isMapView || !mapInstanceRef.current) return;
+    if (skipInitialMapFitRef.current) {
+      applyInitialMapViewRef.current?.();
+      return;
+    }
     const naver = (window as any).naver;
     if (!naver?.maps) return;
     const map = mapInstanceRef.current;

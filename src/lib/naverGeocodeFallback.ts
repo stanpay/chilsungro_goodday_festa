@@ -1,7 +1,7 @@
 /** Geocoding API 비활성 시 임시 좌표 (제주 앱 전용) */
 export const JEJU_DOWNTOWN_COORDS = {
-  latitude: 33.5098,
-  longitude: 126.5219,
+  latitude: 33.515984,
+  longitude: 126.525799,
 } as const;
 
 const KNOWN_LOCATION_PATTERNS: {
