@@ -25,6 +25,8 @@ const STORE_CARD_HEIGHT_PX = 240;
 const MAP_VIEW_SHEET_HEADER_PX = 40;
 /** py-2(16) + 카드 240 — 그리드 gap-3(12)는 overflow로 잘림 */
 const MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX = 256;
+/** 별도 스크롤바 트랙 너비 */
+const MAP_VIEW_SHEET_SCROLLBAR_PX = 4;
 /** 카드 1행만 보이도록 고정 (동적 측정 없음) */
 export const MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT =
   EXPANDED_HANDLE_HEIGHT + MAP_VIEW_SHEET_HEADER_PX + MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX;
@@ -64,8 +66,10 @@ type MapViewBottomSheetProps = {
   onSortChange: (sort: "distance" | "discount") => void;
   sortDistanceLabel: string;
   sortDiscountLabel: string;
-  /** 시트 높이 변경 시 (지도 핀 위치 보정용) */
+  /** 시트 높이 변경 시 (지도 핀 위치 보정용) — 드래그 중에는 호출되지 않음 */
   onPanelHeightChange?: (height: number) => void;
+  /** 시트 드래그 시작/종료 (지도 제스처 차단용) */
+  onDraggingChange?: (dragging: boolean) => void;
   className?: string;
   "aria-hidden"?: boolean;
 };
@@ -82,6 +86,7 @@ const MapViewBottomSheet = ({
   sortDistanceLabel,
   sortDiscountLabel,
   onPanelHeightChange,
+  onDraggingChange,
   className,
   "aria-hidden": ariaHidden,
 }: MapViewBottomSheetProps) => {
@@ -103,6 +108,8 @@ const MapViewBottomSheet = ({
   } | null>(null);
   const cardWrapRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const scrollTrackRef = useRef<HTMLDivElement>(null);
+  const scrollThumbRef = useRef<HTMLDivElement>(null);
   /** 선택 매장으로 스크롤은 매장당 최초 1회만 */
   const scrollSyncedStoreIdRef = useRef<string | null>(null);
   const prevSelectedStoreIdRef = useRef<string | null>(null);
@@ -143,6 +150,28 @@ const MapViewBottomSheet = ({
     panelHeightRef.current = target;
     setPanelHeight(target);
   }, [expandedCap]);
+
+  const updateScrollThumb = useCallback(() => {
+    const sb = scrollBodyRef.current;
+    const track = scrollTrackRef.current;
+    const thumb = scrollThumbRef.current;
+    if (!sb || !track || !thumb) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = sb;
+    const canScroll = scrollHeight > clientHeight + 1;
+
+    track.style.opacity = canScroll ? "1" : "0";
+    if (!canScroll) return;
+
+    const trackHeight = clientHeight;
+    const thumbHeight = Math.max(32, (clientHeight / scrollHeight) * trackHeight);
+    const maxTop = trackHeight - thumbHeight;
+    const scrollRange = scrollHeight - clientHeight;
+    const top = scrollRange > 0 ? (scrollTop / scrollRange) * maxTop : 0;
+
+    thumb.style.height = `${thumbHeight}px`;
+    thumb.style.transform = `translateY(${top}px)`;
+  }, []);
 
   useEffect(() => {
     if (!showContent) {
@@ -222,10 +251,19 @@ const MapViewBottomSheet = ({
   }, [selectedStoreId, highlightSelectedCard, showContent, stores, scrollSelectedStoreRowIntoView]);
 
   useLayoutEffect(() => {
+    if (isDragging) return;
     if (reportedPanelHeightRef.current === panelHeight) return;
     reportedPanelHeightRef.current = panelHeight;
     onPanelHeightChange?.(panelHeight);
-  }, [panelHeight, onPanelHeightChange]);
+  }, [panelHeight, isDragging, onPanelHeightChange]);
+
+  useEffect(() => {
+    onDraggingChange?.(isDragging);
+  }, [isDragging, onDraggingChange]);
+
+  useEffect(() => {
+    return () => onDraggingChange?.(false);
+  }, [onDraggingChange]);
 
   const maxHeight = Math.max(MIN_EXPANDED, expandedCap());
   maxHeightRef.current = maxHeight;
@@ -394,12 +432,16 @@ const MapViewBottomSheet = ({
   };
 
   const onPointerDownHandle = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     startDrag(e.clientY);
   };
 
   const onPointerMoveHandle = (e: React.PointerEvent) => {
     if (!dragRef.current?.dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
     moveDrag(e.clientY);
   };
 
@@ -411,6 +453,24 @@ const MapViewBottomSheet = ({
     }
     endDrag();
   };
+
+  useEffect(() => {
+    if (!showContent) return;
+
+    const sb = scrollBodyRef.current;
+    if (!sb) return;
+
+    updateScrollThumb();
+    sb.addEventListener("scroll", updateScrollThumb, { passive: true });
+
+    const ro = new ResizeObserver(updateScrollThumb);
+    ro.observe(sb);
+
+    return () => {
+      sb.removeEventListener("scroll", updateScrollThumb);
+      ro.disconnect();
+    };
+  }, [showContent, stores.length, updateScrollThumb]);
 
   useEffect(() => {
     if (!showContent) return;
@@ -555,6 +615,7 @@ const MapViewBottomSheet = ({
       aria-hidden={ariaHidden}
       className={cn(
         "fixed left-0 right-0 z-[45] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-2xl border border-border/80 bg-card/98 shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-md",
+        isDragging && "touch-none",
         className
       )}
       style={{
@@ -626,17 +687,19 @@ const MapViewBottomSheet = ({
           </div>
 
           <div
-            ref={scrollBodyRef}
             className={cn(
-              "scrollbar-show min-h-0 overflow-y-auto overscroll-contain px-3",
+              "relative min-h-0 overscroll-contain",
               isSingleRowPanel ? "h-[256px] shrink-0 py-2" : "flex-1 pb-3"
             )}
-            style={{
-              WebkitOverflowScrolling: "touch",
-              overscrollBehaviorY: "contain",
-            }}
           >
-            <div>
+            <div
+              ref={scrollBodyRef}
+              className="scrollbar-hide h-full min-h-0 overflow-y-auto overscroll-contain px-3"
+              style={{
+                WebkitOverflowScrolling: "touch",
+                overscrollBehaviorY: "contain",
+              }}
+            >
               <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
                 {stores.map((store) => (
                   <div
@@ -656,11 +719,25 @@ const MapViewBottomSheet = ({
                 ))}
               </div>
             </div>
+
+            <div
+              ref={scrollTrackRef}
+              className="pointer-events-none absolute bottom-0 right-0 top-0 opacity-0 transition-opacity duration-150"
+              style={{ width: MAP_VIEW_SHEET_SCROLLBAR_PX }}
+              aria-hidden
+            >
+              <div
+                ref={scrollThumbRef}
+                className="absolute left-0 top-0 w-full rounded-full bg-muted-foreground/45 will-change-transform"
+                style={{ height: 32 }}
+              />
+            </div>
           </div>
         </>
       )}
     </div>
   );
 };
+
 
 export default MapViewBottomSheet;

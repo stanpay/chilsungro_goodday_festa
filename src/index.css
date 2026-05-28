@@ -29,6 +29,26 @@
     background: transparent;
   }
 
+  /* 얇은 스크롤바 — 카드 레이아웃(px-3)과 분리, 스크롤바는 오른쪽 여백 위에 겹침 */
+  .scrollbar-minimal {
+    -ms-overflow-style: auto;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+  }
+  .scrollbar-minimal::-webkit-scrollbar {
+    display: block;
+    width: 4px;
+    height: 4px;
+  }
+  .scrollbar-minimal::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.45);
+    border-radius: 9999px;
+    min-height: 32px;
+  }
+  .scrollbar-minimal::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   .marquee-on-overflow {
     display: inline-block;
     max-width: none;

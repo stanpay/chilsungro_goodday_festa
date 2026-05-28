@@ -10,3 +10,20 @@ export function isInStandaloneMode(): boolean {
     }
     return ["standalone", "fullscreen", "minimal-ui"].some((mode) => window.matchMedia(`(display-mode: ${mode})`).matches);
 }
+
+/** PWA·모바일에서 intent/custom scheme 등 외부 URL 열기 (location.href 대신 anchor click) */
+export function openExternalUrl(
+    url: string,
+    options?: { targetBlank?: boolean },
+): void {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.rel = "noopener noreferrer";
+    if (options?.targetBlank) {
+        anchor.target = "_blank";
+    }
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+}

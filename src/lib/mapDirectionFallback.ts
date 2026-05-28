@@ -1,4 +1,5 @@
 import { getStoredLocale, type AppLocale } from "@/lib/locale";
+import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 export const NAVER_MAP_FALLBACK_EVENT = "naver-map:fallback";
 
@@ -93,7 +94,11 @@ export function openNaverMapIosStore(): void {
 
 export function openNaverMapAndroidStore(): void {
   const marketUrl = "market://details?id=com.nhn.android.nmap";
-  window.location.href = marketUrl;
+  if (isInStandaloneMode()) {
+    openExternalUrl(marketUrl, { targetBlank: true });
+  } else {
+    window.location.href = marketUrl;
+  }
   window.setTimeout(() => {
     if (document.visibilityState === "visible") {
       window.open(NAVER_MAP_ANDROID_STORE_URL, "_blank", "noopener,noreferrer");

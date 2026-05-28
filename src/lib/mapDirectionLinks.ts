@@ -1,4 +1,5 @@
 import { promptNaverMapFallback } from "@/lib/mapDirectionFallback";
+import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 /**
  * 네이버 지도 웹에서 매장 위치 열기 (좌표가 있으면 해당 지점 중심, 없으면 매장명 검색).
@@ -49,21 +50,22 @@ function getNaverMapAppName(): string {
   return encodeURIComponent(window.location.href);
 }
 
-function navigateToUrl(url: string) {
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.rel = "noopener noreferrer";
-  anchor.style.display = "none";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-}
-
 const DEEP_LINK_FALLBACK_MS = 1500;
+
+function resolveAndroidLaunchUrl(
+  intentUrl: string,
+  nativeSchemeUrl?: string,
+): string {
+  // WebAPK(PWA standalone)에서는 intent://가 차단되므로 nmap:// 직접 사용
+  if (isInStandaloneMode() && nativeSchemeUrl) {
+    return nativeSchemeUrl;
+  }
+  return intentUrl;
+}
 
 function tryOpenDeepLink(
   deepLink: string,
-  options?: { webFallback?: string },
+  options?: { webFallback?: string; nativeSchemeUrl?: string },
 ) {
   const { isIOS, isAndroid } = getMobileEnv();
   const webFallback = options?.webFallback;
@@ -82,11 +84,11 @@ function tryOpenDeepLink(
   };
   document.addEventListener("visibilitychange", onHide);
 
-  if (isAndroid) {
-    window.location.href = deepLink;
-  } else {
-    navigateToUrl(deepLink);
-  }
+  const launchUrl = isAndroid
+    ? resolveAndroidLaunchUrl(deepLink, options?.nativeSchemeUrl)
+    : deepLink;
+  // PWA·모바일: location.href 대신 anchor click (intent/custom scheme 안정성)
+  openExternalUrl(launchUrl, { targetBlank: isAndroid });
 
   window.setTimeout(() => {
     document.removeEventListener("visibilitychange", onHide);
@@ -161,7 +163,7 @@ export function openNaverMapMarker(input: {
     webFallback ?? buildNaverMapOpenUrl({ name, lat, lon });
 
   if (isAndroid) {
-    tryOpenDeepLink(intentUrl, { webFallback: webUrl });
+    tryOpenDeepLink(intentUrl, { webFallback: webUrl, nativeSchemeUrl: nmapUrl });
     return;
   }
 
@@ -193,19 +195,20 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
   }
 
   const appName = getNaverMapAppName();
+  const nmapUrl = `nmap://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}`;
+  const intentUrl =
+    `intent://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}` +
+    `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
+    `category=android.intent.category.BROWSABLE;package=${NAVER_MAP_ANDROID_PACKAGE};end`;
+  const webUrl = buildNaverMapOpenUrl({ name, lat, lon });
 
   if (isAndroid) {
-    window.location.href =
-      `intent://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}` +
-      `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
-      `category=android.intent.category.BROWSABLE;package=${NAVER_MAP_ANDROID_PACKAGE};end`;
+    tryOpenDeepLink(intentUrl, { webFallback: webUrl, nativeSchemeUrl: nmapUrl });
     return;
   }
 
   if (isIOS) {
-    const appUrl = `nmap://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}`;
-    const webUrl = buildNaverMapOpenUrl({ name, lat, lon });
-    tryOpenDeepLink(appUrl, { webFallback: webUrl });
+    tryOpenDeepLink(nmapUrl, { webFallback: webUrl });
     return;
   }
 
@@ -273,7 +276,7 @@ export function openNaverMapPlace(
     `package=${NAVER_MAP_ANDROID_PACKAGE};end`;
 
   if (isAndroid) {
-    tryOpenDeepLink(intentUrl, { webFallback: webUrl });
+    tryOpenDeepLink(intentUrl, { webFallback: webUrl, nativeSchemeUrl: nmapUrl });
     return;
   }
 
