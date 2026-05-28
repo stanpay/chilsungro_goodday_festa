@@ -96,7 +96,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     searchPlaceholder: "매장 검색...",
     storesHeading: "결제 가능 매장",
     chipAll: "전체",
-    chipChilsungro: "원도심쿠폰",
+    chipChilsungro: "여행자 소비쿠폰",
     chipLocalCurrency: "지역화폐",
     chipRestaurant: "음식점",
     chipCafe: "카페",
@@ -124,7 +124,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     searchPlaceholder: "Search stores...",
     storesHeading: "Stores you can pay at",
     chipAll: "All",
-    chipChilsungro: "Jeju Old Town coupon",
+    chipChilsungro: "Travel consumer coupon",
     chipLocalCurrency: "Local currency",
     chipRestaurant: "Restaurant",
     chipCafe: "Cafe",
@@ -152,7 +152,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     searchPlaceholder: "搜索门店...",
     storesHeading: "可付款门店",
     chipAll: "全部",
-    chipChilsungro: "济州旧城区优惠券",
+    chipChilsungro: "旅游消费券",
     chipLocalCurrency: "地区货币",
     chipRestaurant: "餐厅",
     chipCafe: "咖啡厅",
@@ -181,7 +181,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     searchPlaceholder: "店舗を検索...",
     storesHeading: "支払い可能な店舗",
     chipAll: "すべて",
-    chipChilsungro: "済州旧市街クーポン",
+    chipChilsungro: "旅行者消費クーポン",
     chipLocalCurrency: "地域通貨",
     chipRestaurant: "飲食店",
     chipCafe: "カフェ",
@@ -216,15 +216,23 @@ export function mainStrings(locale: AppLocale): MainCopy {
 const KO_LOCATION_SYSTEM = {
   initialFetching: "위치 가져오는 중...",
   checkingLocation: "위치 확인 중...",
-  locationUnavailable: "위치 불러올 수 없음",
+  locationFetchFailed: "현재 위치를 불러올 수 없음",
+  locationUnavailable: "불러올 수 없음",
   locationUnknownGeo: "위치를 확인할 수 없음",
 } as const;
+
+/** GPS 등 위치 조회 실패 시 `currentLocation`에 저장 (표시는 `resolveLocationDisplay`로 로케일 변환) */
+export const LOCATION_FETCH_FAILED_KO = KO_LOCATION_SYSTEM.locationFetchFailed;
+
+/** @deprecated `LOCATION_FETCH_FAILED_KO` 사용 */
+export const LOCATION_UNAVAILABLE_KO = KO_LOCATION_SYSTEM.locationUnavailable;
 
 type HeaderCopy = {
   initialFetching: string;
   checkingLocation: string;
   manualLocationLabel: string;
   currentLocationLabel: string;
+  locationFetchFailed: string;
   locationUnavailable: string;
   locationUnknownGeo: string;
   refreshLocationAria: string;
@@ -237,7 +245,8 @@ const HEADER_COPY: Record<AppLocale, HeaderCopy> = {
     checkingLocation: "위치 확인 중...",
     manualLocationLabel: "사용자 위치",
     currentLocationLabel: "현재 위치",
-    locationUnavailable: "위치 불러올 수 없음",
+    locationFetchFailed: "현재 위치를 불러올 수 없음",
+    locationUnavailable: "불러올 수 없음",
     locationUnknownGeo: "위치를 확인할 수 없음",
     refreshLocationAria: "위치 새로고침",
     mapCurrentLocationTitle: "현재 위치",
@@ -247,6 +256,7 @@ const HEADER_COPY: Record<AppLocale, HeaderCopy> = {
     checkingLocation: "Checking location...",
     manualLocationLabel: "Saved location",
     currentLocationLabel: "Current location",
+    locationFetchFailed: "Could not load current location",
     locationUnavailable: "Could not load location",
     locationUnknownGeo: "Location unavailable",
     refreshLocationAria: "Refresh location",
@@ -257,6 +267,7 @@ const HEADER_COPY: Record<AppLocale, HeaderCopy> = {
     checkingLocation: "正在确认位置...",
     manualLocationLabel: "已保存位置",
     currentLocationLabel: "当前位置",
+    locationFetchFailed: "无法加载当前位置",
     locationUnavailable: "无法加载位置",
     locationUnknownGeo: "无法确认位置",
     refreshLocationAria: "刷新位置",
@@ -267,6 +278,7 @@ const HEADER_COPY: Record<AppLocale, HeaderCopy> = {
     checkingLocation: "位置を確認中...",
     manualLocationLabel: "保存した位置",
     currentLocationLabel: "現在地",
+    locationFetchFailed: "現在地を読み込めません",
     locationUnavailable: "位置を読み込めません",
     locationUnknownGeo: "位置を確認できません",
     refreshLocationAria: "位置を更新",
@@ -283,7 +295,15 @@ export function resolveLocationDisplay(locale: AppLocale, stored: string): strin
   const t = HEADER_COPY[locale];
   if (stored === KO_LOCATION_SYSTEM.initialFetching) return t.initialFetching;
   if (stored === KO_LOCATION_SYSTEM.checkingLocation) return t.checkingLocation;
-  if (stored === KO_LOCATION_SYSTEM.locationUnavailable) return t.locationUnavailable;
+  if (
+    stored === KO_LOCATION_SYSTEM.locationFetchFailed ||
+    stored === "위치 불러올 수 없음"
+  ) {
+    return t.locationFetchFailed;
+  }
+  if (stored === KO_LOCATION_SYSTEM.locationUnavailable) {
+    return t.locationUnavailable;
+  }
   if (stored === KO_LOCATION_SYSTEM.locationUnknownGeo) return t.locationUnknownGeo;
   return stored;
 }
@@ -292,14 +312,20 @@ const KO_LOCATION_SYSTEM_VALUES = new Set<string>(Object.values(KO_LOCATION_SYST
 
 /** 위치 API가 아닌 앱 고정 한국어 상태 문구인지 (기계번역 대상에서 제외) */
 export function isStoredKoreanSystemLocation(stored: string): boolean {
-  return KO_LOCATION_SYSTEM_VALUES.has(stored);
+  return KO_LOCATION_SYSTEM_VALUES.has(stored) || stored === "위치 불러올 수 없음";
+}
+
+export function isLocationFetchFailed(stored: string): boolean {
+  return (
+    stored === KO_LOCATION_SYSTEM.locationFetchFailed || stored === "위치 불러올 수 없음"
+  );
 }
 
 type StoreCardCopy = {
   maxDiscountPercent: (n: number) => string;
   localCurrency: string;
   localCurrencyDiscount: (n: number) => string;
-  chilsungroCoupon: string;
+  travelConsumerCoupon: string;
   highOilSupport: string;
   freeParking: string;
   freeParkingWithSize: (sizeLabel: string) => string;
@@ -317,7 +343,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     maxDiscountPercent: (n) => `최대 ${n}% 할인`,
     localCurrency: "지역화폐",
     localCurrencyDiscount: (n) => `지역화폐 ${n}%할인`,
-    chilsungroCoupon: "원도심쿠폰",
+    travelConsumerCoupon: "여행자 소비쿠폰",
     highOilSupport: "고유가지원금",
     freeParking: "무료 주차 가능",
     freeParkingWithSize: (s) => `무료 주차 가능: ${s}`,
@@ -333,7 +359,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     maxDiscountPercent: (n) => `Up to ${n}% off`,
     localCurrency: "Local currency",
     localCurrencyDiscount: (n) => `Local currency ${n}% off`,
-    chilsungroCoupon: "Old Town coupon",
+    travelConsumerCoupon: "Travel consumer coupon",
     highOilSupport: "High Oil Support",
     freeParking: "Parking available (free)",
     freeParkingWithSize: (s) => `Free parking: ${s}`,
@@ -349,7 +375,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     maxDiscountPercent: (n) => `最高 ${n}% 折扣`,
     localCurrency: "本地货币",
     localCurrencyDiscount: (n) => `本地货币 ${n}% 优惠`,
-    chilsungroCoupon: "济州旧城区优惠券",
+    travelConsumerCoupon: "旅游消费券",
     highOilSupport: "高油价支援金",
     freeParking: "可免费停车",
     freeParkingWithSize: (s) => `免费停车：${s}`,
@@ -365,7 +391,7 @@ const STORE_CARD_COPY: Record<AppLocale, StoreCardCopy> = {
     maxDiscountPercent: (n) => `最大${n}%オフ`,
     localCurrency: "地域通貨",
     localCurrencyDiscount: (n) => `地域プレミアム ${n}%割引`,
-    chilsungroCoupon: "済州旧市街クーポン",
+    travelConsumerCoupon: "旅行者消費クーポン",
     highOilSupport: "高油価支援金",
     freeParking: "無料駐車可",
     freeParkingWithSize: (s) => `無料駐車可：${s}`,

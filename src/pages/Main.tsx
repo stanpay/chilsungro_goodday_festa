@@ -23,8 +23,7 @@ import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
-import type { CSSProperties } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { paymentHistoryApi } from "@/api/paymentHistory";
@@ -32,6 +31,7 @@ import { storesApi, type NearbyStore } from "@/api/stores";
 import { gifticonsApi } from "@/api/gifticons";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
+import { getBrowserPosition } from "@/lib/geolocation";
 import { Skeleton } from "@/components/ui/skeleton";
 import TutorialModal from "@/components/TutorialModal";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
@@ -42,6 +42,9 @@ import {
   APP_LOCALES,
   isAppLocale,
   headerStrings,
+  isLocationFetchFailed,
+  LOCATION_FETCH_FAILED_KO,
+  type AppLocale,
 } from "@/lib/locale";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { useTranslatedAddressLine } from "@/hooks/useKoreanDisplayText";
@@ -168,7 +171,8 @@ function storeChipIsOther(store: StoreLikeForChip): boolean {
 
 function storeMatchesBenefitChipFilters(
   store: StoreLikeForChip,
-  chips: ReadonlySet<StoreFilterChipId>
+  chips: ReadonlySet<StoreFilterChipId>,
+  locale: AppLocale
 ): boolean {
   // openNow는 영업 여부 필터에서 따로 처리하므로 여기서는 제외
   if (chips.has("all")) return true;
@@ -176,7 +180,9 @@ function storeMatchesBenefitChipFilters(
   const parts: boolean[] = [];
   if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
   if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
-  if (chips.has("highOilSupport")) parts.push(storeHasHighOilSupport(store));
+  if (locale === "ko" && chips.has("highOilSupport")) {
+    parts.push(storeHasHighOilSupport(store));
+  }
 
   return parts.length > 0 && parts.some(Boolean);
 }
@@ -207,32 +213,13 @@ function ChipButton({
   label: string;
   onToggle: () => void;
 }) {
-  const containerRef = useRef<HTMLSpanElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
-  const [marqueeDist, setMarqueeDist] = useState(0);
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    const text = textRef.current;
-    if (!container || !text) return;
-    const update = () => {
-      const dist = text.scrollWidth - container.clientWidth;
-      setMarqueeDist(dist > 1 ? dist : 0);
-    };
-    update();
-    document.fonts?.ready.then(update);
-    const ro = new ResizeObserver(update);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [label]);
-
   return (
     <button
       type="button"
       aria-pressed={active}
       onClick={onToggle}
       className={cn(
-        "flex shrink-0 max-w-[8rem] items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
+        "flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground shadow-sm"
           : "border-border bg-card text-foreground hover:bg-muted/80"
@@ -246,22 +233,7 @@ function ChipButton({
           )}
         />
       )}
-      <span ref={containerRef} className="block min-w-0 overflow-hidden">
-        <span
-          ref={textRef}
-          className={cn(
-            "block whitespace-nowrap text-xs",
-            marqueeDist > 0 && "marquee-on-overflow"
-          )}
-          style={
-            marqueeDist > 0
-              ? ({ "--marquee-distance": `${marqueeDist}px` } as CSSProperties)
-              : undefined
-          }
-        >
-          {label}
-        </span>
-      </span>
+      <span className="whitespace-nowrap text-xs">{label}</span>
     </button>
   );
 }
@@ -308,6 +280,14 @@ interface StoreData {
   const [isLoadingStores, setIsLoadingStores] = useState(true);
   const [isLoadingMoreStores, setIsLoadingMoreStores] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
+
+  /** 사용자가 /location에서 직접 고른 위치만 유지. 자동 GPS 캐시는 실패 시 제거 */
+  const clearAutoSavedLocation = () => {
+    localStorage.removeItem("currentCoordinates");
+    localStorage.removeItem("selectedLocation");
+    setCurrentCoords(null);
+  };
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
@@ -318,6 +298,24 @@ interface StoreData {
     () => new Set<StoreFilterChipId>(["all"])
   );
   const { locale, setLocale } = useAppLocale();
+
+  useEffect(() => {
+    if (locale === "ko") return;
+    setBenefitFilterChips((prev) => {
+      if (!prev.has("highOilSupport")) return prev;
+      const next = new Set(prev);
+      next.delete("highOilSupport");
+      return next;
+    });
+  }, [locale]);
+
+  const benefitFilterChipOrder = useMemo(
+    () =>
+      locale === "ko"
+        ? BENEFIT_FILTER_CHIP_ORDER
+        : BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport"),
+    [locale]
+  );
   const [showTutorialModal, setShowTutorialModal] = useState(false);
   const [showLocationPermModal, setShowLocationPermModal] = useState(false);
   const isMapView = searchParams.get("map") === "1";
@@ -338,6 +336,7 @@ interface StoreData {
   const mapOverlaysReadyRef = useRef(false);
   const mapClusteringEnabledRef = useRef(false);
   const mapBootstrapFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextFitMapRef = useRef(false);
 
   const getMarkerPinContent = (marker: any): HTMLElement | null => {
     const icon = marker?.getIcon?.();
@@ -563,7 +562,7 @@ interface StoreData {
             });
             localStorage.removeItem("isManualLocation");
             setIsManualLocation(false);
-            setCurrentLocation(savedLocation || "위치 불러올 수 없음");
+            setCurrentLocation(LOCATION_FETCH_FAILED_KO);
           }
         }
       } else if (isManualLocationValue && !savedLocation) {
@@ -594,79 +593,70 @@ interface StoreData {
       await fetchBrowserLocation();
     };
 
+    const applyDetectedLocation = async (latitude: number, longitude: number) => {
+      console.log("✅ [위치 정보] 좌표 적용:", { latitude, longitude });
+      console.log("🏠 [주소 변환] 시작");
+      const address = await getAddressFromCoords(latitude, longitude, locale);
+      console.log("✅ [주소 변환] 완료:", address);
+      const displayAddress =
+        address === "위치를 확인할 수 없음"
+          ? headerStrings(locale).locationUnknownGeo
+          : address;
+
+      localStorage.setItem("selectedLocation", displayAddress);
+      localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+      localStorage.removeItem("isManualLocation");
+      setIsManualLocation(false);
+      setCurrentLocation(displayAddress);
+      setCurrentCoords({ latitude, longitude });
+      setIsLoadingLocation(false);
+
+      console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
+      await fetchNearbyStores(latitude, longitude);
+    };
+
     const fetchBrowserLocation = async () => {
-      // 위치 권한 확인 및 현재 위치 가져오기
-      if (navigator.geolocation) {
-        console.log("🌍 [위치 정보] 브라우저 위치 정보 요청 시작");
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            try {
-              const { latitude, longitude } = position.coords;
-              console.log("✅ [위치 정보] 좌표 획득 성공:", { latitude, longitude });
-              
-              // 좌표를 주소로 변환
-              console.log("🏠 [주소 변환] 시작");
-              const address = await getAddressFromCoords(latitude, longitude, locale);
-              console.log("✅ [주소 변환] 완료:", address);
-              
-              // 저장 및 표시 (현재 위치는 자동으로 가져온 것이므로 isManualLocation 플래그 없음)
-              localStorage.setItem("selectedLocation", address);
-              localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-              localStorage.removeItem("isManualLocation"); // 현재 위치는 수동 설정이 아님
-              setIsManualLocation(false);
-              setCurrentLocation(address);
-              setCurrentCoords({ latitude, longitude });
-              setIsLoadingLocation(false);
-              
-              // 매장 정보 가져오기
-              console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
-              await fetchNearbyStores(latitude, longitude);
-            } catch (error) {
-              console.error("❌ [위치 초기화] 주소 변환 중 오류:", error);
-              // 이전 사용자 위치값 표시
-              const previousLocation = localStorage.getItem("selectedLocation");
-              setCurrentLocation(previousLocation || "위치 불러올 수 없음");
-              // localStorage는 유지 (이전 위치값을 보여주기 위해)
-              setIsLoadingLocation(false);
-              setIsLoadingStores(false);
-            }
-          },
-          (error) => {
-            console.error("❌ [위치 정보] 획득 실패:", error);
-            console.log("에러 코드:", error.code);
-            console.log("에러 메시지:", error.message);
-            
-            // 이전 사용자 위치값 표시
-            const previousLocation = localStorage.getItem("selectedLocation");
-            setCurrentLocation(previousLocation || "위치 불러올 수 없음");
-            // localStorage는 유지 (이전 위치값을 보여주기 위해)
-            setIsLoadingLocation(false);
-            setIsLoadingStores(false);
-            
-            // 에러 메시지 표시 (권한 거부시)
-            if (error.code === error.PERMISSION_DENIED) {
-              console.warn("⚠️ [위치 권한] 사용자가 위치 권한을 거부했습니다");
-              toast({
-                title: "위치 권한 필요",
-                description: "위치 권한을 허용하면 자동으로 현재 위치가 설정됩니다.",
-              });
-            }
-          },
-          {
-            // 고정밀은 실내/일부 환경에서 타임아웃이 잦아 일반 정확도 우선
-            enableHighAccuracy: false,
-            timeout: 20000,
-            maximumAge: 60000,
-          }
-        );
-      } else {
-        // Geolocation 미지원
-        // 이전 사용자 위치값 표시
-        const previousLocation = localStorage.getItem("selectedLocation");
-        setCurrentLocation(previousLocation || "위치 불러올 수 없음");
-        // localStorage는 유지 (이전 위치값을 보여주기 위해)
+      if (!navigator.geolocation) {
+        clearAutoSavedLocation();
+        setCurrentLocation(LOCATION_FETCH_FAILED_KO);
         setIsLoadingLocation(false);
         setIsLoadingStores(false);
+        return;
+      }
+
+      console.log("🌍 [위치 정보] 브라우저 위치 정보 요청 시작");
+      try {
+        const { latitude, longitude } = await getBrowserPosition();
+        await applyDetectedLocation(latitude, longitude);
+      } catch (error) {
+        const geoError = error as GeolocationPositionError;
+        console.error("❌ [위치 정보] 획득 실패:", geoError);
+        if (geoError?.code != null) console.log("에러 코드:", geoError.code);
+        if (geoError?.message) console.log("에러 메시지:", geoError.message);
+
+        clearAutoSavedLocation();
+
+        if (geoError?.code === 1) {
+          console.warn("⚠️ [위치 권한] 사용자가 위치 권한을 거부했습니다");
+          setCurrentLocation(LOCATION_FETCH_FAILED_KO);
+          setIsLoadingLocation(false);
+          setIsLoadingStores(false);
+          toast({
+            title: "위치 권한 필요",
+            description: "위치 권한을 허용하면 자동으로 현재 위치가 설정됩니다.",
+            duration: 2000,
+          });
+          return;
+        }
+
+        setCurrentLocation(LOCATION_FETCH_FAILED_KO);
+        setIsLoadingLocation(false);
+        setIsLoadingStores(false);
+        toast({
+          title: "위치를 불러올 수 없습니다",
+          description: "현재 위치를 확인하지 못했습니다. 상단에서 위치를 직접 설정해 주세요.",
+          duration: 2000,
+        });
       }
     };
 
@@ -674,31 +664,6 @@ interface StoreData {
 
     return () => {};
   }, [toast, navigate, locale]);
-
-  const handleResearch = () => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-    const center = map.getCenter();
-    const centerLat = center.lat();
-    const centerLng = center.lng();
-
-    // 캐시된 전체 매장 목록에서 지도 중심 기준 1500m 이내만 필터링 (API 재호출 없음)
-    const NEARBY_FILTER_RADIUS_M = 1500;
-    const filtered = allFetchedStoresRef.current.flatMap((s: any) => {
-      if (typeof s.lat !== "number" || typeof s.lon !== "number") return [];
-      const distM = calculateDistance(centerLat, centerLng, s.lat, s.lon) * 1000;
-      if (distM > NEARBY_FILTER_RADIUS_M) return [];
-      return [{
-        ...s,
-        distance: distM < 1000 ? `${Math.round(distM)}m` : `${(distM / 1000).toFixed(1)}km`,
-        distanceNum: Math.round(distM),
-      }];
-    });
-
-    console.log(`🔍 [재검색] 지도 중심 (${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}) 기준 ${NEARBY_FILTER_RADIUS_M}m 이내: ${filtered.length}개`);
-    setMapFilteredStores(filtered);
-    setShowResearchButton(false);
-  };
 
   const handleRefreshLocation = async () => {
     console.log("🔄🔄🔄 [수동 새로고침] 위치 재조회 시작 🔄🔄🔄");
@@ -721,63 +686,38 @@ interface StoreData {
     setCurrentLocation("위치 확인 중...");
     
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            const address = await getAddressFromCoords(latitude, longitude, locale);
-            
-            localStorage.setItem("selectedLocation", address);
-            localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-            localStorage.removeItem("isManualLocation"); // 새로고침으로 현재 위치를 가져왔으므로 수동 설정 아님
-            setIsManualLocation(false);
-            setCurrentLocation(address);
-            setCurrentCoords({ latitude, longitude });
-            setIsLoadingLocation(false);
-            
-            await fetchNearbyStores(latitude, longitude);
-            
-            toast({
-              title: "위치 업데이트 완료",
-              description: "현재 위치가 업데이트되었습니다.",
-            });
-          } catch (error) {
-            console.error("❌ [위치 새로고침] 주소 변환 중 오류:", error);
-            // 이전 사용자 위치값 표시
-            const previousLocation = localStorage.getItem("selectedLocation");
-            setCurrentLocation(previousLocation || "위치 불러올 수 없음");
-            // localStorage는 유지 (이전 위치값을 보여주기 위해)
-            setIsLoadingLocation(false);
-            setIsLoadingStores(false);
-            
-            toast({
-              title: "위치 업데이트 실패",
-              description: "주소 변환에 실패했습니다.",
-              variant: "destructive",
-            });
-          }
-        },
-        (error) => {
-          console.error("위치 가져오기 실패:", error);
-          // 이전 사용자 위치값 표시
-          const previousLocation = localStorage.getItem("selectedLocation");
-          setCurrentLocation(previousLocation || "위치 불러올 수 없음");
-          // localStorage는 유지 (이전 위치값을 보여주기 위해)
-          setIsLoadingLocation(false);
-          setIsLoadingStores(false);
-          
-          toast({
-            title: "위치 업데이트 실패",
-            description: "위치를 가져올 수 없습니다.",
-            variant: "destructive",
-          });
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 20000,
-          maximumAge: 60000,
-        }
-      );
+      try {
+        const { latitude, longitude } = await getBrowserPosition();
+        const address = await getAddressFromCoords(latitude, longitude, locale);
+
+        localStorage.setItem("selectedLocation", address);
+        localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+        localStorage.removeItem("isManualLocation");
+        setIsManualLocation(false);
+        setCurrentLocation(address);
+        setCurrentCoords({ latitude, longitude });
+        setIsLoadingLocation(false);
+
+        await fetchNearbyStores(latitude, longitude);
+
+        toast({
+          title: "위치 업데이트 완료",
+          description: "현재 위치가 업데이트되었습니다.",
+        });
+      } catch (error) {
+        console.error("❌ [위치 새로고침] 실패:", error);
+        clearAutoSavedLocation();
+        setCurrentLocation(LOCATION_FETCH_FAILED_KO);
+        setIsLoadingLocation(false);
+        setIsLoadingStores(false);
+
+        toast({
+          title: "위치 업데이트 실패",
+          description: "위치를 가져올 수 없습니다. 위치 설정에서 직접 선택해 주세요.",
+          variant: "destructive",
+          duration: 2000,
+        });
+      }
     } else {
       setIsLoadingLocation(false);
       setIsLoadingStores(false);
@@ -822,7 +762,8 @@ interface StoreData {
       await fetchNearbyStores(latitude, longitude);
     } catch (error) {
       console.error("위치 처리 오류:", error);
-      setCurrentLocation("위치 불러올 수 없음");
+      clearAutoSavedLocation();
+      setCurrentLocation(LOCATION_FETCH_FAILED_KO);
       setIsLoadingLocation(false);
       setIsLoadingStores(false);
     }
@@ -1378,7 +1319,9 @@ interface StoreData {
   const headerLocationLine = useTranslatedAddressLine(currentLocation, locale);
   const headerLocationText = isLoadingLocation
     ? h.checkingLocation
-    : `${isManualLocation ? h.manualLocationLabel : h.currentLocationLabel}: ${headerLocationLine}`;
+    : isLocationFetchFailed(currentLocation)
+      ? h.locationFetchFailed
+      : `${isManualLocation ? h.manualLocationLabel : h.currentLocationLabel}: ${headerLocationLine}`;
 const chipLabelMap: Record<StoreFilterChipId, string> = {
   all: t.chipAll,
   chilsungro: t.chipChilsungro,
@@ -1467,8 +1410,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   );
 
   const benefitFilteredStores = useMemo(() =>
-    filteredStores.filter((store) => storeMatchesBenefitChipFilters(store, benefitFilterChips)),
-    [filteredStores, benefitFilterChips]
+    filteredStores.filter((store) =>
+      storeMatchesBenefitChipFilters(store, benefitFilterChips, locale)
+    ),
+    [filteredStores, benefitFilterChips, locale]
   );
 
   const categoryFilteredStores = useMemo(() =>
@@ -1484,15 +1429,62 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     [categoryFilteredStores, benefitFilterChips]
   );
 
+  const hasStoreCoords = (store: StoreData) =>
+    Number.isFinite(store.lat) && Number.isFinite(store.lon);
+
+  const handleResearch = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const naver = (window as any).naver;
+    const bounds = map.getBounds?.();
+    if (!bounds) return;
+
+    const center = map.getCenter();
+    const centerLat = center.lat();
+    const centerLng = center.lng();
+
+    const isInViewport = (lat: number, lon: number): boolean => {
+      if (typeof bounds.hasLatLng === "function" && naver?.maps?.LatLng) {
+        return bounds.hasLatLng(new naver.maps.LatLng(lat, lon));
+      }
+      const sw = bounds.getSW?.();
+      const ne = bounds.getNE?.();
+      if (!sw || !ne) return false;
+      const minLat = Math.min(sw.lat(), ne.lat());
+      const maxLat = Math.max(sw.lat(), ne.lat());
+      const minLng = Math.min(sw.lng(), ne.lng());
+      const maxLng = Math.max(sw.lng(), ne.lng());
+      return lat >= minLat && lat <= maxLat && lon >= minLng && lon <= maxLng;
+    };
+
+    // 칩 필터가 적용된 목록 중 현재 지도 화면(뷰포트) 안에 있는 매장만 표시
+    const filtered = categoryFilteredStores.flatMap((s) => {
+      if (!hasStoreCoords(s)) return [];
+      if (!isInViewport(s.lat!, s.lon!)) return [];
+      const distM = calculateDistance(centerLat, centerLng, s.lat!, s.lon!) * 1000;
+      return [
+        {
+          ...s,
+          distance:
+            distM < 1000 ? `${Math.round(distM)}m` : `${(distM / 1000).toFixed(1)}km`,
+          distanceNum: Math.round(distM),
+        },
+      ];
+    });
+
+    console.log(`🔍 [재검색] 지도 화면 영역 내 매장: ${filtered.length}개`);
+    skipNextFitMapRef.current = true;
+    setMapFilteredStores(filtered);
+    setShowResearchButton(false);
+  };
+
   const sortedStores = useMemo(() =>
     [...openStores].sort((a, b) =>
       sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
     ),
     [openStores, sortBy]
   );
-
-  const hasStoreCoords = (store: StoreData) =>
-    Number.isFinite(store.lat) && Number.isFinite(store.lon);
 
   const storesWithCoords = useMemo(() => {
     // 지도뷰: 재검색 결과 또는 불러온 매장 중 좌표 있는 것 (영업중 필터는 시트에서만 적용 가능)
@@ -1857,7 +1849,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           syncStorePinsToMap();
           updateStoreLabels();
           showAllStoreMarkers();
-          fitMapToStores();
+          if (!skipNextFitMapRef.current) {
+            fitMapToStores();
+          }
           naver.maps.Event.once(map, "idle", () => {
             if (!isCancelled) {
               mapClusteringEnabledRef.current = true;
@@ -1941,7 +1935,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
     const run = () => {
       rebuildStoreOverlaysRef.current?.();
-      fitMapToStoresRef.current?.();
+      if (!skipNextFitMapRef.current) {
+        fitMapToStoresRef.current?.();
+      } else {
+        skipNextFitMapRef.current = false;
+      }
     };
 
     if (mapOverlaysReadyRef.current) {
@@ -2107,17 +2105,25 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               placeholder={t.searchPlaceholder}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") setSearchQuery(searchInput); }}
-              className="w-full h-12 pl-10 pr-10 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setSearchQuery(searchInput);
+              }}
+              className={cn(
+                "w-full h-12 pl-10 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all",
+                searchInput || searchQuery ? "pr-10" : "pr-3"
+              )}
             />
-            {searchInput && (
+            {(searchInput || searchQuery) && (
               <button
                 type="button"
-                onClick={() => { setSearchInput(""); setSearchQuery(""); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="검색어 지우기"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             )}
           </div>
@@ -2187,7 +2193,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           <div className="space-y-2 -mr-4">
             {renderFilterChipRow(
               "flex w-full gap-2 overflow-x-auto py-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-              BENEFIT_FILTER_CHIP_ORDER,
+              benefitFilterChipOrder,
               benefitFilterChips,
               toggleBenefitFilterChip,
               (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria

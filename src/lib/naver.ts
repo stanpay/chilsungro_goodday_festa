@@ -3,6 +3,7 @@ import {
   buildGeocodeQueryVariants,
   getKnownCoordsForQuery,
 } from "@/lib/naverGeocodeFallback";
+import { normalizeGeocodeRestLanguage } from "@/lib/naverGeocodeLanguage";
 
 let naverLoaded = false;
 let naverGeocoderLoaded = false;
@@ -135,6 +136,7 @@ export interface NaverSearchResult {
   road_address_name: string;
   x: string;
   y: string;
+  category_name?: string;
 }
 
 export interface NaverSearchResponse {
@@ -189,7 +191,9 @@ async function searchAddressViaProxy(
   const url = new URL("/api/naver/geocode", window.location.origin);
   url.searchParams.set("query", query.trim());
   url.searchParams.set("count", "10");
-  if (locale) url.searchParams.set("language", resolveNaverLanguage(locale));
+  if (locale) {
+    url.searchParams.set("language", normalizeGeocodeRestLanguage(resolveNaverLanguage(locale)));
+  }
 
   const res = await fetch(url.toString());
   if (!res.ok) {
@@ -206,8 +210,47 @@ async function searchAddressViaProxy(
   }
 
   const data = await res.json();
+  if (data?.status !== "OK") {
+    console.warn(
+      "[naver] Geocoding proxy status:",
+      data?.status,
+      data?.errorMessage ?? ""
+    );
+    return { documents: [], forbidden: false };
+  }
+
   const documents = mapGeocodeAddresses(data?.addresses ?? [], query);
   return { documents, forbidden: false };
+}
+
+function prioritizeJejuResults(results: NaverSearchResult[]): NaverSearchResult[] {
+  const isJeju = (r: NaverSearchResult) =>
+    `${r.address_name}${r.road_address_name}`.includes("제주");
+  const jeju = results.filter(isJeju);
+  if (jeju.length === 0) return results;
+  return [...jeju, ...results.filter((r) => !isJeju(r))];
+}
+
+/** Geocoding은 주소만 반환 — 장소명은 Kakao 키워드 검색으로 보완 */
+async function searchPlaceViaKakao(query: string): Promise<NaverSearchResult[]> {
+  try {
+    const { searchAddress: kakaoSearch } = await import("@/lib/kakao");
+    const result = await kakaoSearch(query.trim(), 1, 10);
+    if (result.documents.length === 0) return [];
+
+    const mapped = result.documents.map((doc) => ({
+      place_name: doc.place_name,
+      address_name: doc.address_name,
+      road_address_name: doc.road_address_name,
+      x: doc.x,
+      y: doc.y,
+      category_name: doc.category_name,
+    }));
+    return prioritizeJejuResults(mapped);
+  } catch (error) {
+    console.warn("[naver] Kakao place search fallback error:", error);
+    return [];
+  }
 }
 
 async function searchAddressViaJs(
@@ -237,7 +280,7 @@ async function searchAddressViaJs(
   });
 }
 
-/** 주소 검색: REST → (403 아닐 때만) JS → 알려진 제주 좌표 폴백 */
+/** 주소·장소 검색: 주소 Geocoding → 장소명 Kakao → 알려진 제주 좌표 폴백 */
 export async function searchAddress(
   query: string,
   locale?: AppLocale
@@ -277,6 +320,15 @@ export async function searchAddress(
         console.warn("[naver] JS geocode error:", error);
       }
     }
+  }
+
+  const fromKakao = await searchPlaceViaKakao(query);
+  if (fromKakao.length > 0) {
+    return {
+      documents: fromKakao,
+      meta: { total_count: fromKakao.length, is_end: true },
+      geocodingForbidden,
+    };
   }
 
   const known = getKnownCoordsForQuery(query);

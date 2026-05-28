@@ -17,10 +17,8 @@ export default defineConfig(({ mode }) => {
       host: true,
       port: 8080,
       strictPort: true,
-      // HMR WebSocket: host:true 사용 시 localhost와 불일치하면 연결 실패
+      // 접속 URL 호스트와 동일하게 HMR 사용 (localhost 고정 시 LAN IP 접속 시 WS 실패)
       hmr: {
-        host: "localhost",
-        port: 8080,
         clientPort: 8080,
       },
     },

@@ -109,3 +109,74 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
     "noopener,noreferrer"
   );
 }
+
+/**
+ * 네이버 지도 장소 ID(place)로 길안내 딥링크를 연다.
+ * - Android: Intent URI → 앱 미설치 시 웹 fallback
+ * - iOS: nmap://place → 앱 미설치 시 웹 fallback
+ * - 데스크탑: 웹 네이버 지도 새 탭
+ */
+export function openNaverMapPlace(placeId: string): void {
+  const webUrl = `https://map.naver.com/p/entry/place/${placeId}?placePath=%2Fhome`;
+  const appName = encodeURIComponent(window.location.origin);
+  const ua = navigator.userAgent;
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+  if (isAndroid) {
+    window.location.href =
+      `intent://place?id=${placeId}&appname=${appName}` +
+      `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
+      `category=android.intent.category.BROWSABLE;` +
+      `package=com.nhn.android.nmap;` +
+      `S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+    return;
+  }
+
+  if (isIOS) {
+    const deepLink = `nmap://place?id=${placeId}&appname=${appName}`;
+    const clickedAt = Date.now();
+
+    window.location.href = deepLink;
+
+    setTimeout(() => {
+      if (Date.now() - clickedAt < 2000) {
+        window.location.href = webUrl;
+      }
+    }, 1500);
+    return;
+  }
+
+  window.open(webUrl, "_blank", "noopener,noreferrer");
+}
+
+/**
+ * naver.me 등 네이버 지도 공유 URL을 연다.
+ * - 모바일: 같은 탭에서 열어 앱 딥링크 리다이렉트 유도
+ * - 데스크탑: 새 탭
+ */
+export function openNaverMapLink(url: string): void {
+  const ua = navigator.userAgent;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+
+  if (isMobile) {
+    window.location.href = url;
+    return;
+  }
+
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export function openNaverMapDirections(input: {
+  placeId?: string;
+  url?: string;
+}): void {
+  if (input.url) {
+    openNaverMapLink(input.url);
+    return;
+  }
+
+  if (input.placeId) {
+    openNaverMapPlace(input.placeId);
+  }
+}

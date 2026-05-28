@@ -1,6 +1,7 @@
 import type { Plugin } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolveNaverCredsFromEnv, fetchNaverUpstream } from "../api/naver/_upstream";
+import { normalizeGeocodeRestLanguage } from "../src/lib/naverGeocodeLanguage";
 
 function sendJson(res: ServerResponse, status: number, body: string) {
   res.statusCode = status;
@@ -52,7 +53,9 @@ async function handleNaverApi(
       }
       const upstreamParams = new URLSearchParams({ query });
       if (params.get("count")) upstreamParams.set("count", params.get("count")!);
-      if (params.get("language")) upstreamParams.set("language", params.get("language")!);
+      if (params.get("language")) {
+        upstreamParams.set("language", normalizeGeocodeRestLanguage(params.get("language")));
+      }
 
       const { status, body } = await fetchNaverUpstream(
         "/map-geocode/v2/geocode",

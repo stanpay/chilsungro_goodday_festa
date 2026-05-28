@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,18 +10,19 @@ import Location from "./pages/Location";
 import Sell from "./pages/Sell";
 import SellResult from "./pages/SellResult";
 import SellResultDetail from "./pages/SellResultDetail";
-import Payment from "./pages/Payment";
-import TutorialPayment from "./pages/TutorialPayment";
 import BarcodePrototype from "./pages/BarcodePrototype";
 import MyPage from "./pages/MyPage";
 import MyGifticons from "./pages/MyGifticons";
 import History from "./pages/History";
-import PaymentMethods from "./pages/PaymentMethods";
-import OneTouchPayment from "./pages/OneTouchPayment";
 import DiscountCoupon from "./pages/DiscountCoupon";
-import PaymentSuccess from "./pages/PaymentSuccess";
-import PaymentFail from "./pages/PaymentFail";
 import NotFound from "./pages/NotFound";
+
+const Payment = lazy(() => import("./pages/Payment"));
+const TutorialPayment = lazy(() => import("./pages/TutorialPayment"));
+const PaymentMethods = lazy(() => import("./pages/PaymentMethods"));
+const OneTouchPayment = lazy(() => import("./pages/OneTouchPayment"));
+const PaymentSuccess = lazy(() => import("./pages/PaymentSuccess"));
+const PaymentFail = lazy(() => import("./pages/PaymentFail"));
 import ChatSupport from "./components/ChatSupport";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import MembershipManagement from "./pages/MembershipManagement";
@@ -54,6 +56,7 @@ const App = () => (
         }}
       >
         <AnalyticsPageTracker />
+        <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Main />} />
           <Route path="/jeju" element={<Main />} />
@@ -82,6 +85,7 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
         <ChatSupport />
         <PwaInstallPrompt />
       </BrowserRouter>

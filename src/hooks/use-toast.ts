@@ -156,6 +156,11 @@ function toast({ ...props }: Toast) {
     },
   });
 
+  const duration = props.duration ?? 5000;
+  if (Number.isFinite(duration) && duration > 0) {
+    setTimeout(() => dismiss(), duration);
+  }
+
   return {
     id: id,
     dismiss,

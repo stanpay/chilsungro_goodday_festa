@@ -4,8 +4,14 @@ type LocalizedText = Partial<Record<AppLocale, string>> & { ko: string };
 
 export type MainBanner = {
   id: string;
-  /** 이미지 URL — 있으면 이미지 배너로 표시 */
+  /** 캐러셀 배너 이미지 URL */
   imageUrl?: string;
+  /** 팝업 하단 이미지 URL (캐러셀 배너와 별도 — mainBanners.ts에서 지정) */
+  popupImageUrl?: string;
+  /** 길안내 버튼 클릭 시 열 네이버 지도 장소 ID */
+  naverMapPlaceId?: string;
+  /** 길안내 버튼 클릭 시 열 네이버 지도 URL (naver.me 등) */
+  naverMapUrl?: string;
   imageAlt?: LocalizedText;
   imageCtaLabel?: LocalizedText;
   /** 텍스트 배너용 */
@@ -17,20 +23,89 @@ export type MainBanner = {
   variant?: "primary" | "accent" | "muted";
 };
 
-/** 메인 화면 상단 배너 — 광고·공지 내용은 여기서 수정 */
-export const MAIN_BANNERS: MainBanner[] = [
-  {
-    id: "jeju-travel-center-coupon-event",
-    imageUrl: "/banners/jeju-travel-center-coupon-event.png",
-    imageAlt: {
-      ko: "제주 여행자센터 폭풍감동 쿠폰 이벤트",
-      en: "Jeju Travel Center coupon event",
-      zh: "济州旅行者中心优惠券活动",
-      ja: "済州旅行者センタークーポンイベント",
+const TRAVEL_CENTER_PLACE_ID = "2031464673";
+const CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL = "https://naver.me/xpjja0mM";
+
+const JEJU_TRAVELER_CENTER_COUPON_POSTER =
+  "/banners/jeju-traveler-center-coupon-poster.png";
+const CHILSEONGRO_GOOD_DAY_FESTA_POSTER =
+  "/banners/chilseongro-good-day-festa-poster.png";
+
+const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
+  ko: "/banners/travel-center-ko.png",
+  en: "/banners/travel-center-en.png",
+  zh: "/banners/travel-center-zh.png",
+  ja: "/banners/travel-center-ja.png",
+};
+
+export const NAVER_MAP_DIRECTIONS_IMAGE: Record<AppLocale, string> = {
+  ko: "/banners/naver-map-directions-ko.png",
+  en: "/banners/naver-map-directions-en.png",
+  zh: "/banners/naver-map-directions-zh.png",
+  ja: "/banners/naver-map-directions-ja.png",
+};
+
+export const NAVER_MAP_DIRECTIONS_ALT: Record<AppLocale, string> = {
+  ko: "네이버 지도 길안내",
+  en: "Naver Map directions",
+  zh: "Naver 地图路线指南",
+  ja: "Naverマップ アクセス案内",
+};
+
+/** 메인 화면 상단 배너 — 광고·공지·팝업 이미지는 여기서 수정 */
+export function getMainBanners(locale: AppLocale): MainBanner[] {
+  return [
+    {
+      id: "travel-center",
+      imageUrl: TRAVEL_CENTER_IMAGE[locale],
+      popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
+      naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
+      imageAlt: {
+        ko: "제주 여행자센터 안내",
+        en: "Jeju Travel Center",
+        zh: "济州旅行者中心",
+        ja: "済州旅行者センター",
+      },
+      href: "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome",
     },
-    href: "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome",
-  },
-];
+    {
+      id: "coupon-ko",
+      imageUrl: "/banners/coupon-ko.png",
+      popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
+      naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
+      imageAlt: {
+        ko: "제주 여행자센터 쿠폰 이벤트",
+        en: "Jeju Travel Center coupon event",
+        zh: "济州旅行者中心优惠券活动",
+        ja: "済州旅行者センタークーポンイベント",
+      },
+    },
+    {
+      id: "chilseongro-good-day-festa-1",
+      imageUrl: "/banners/chilseongro-good-day-festa-1.png",
+      popupImageUrl: CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
+      naverMapUrl: CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL,
+      imageAlt: {
+        ko: "칠성로 굿데이 페스타",
+        en: "Chilseong-ro Good Day Festa",
+        zh: "七星路 Good Day 庆典",
+        ja: "七星路 Good Day フェスタ",
+      },
+    },
+    {
+      id: "chilseongro-good-day-festa-2",
+      imageUrl: "/banners/chilseongro-good-day-festa-2.png",
+      popupImageUrl: CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
+      naverMapUrl: CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL,
+      imageAlt: {
+        ko: "칠성로 굿데이 페스타",
+        en: "Chilseong-ro Good Day Festa",
+        zh: "七星路 Good Day 庆典",
+        ja: "七星路 Good Day フェスタ",
+      },
+    },
+  ];
+}
 
 export function getBannerText(
   text: LocalizedText | undefined,

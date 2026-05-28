@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getBrowserPosition } from "@/lib/geolocation";
 import { MapPin, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,19 +18,16 @@ interface LocationPermissionModalProps {
 const LocationPermissionModal = ({ open, onGranted }: LocationPermissionModalProps) => {
   const [status, setStatus] = useState<"idle" | "loading" | "denied">("idle");
 
-  const handleAllow = () => {
+  const handleAllow = async () => {
     setStatus("loading");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setStatus("idle");
-        onGranted({ latitude: position.coords.latitude, longitude: position.coords.longitude });
-      },
-      (err) => {
-        console.warn("위치 권한 거부:", err.message);
-        setStatus("denied");
-      },
-      { enableHighAccuracy: false, timeout: 20000, maximumAge: 0 }
-    );
+    try {
+      const coords = await getBrowserPosition();
+      setStatus("idle");
+      onGranted(coords);
+    } catch (err) {
+      console.warn("위치 권한 거부 또는 타임아웃:", err);
+      setStatus("denied");
+    }
   };
 
   return (

@@ -5,10 +5,6 @@ import { getPaymentMode, validatePaymentKeys, PAYMENT_CONFIG } from './paymentCo
 const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY;
 const secretKey = import.meta.env.VITE_TOSS_SECRET_KEY;
 
-if (!clientKey) {
-  console.warn('⚠️ VITE_TOSS_CLIENT_KEY가 설정되지 않았습니다.');
-}
-
 // Toss Payments SDK 인스턴스 캐싱
 let tossPaymentsInstance: any = null;
 let tossPaymentsLoadingPromise: Promise<any> | null = null;

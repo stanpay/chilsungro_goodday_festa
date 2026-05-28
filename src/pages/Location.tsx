@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { searchAddress, NaverSearchResult as KakaoSearchResult } from "@/lib/naver";
 import { getAddressFromCoords } from "@/lib/geocoding";
+import { getBrowserPosition } from "@/lib/geolocation";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 
@@ -113,12 +114,7 @@ const Location = () => {
     if (address) {
       saveToRecentLocations(name, address, coordinates);
     }
-    
-    toast({
-      title: "위치 설정 완료",
-      description: `${name}(으)로 설정되었습니다.`,
-    });
-    
+
     navigate("/main");
   };
 
@@ -134,7 +130,7 @@ const Location = () => {
     handleLocationSelect(displayName, fullAddress, coordinates);
   };
 
-  const handleCurrentLocation = () => {
+  const handleCurrentLocation = async () => {
     const isReactNative = (window as any).isReactNative === true;
 
     if (!navigator.geolocation) {
@@ -150,62 +146,47 @@ const Location = () => {
 
     setIsLoadingLocation(true);
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
+    try {
+      const { latitude, longitude } = await getBrowserPosition();
 
-        // 좌표 → 실제 주소 변환
-        const address = await getAddressFromCoords(latitude, longitude, locale);
-        const displayName = address !== "위치를 확인할 수 없음" ? address : "현재 위치";
+      const address = await getAddressFromCoords(latitude, longitude, locale);
+      const displayName = address !== "위치를 확인할 수 없음" ? address : "현재 위치";
 
-        localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-        localStorage.setItem("selectedLocation", displayName);
-        localStorage.removeItem("isManualLocation");
+      localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+      localStorage.setItem("selectedLocation", displayName);
+      localStorage.removeItem("isManualLocation");
 
-        setIsLoadingLocation(false);
-        toast({
-          title: "위치 설정 완료",
-          description: `${displayName}(으)로 설정되었습니다.`,
-        });
-        navigate("/main");
-      },
-      (error) => {
-        setIsLoadingLocation(false);
-        let errorMessage = "위치를 가져올 수 없습니다.";
+      setIsLoadingLocation(false);
+      navigate("/main");
+    } catch (error) {
+      setIsLoadingLocation(false);
+      const geoError = error as GeolocationPositionError;
+      let errorMessage = "위치를 가져올 수 없습니다.";
 
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-          case 1:
-            errorMessage = isReactNative
-              ? "위치 권한이 거부되었습니다. 앱 설정에서 위치 권한을 허용해주세요."
-              : "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.";
-            break;
-          case error.POSITION_UNAVAILABLE:
-          case 2:
-            errorMessage = "위치 정보를 사용할 수 없습니다.";
-            console.error("❌ [위치 정보] 위치 정보를 사용할 수 없음:", error);
-            break;
-          case error.TIMEOUT:
-          case 3:
-            errorMessage = "위치 요청 시간이 초과되었습니다.";
-            console.error("❌ [위치 정보] 위치 요청 시간 초과:", error);
-            break;
-          default:
-            console.error("❌ [위치 정보] 위치 가져오기 실패:", error);
-        }
-
-        toast({
-          title: "위치 가져오기 실패",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+      switch (geoError?.code) {
+        case 1:
+          errorMessage = isReactNative
+            ? "위치 권한이 거부되었습니다. 앱 설정에서 위치 권한을 허용해주세요."
+            : "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.";
+          break;
+        case 2:
+          errorMessage = "위치 정보를 사용할 수 없습니다.";
+          console.error("❌ [위치 정보] 위치 정보를 사용할 수 없음:", geoError);
+          break;
+        case 3:
+          errorMessage = "위치 요청 시간이 초과되었습니다. 잠시 후 다시 시도하거나 주소를 검색해 주세요.";
+          console.error("❌ [위치 정보] 위치 요청 시간 초과:", geoError);
+          break;
+        default:
+          console.error("❌ [위치 정보] 위치 가져오기 실패:", geoError);
       }
-    );
+
+      toast({
+        title: "위치 가져오기 실패",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   };
 
   return (

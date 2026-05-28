@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Megaphone } from "lucide-react";
 import {
   Carousel,
@@ -7,13 +7,24 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   getBannerText,
-  MAIN_BANNERS,
+  getMainBanners,
+  NAVER_MAP_DIRECTIONS_ALT,
+  NAVER_MAP_DIRECTIONS_IMAGE,
   type MainBanner,
 } from "@/lib/mainBanners";
 import type { AppLocale } from "@/lib/locale";
+import { openNaverMapDirections } from "@/lib/mapDirectionLinks";
 import { cn } from "@/lib/utils";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
+
+const AUTO_SLIDE_MS = 1500;
 
 const VARIANT_CLASS: Record<NonNullable<MainBanner["variant"]>, string> = {
   primary: "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground",
@@ -25,57 +36,41 @@ type MainPromoBannerProps = {
   locale: AppLocale;
   className?: string;
 };
-const openNaverMap = () => {
-  const placeId = "2031464673";
-  const webUrl =
-    "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome";
 
-  // 모바일 웹이면 본인 서비스 도메인을 appname으로 넣는 게 좋습니다.
-  const appName = encodeURIComponent(window.location.origin);
-
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  if (isAndroid) {
-    // Android Chrome 계열: 네이버지도 앱 설치 시 앱으로 열림
-    window.location.href =
-      `intent://place?id=${placeId}&appname=${appName}` +
-      `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
-      `category=android.intent.category.BROWSABLE;` +
-      `package=com.nhn.android.nmap;` +
-      `S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
-    return;
-  }
-
-  if (isIOS) {
-    const deepLink = `nmap://place?id=${placeId}&appname=${appName}`;
-    const clickedAt = Date.now();
-
-    window.location.href = deepLink;
-
-    // 앱이 안 열리면 웹 네이버지도로 fallback
-    setTimeout(() => {
-      if (Date.now() - clickedAt < 2000) {
-        window.location.href = webUrl;
-      }
-    }, 1500);
-    return;
-  }
-
-  // PC에서는 그냥 웹 네이버지도
-  window.open(webUrl, "_blank");
-};
 function BannerSlide({
   banner,
   locale,
+  onOpen,
 }: {
   banner: MainBanner;
   locale: AppLocale;
+  onOpen: () => void;
 }) {
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+  const skippedClick = useRef(false);
+
   const title = getBannerText(banner.title, locale);
   const description = getBannerText(banner.description, locale);
   const imageAlt = getBannerText(banner.imageAlt, locale) || title;
-  const imageCtaLabel = getBannerText(banner.imageCtaLabel, locale) || "길찾기";
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    pointerStart.current = { x: event.clientX, y: event.clientY };
+    skippedClick.current = false;
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!pointerStart.current) return;
+    const dx = Math.abs(event.clientX - pointerStart.current.x);
+    const dy = Math.abs(event.clientY - pointerStart.current.y);
+    if (dx > 8 || dy > 8) {
+      skippedClick.current = true;
+    }
+  };
+
+  const handleClick = () => {
+    if (skippedClick.current) return;
+    onOpen();
+  };
 
   const content = banner.imageUrl ? (
     <div className="relative h-full w-full bg-card">
@@ -117,31 +112,46 @@ function BannerSlide({
     </div>
   );
 
-  if (banner.href) {
-    return (
-      <a
-        // href={banner.href}
-        // target="_blank"
-        // rel="noopener noreferrer"
-        className="block min-h-full w-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        aria-label={title || imageAlt}
-        onClick={openNaverMap}
-      >
-        {content}
-      </a>
-    );
-  }
-
-  return <div className="min-h-full w-full rounded-xl">{content}</div>;
+  return (
+    <button
+      type="button"
+      className="block min-h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      aria-label={title || imageAlt}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onClick={handleClick}
+    >
+      {content}
+    </button>
+  );
 }
 
 export default function MainPromoBanner({
   locale,
   className,
 }: MainPromoBannerProps) {
-  const banners = MAIN_BANNERS;
+  const banners = useMemo(() => getMainBanners(locale), [locale]);
   const [api, setApi] = useState<CarouselApi>();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isAutoSlidePaused, setIsAutoSlidePaused] = useState(false);
+  const [selectedBanner, setSelectedBanner] = useState<MainBanner | null>(null);
+
+  const selectedBannerAlt = selectedBanner
+    ? getBannerText(selectedBanner.imageAlt, locale) ||
+      getBannerText(selectedBanner.title, locale)
+    : "";
+  const selectedPopupImageUrl = selectedBanner?.popupImageUrl;
+  const showNaverMapDirections =
+    !!selectedBanner?.naverMapPlaceId || !!selectedBanner?.naverMapUrl;
+  const directionsAlt = NAVER_MAP_DIRECTIONS_ALT[locale];
+
+  const pauseAutoSlide = useCallback(() => {
+    setIsAutoSlidePaused(true);
+  }, []);
+
+  const resumeAutoSlide = useCallback(() => {
+    setIsAutoSlidePaused(false);
+  }, []);
 
   const onSelect = useCallback(() => {
     if (!api) return;
@@ -158,56 +168,100 @@ export default function MainPromoBanner({
   }, [api, onSelect]);
 
   useEffect(() => {
-    if (!api || banners.length <= 1) return;
-    const timer = window.setInterval(() => {
+    if (!api || banners.length <= 1 || isAutoSlidePaused || selectedBanner) return;
+
+    const timer = window.setTimeout(() => {
       api.scrollNext();
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [api, banners.length]);
+    }, AUTO_SLIDE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [api, activeIndex, banners.length, isAutoSlidePaused, selectedBanner]);
 
   if (banners.length === 0) return null;
 
-  if (banners.length === 1) {
-    return (
-      <div className={cn("mb-4 aspect-[2.39/1] w-full overflow-hidden", className)}>
-        <BannerSlide banner={banners[0]} locale={locale} />
-      </div>
-    );
-  }
-
   return (
-    <div className={cn("relative mb-4", className)}>
+    <div
+      className={cn("relative mb-4 overflow-hidden rounded-xl", className)}
+      onPointerDown={pauseAutoSlide}
+      onPointerUp={resumeAutoSlide}
+      onPointerCancel={resumeAutoSlide}
+    >
       <Carousel
         setApi={setApi}
-        opts={{ loop: true }}
+        opts={{ loop: true, dragFree: false }}
         className="w-full"
       >
         <CarouselContent className="-ml-0">
           {banners.map((banner) => (
             <CarouselItem key={banner.id} className="basis-full pl-0">
               <div className="aspect-[2.39/1] w-full overflow-hidden">
-                <BannerSlide banner={banner} locale={locale} />
+                <BannerSlide
+                  banner={banner}
+                  locale={locale}
+                  onOpen={() => setSelectedBanner(banner)}
+                />
               </div>
             </CarouselItem>
           ))}
         </CarouselContent>
       </Carousel>
-      <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
-        {banners.map((banner, index) => (
-          <button
-            key={banner.id}
-            type="button"
-            aria-label={`배너 ${index + 1}`}
-            className={cn(
-              "h-1.5 rounded-full transition-all",
-              index === activeIndex
-                ? "w-4 bg-white"
-                : "w-1.5 bg-white/50",
-            )}
-            onClick={() => api?.scrollTo(index)}
-          />
-        ))}
-      </div>
+      {banners.length > 1 ? (
+        <div
+          className="pointer-events-none absolute right-2 top-2 rounded-md bg-black/50 px-2 py-0.5 text-xs font-medium text-white tabular-nums"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {activeIndex + 1}/{banners.length}
+        </div>
+      ) : null}
+      <Dialog
+        open={selectedBanner !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedBanner(null);
+        }}
+      >
+        <DialogContent className="max-w-md gap-0 overflow-hidden rounded-xl p-0">
+          <DialogTitle className="sr-only">{selectedBannerAlt}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {selectedBannerAlt}
+          </DialogDescription>
+          <div className="flex max-h-[85vh] flex-col overflow-hidden">
+            <div className="h-10 shrink-0" aria-hidden="true" />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="flex flex-col gap-4 px-4 pb-4">
+                {showNaverMapDirections ? (
+                  <button
+                    type="button"
+                    className="block w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={directionsAlt}
+                    onClick={() =>
+                      openNaverMapDirections({
+                        placeId: selectedBanner?.naverMapPlaceId,
+                        url: selectedBanner?.naverMapUrl,
+                      })
+                    }
+                  >
+                    <img
+                      src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
+                      alt={directionsAlt}
+                      className="w-full object-contain"
+                    />
+                  </button>
+                ) : null}
+                {selectedPopupImageUrl ? (
+                  <img
+                    src={selectedPopupImageUrl}
+                    alt={selectedBannerAlt}
+                    className="w-full object-contain"
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

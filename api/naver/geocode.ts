@@ -1,5 +1,6 @@
 import { fetchNaverUpstream } from "./_upstream";
 import { getNaverServerCredentials } from "./_credentials";
+import { normalizeGeocodeRestLanguage } from "./_language";
 
 type Req = { method?: string; query: Record<string, string | string[] | undefined> };
 type Res = {
@@ -31,7 +32,9 @@ export default async function handler(req: Req, res: Res) {
 
   const upstreamParams = new URLSearchParams({ query });
   if (req.query.count) upstreamParams.set("count", String(req.query.count));
-  if (req.query.language) upstreamParams.set("language", String(req.query.language));
+  if (req.query.language) {
+    upstreamParams.set("language", normalizeGeocodeRestLanguage(String(req.query.language)));
+  }
 
   const { status, body } = await fetchNaverUpstream(
     "/map-geocode/v2/geocode",

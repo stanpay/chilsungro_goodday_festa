@@ -46,6 +46,7 @@ const brandLogos: Record<string, string> = {
 
 const NAME_MARQUEE_TOLERANCE_PX = 1;
 const NAME_SAFE_RIGHT_PADDING_PX = 6;
+const CHIPS_MARQUEE_TOLERANCE_PX = 1;
 
 const StoreCard = ({
   id,
@@ -81,8 +82,11 @@ const StoreCard = ({
   const isTutorial = location.pathname.includes("/tutorial");
   const brandLogoUrl = brandLogos[image as keyof typeof brandLogos];
   const nameContainerRef = useRef<HTMLHeadingElement>(null);
+  const chipsContainerRef = useRef<HTMLDivElement>(null);
+  const chipsInnerRef = useRef<HTMLSpanElement>(null);
   const [nameFontSizeClass, setNameFontSizeClass] = useState("text-base");
   const [nameMarqueeDistance, setNameMarqueeDistance] = useState(0);
+  const [chipsMarqueeDistance, setChipsMarqueeDistance] = useState(0);
 
   useLayoutEffect(() => {
     const container = nameContainerRef.current;
@@ -176,7 +180,63 @@ const StoreCard = ({
     typeof maxDiscountPercent === "number" && maxDiscountPercent > 0
       ? sc.maxDiscountPercent(maxDiscountPercent)
       : maxDiscount;
-  
+
+  const parkingText = getParkingText();
+  const localCurrencyText =
+    local_currency_discount_rate != null && local_currency_discount_rate > 0
+      ? sc.localCurrencyDiscount(local_currency_discount_rate)
+      : sc.localCurrency;
+  const showChipsRow =
+    showLocalCurrencyChip ||
+    hasGifticonDiscount ||
+    (locale === "ko" && high_oil_support_available) ||
+    showParkingChip;
+
+  useLayoutEffect(() => {
+    const container = chipsContainerRef.current;
+    const inner = chipsInnerRef.current;
+    if (!container || !inner || !showChipsRow) {
+      setChipsMarqueeDistance(0);
+      return;
+    }
+
+    const updateChipsLayout = () => {
+      const containerWidth = container.clientWidth;
+      if (containerWidth <= 0) return;
+
+      const contentWidth = inner.scrollWidth;
+      const overflow = contentWidth - containerWidth;
+      setChipsMarqueeDistance(
+        overflow > CHIPS_MARQUEE_TOLERANCE_PX ? overflow : 0
+      );
+    };
+
+    updateChipsLayout();
+    document.fonts?.ready.then(updateChipsLayout);
+
+    if (!("ResizeObserver" in window)) {
+      window.addEventListener("resize", updateChipsLayout);
+      return () => window.removeEventListener("resize", updateChipsLayout);
+    }
+
+    const observer = new ResizeObserver(updateChipsLayout);
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, [
+    showChipsRow,
+    hasGifticonDiscount,
+    showLocalCurrencyChip,
+    localCurrencyText,
+    high_oil_support_available,
+    showParkingChip,
+    parkingText,
+    locale,
+  ]);
+
+  const chipClassName =
+    "inline-flex items-center px-1.5 py-1 rounded text-[11px] font-medium leading-none whitespace-nowrap shrink-0";
+
   return (
     <div
       onClick={handleClick}
@@ -233,7 +293,7 @@ const StoreCard = ({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-1 grid-rows-[1.75rem_1.125rem_1.125rem_1.25rem] gap-y-1 bg-card p-3">
+          <div className="grid grid-cols-1 grid-rows-[1.75rem_1.125rem_1.125rem_1.75rem] gap-y-1 bg-card p-3">
             <h3
               ref={nameContainerRef}
               className="flex h-7 min-w-0 items-center pr-1.5"
@@ -279,32 +339,72 @@ const StoreCard = ({
                 </>
               )}
             </div>
-            <div className="flex h-5 flex-nowrap items-center gap-1 overflow-x-auto scrollbar-hide">
-              {(showLocalCurrencyChip || hasGifticonDiscount || high_oil_support_available || showParkingChip) && (
-                <>
-                {hasGifticonDiscount && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/50 whitespace-nowrap shrink-0">
-                    {sc.chilsungroCoupon}
+            <div
+              ref={chipsContainerRef}
+              className="flex h-[1.75rem] min-w-0 items-center overflow-x-hidden"
+            >
+              {showChipsRow && (
+                <span className="flex min-w-0 flex-1 items-center overflow-x-hidden">
+                  <span
+                    className={cn(
+                      "leading-none",
+                      chipsMarqueeDistance > 0 && "marquee-on-overflow"
+                    )}
+                    style={
+                      chipsMarqueeDistance > 0
+                        ? ({
+                            "--marquee-distance": `${chipsMarqueeDistance}px`,
+                          } as CSSProperties)
+                        : undefined
+                    }
+                  >
+                    <span
+                      ref={chipsInnerRef}
+                      className="inline-flex flex-nowrap items-center gap-1"
+                    >
+                      {hasGifticonDiscount && (
+                        <span
+                          className={cn(
+                            chipClassName,
+                            "border border-[#1EA2DC]/25 bg-[#1EA2DC]/10 text-[#1EA2DC] dark:border-[#1EA2DC]/35 dark:bg-[#1EA2DC]/15 dark:text-[#5BC8E8]"
+                          )}
+                        >
+                          {sc.travelConsumerCoupon}
+                        </span>
+                      )}
+                      {showLocalCurrencyChip && (
+                        <span
+                          className={cn(
+                            chipClassName,
+                            "border border-[#FF9E09]/25 bg-[#FF9E09]/10 text-[#FF9E09] dark:border-[#FF9E09]/35 dark:bg-[#FF9E09]/15 dark:text-[#FFB84D]"
+                          )}
+                        >
+                          {localCurrencyText}
+                        </span>
+                      )}
+                      {locale === "ko" && high_oil_support_available && (
+                        <span
+                          className={cn(
+                            chipClassName,
+                            "border border-[#F5B800]/30 bg-[#F5B800]/12 text-[#C98A00] dark:border-[#F5B800]/35 dark:bg-[#F5B800]/18 dark:text-[#FFD54F]"
+                          )}
+                        >
+                          {sc.highOilSupport}
+                        </span>
+                      )}
+                      {showParkingChip && (
+                        <span
+                          className={cn(
+                            chipClassName,
+                            "bg-secondary text-secondary-foreground border border-border"
+                          )}
+                        >
+                          {parkingText}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                )}
-                {showLocalCurrencyChip && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
-                    {local_currency_discount_rate != null && local_currency_discount_rate > 0
-                      ? sc.localCurrencyDiscount(local_currency_discount_rate)
-                      : sc.localCurrency}
-                  </span>
-                )}
-                {high_oil_support_available && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-600 border border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800/50 whitespace-nowrap shrink-0">
-                    {sc.highOilSupport}
-                  </span>
-                )}
-                {showParkingChip && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground border border-border whitespace-nowrap shrink-0">
-                    {getParkingText()}
-                  </span>
-                )}
-                </>
+                </span>
               )}
             </div>
           </div>
