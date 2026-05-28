@@ -43,8 +43,8 @@ const TRAVEL_CENTER_MAP_NAME: LocalizedText = {
 };
 
 /** 제주 제주시 관덕로17길 27-1 — 칠성로 굿데이 페스타 (naver.me/xpjja0mM) */
-const CHILSEONGRO_FESTA_LAT = 33.515678;
-const CHILSEONGRO_FESTA_LON = 126.528875;
+const CHILSEONGRO_FESTA_LAT = 33.514333;
+const CHILSEONGRO_FESTA_LON =  126.525519;
 const CHILSEONGRO_FESTA_MAP_NAME: LocalizedText = {
   ko: "칠성로 굿데이 페스타",
   en: "Chilseong-ro Good Day Festa",
