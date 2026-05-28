@@ -70,6 +70,7 @@ const MapViewBottomSheet = ({
 
   const [panelHeight, setPanelHeight] = useState(PEEK_HEIGHT);
   const [isDragging, setIsDragging] = useState(false);
+  const [heightTransitionEnabled, setHeightTransitionEnabled] = useState(false);
   const panelHeightRef = useRef(PEEK_HEIGHT);
   const dragRef = useRef<{
     startY: number;
@@ -89,6 +90,13 @@ const MapViewBottomSheet = ({
 } | null>(null);
 
   panelHeightRef.current = panelHeight;
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setHeightTransitionEnabled(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     const onResize = () => {
@@ -465,7 +473,8 @@ useEffect(() => {
         bottom: BOTTOM_NAV_PX,
         height: panelHeight,
         maxHeight: `min(${maxHeight}px, calc(100dvh - ${BOTTOM_NAV_PX}px - max(0.5rem, env(safe-area-inset-top, 0px)) - 8px))`,
-        transition: isDragging ? "none" : "height 0.22s ease-out",
+        transition:
+          isDragging || !heightTransitionEnabled ? "none" : "height 0.22s ease-out",
       }}
     >
       <div

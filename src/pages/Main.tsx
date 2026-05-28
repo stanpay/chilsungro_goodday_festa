@@ -2663,38 +2663,25 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         </div>
 
         {isMapView ? (
-          <div className="animate-fade-in relative z-30">
-            <div
-              className="pointer-events-none fixed left-1/2 z-[25] flex w-full max-w-md -translate-x-1/2 justify-end px-4"
-              style={{ bottom: "calc(4rem + 4.5rem)" }}
+          <div
+            className="pointer-events-none fixed left-1/2 z-[25] flex w-full max-w-md -translate-x-1/2 justify-end px-4"
+            style={{ bottom: "calc(4rem + 4.5rem)" }}
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              className="pointer-events-auto h-12 w-12 rounded-full border border-border bg-card/95 text-foreground shadow-lg backdrop-blur-sm hover:bg-muted"
+              disabled={isLoadingLocation}
+              onClick={() => void handleRefreshLocation()}
+              aria-label={t.mapFabChangeLocationAria}
             >
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                className="pointer-events-auto h-12 w-12 rounded-full border border-border bg-card/95 text-foreground shadow-lg backdrop-blur-sm hover:bg-muted"
-                disabled={isLoadingLocation}
-                onClick={() => void handleRefreshLocation()}
-                aria-label={t.mapFabChangeLocationAria}
-              >
-                {isLoadingLocation ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                ) : (
-                  <LocateFixed className="h-5 w-5 text-primary" strokeWidth={2.25} aria-hidden />
-                )}
-              </Button>
-            </div>
-            <MapViewBottomSheet
-              stores={storesWithCoords}
-              selectedStoreId={selectedMapStoreId}
-              onSelectStore={setSelectedMapStoreId}
-              title={t.mapSheetTitle}
-              dragHint={t.mapSheetDragHint}
-              sortBy={sortBy}
-              onSortChange={setSortBy}
-              sortDistanceLabel={currentCoords ? t.sortDistance : t.sortName}
-              sortDiscountLabel={t.sortDiscount}
-            />
+              {isLoadingLocation ? (
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              ) : (
+                <LocateFixed className="h-5 w-5 text-primary" strokeWidth={2.25} aria-hidden />
+              )}
+            </Button>
           </div>
         ) : isLoadingStores ? (
           <div
@@ -2739,6 +2726,20 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           disabled: isLoadingStores,
         }}
       />
+
+      {isMapView && (
+        <MapViewBottomSheet
+          stores={storesWithCoords}
+          selectedStoreId={selectedMapStoreId}
+          onSelectStore={setSelectedMapStoreId}
+          title={t.mapSheetTitle}
+          dragHint={t.mapSheetDragHint}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          sortDistanceLabel={currentCoords ? t.sortDistance : t.sortName}
+          sortDiscountLabel={t.sortDiscount}
+        />
+      )}
     </div>
   );
 };
