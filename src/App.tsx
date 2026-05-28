@@ -33,6 +33,7 @@ import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AnalyticsPageTracker from "@/components/AnalyticsPageTracker";
 import NaverMapFallbackDialog from "@/components/NaverMapFallbackDialog";
+import MapDirectionDebugDialog from "@/components/MapDirectionDebugDialog";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,6 +91,7 @@ const App = () => (
         <ChatSupport />
         <PwaInstallPrompt />
         <NaverMapFallbackDialog />
+        <MapDirectionDebugDialog />
       </BrowserRouter>
       </AppLocaleProvider>
     </TooltipProvider>

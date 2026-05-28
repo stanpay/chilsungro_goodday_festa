@@ -1,4 +1,5 @@
 import { promptNaverMapFallback } from "@/lib/mapDirectionFallback";
+import { emitMapDirectionDebug } from "@/lib/mapDirectionDebug";
 import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 /**
@@ -52,6 +53,17 @@ function getNaverMapAppName(): string {
 
 const DEEP_LINK_FALLBACK_MS = 1500;
 
+function truncateUrl(url: string, max = 120): string {
+  return url.length <= max ? url : `${url.slice(0, max)}…`;
+}
+
+function getSchemeLabel(url: string): string {
+  if (url.startsWith("intent://")) return "intent";
+  if (url.startsWith("nmap://")) return "nmap";
+  if (url.startsWith("https://")) return "https";
+  return url.split(":")[0] || "unknown";
+}
+
 function resolveAndroidLaunchUrl(
   intentUrl: string,
   nativeSchemeUrl?: string,
@@ -69,8 +81,26 @@ function tryOpenDeepLink(
 ) {
   const { isIOS, isAndroid } = getMobileEnv();
   const webFallback = options?.webFallback;
+  const debug: string[] = [];
+  const push = (line: string) => {
+    debug.push(line);
+    emitMapDirectionDebug(debug, {
+      webFallbackUrl: webFallback,
+      platform: isIOS ? "ios" : "android",
+    });
+  };
+
+  push(`── 딥링크 시도 ${new Date().toLocaleTimeString()} ──`);
+  push(`환경: Android=${isAndroid}, iOS=${isIOS}, PWA=${isInStandaloneMode()}`);
+  push(`visibility: ${document.visibilityState}`);
+  push(`display-mode: ${["standalone", "fullscreen", "browser", "minimal-ui"].map((m) => `${m}=${window.matchMedia(`(display-mode: ${m})`).matches}`).join(", ")}`);
+  if (options?.nativeSchemeUrl) {
+    push(`준비 nmap: ${truncateUrl(options.nativeSchemeUrl)}`);
+  }
+  push(`준비 intent: ${truncateUrl(deepLink)}`);
 
   if (!isIOS && !isAndroid) {
+    push("결과: 데스크탑 → 웹 fallback");
     if (webFallback) {
       window.open(webFallback, "_blank", "noopener,noreferrer");
     }
@@ -80,26 +110,73 @@ function tryOpenDeepLink(
   let appOpened = false;
   const onHide = () => {
     appOpened = true;
+    push(`감지: visibilitychange → 앱 전환으로 판단 (${document.visibilityState})`);
     document.removeEventListener("visibilitychange", onHide);
   };
+  const onBlur = () => {
+    push("감지: window blur");
+  };
+  const onPageHide = () => {
+    push("감지: pagehide");
+  };
+
   document.addEventListener("visibilitychange", onHide);
+  window.addEventListener("blur", onBlur);
+  window.addEventListener("pagehide", onPageHide);
 
   const launchUrl = isAndroid
     ? resolveAndroidLaunchUrl(deepLink, options?.nativeSchemeUrl)
     : deepLink;
-  // PWA·모바일: location.href 대신 anchor click (intent/custom scheme 안정성)
-  openExternalUrl(launchUrl, { targetBlank: isAndroid });
+  push(`실행: ${getSchemeLabel(launchUrl)} (${isInStandaloneMode() ? "PWA→nmap 우선" : "브라우저→intent"})`);
+  push(`실행 URL: ${truncateUrl(launchUrl)}`);
+
+  try {
+    openExternalUrl(launchUrl, { targetBlank: isAndroid });
+    push("실행: openExternalUrl(anchor click) 호출됨");
+  } catch (error) {
+    push(`실행: openExternalUrl 실패 — ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   window.setTimeout(() => {
     document.removeEventListener("visibilitychange", onHide);
-    if (appOpened) return;
-    if (webFallback && (isIOS || isAndroid)) {
-      promptNaverMapFallback(webFallback, isIOS ? "ios" : "android");
+    window.removeEventListener("blur", onBlur);
+    window.removeEventListener("pagehide", onPageHide);
+
+    push(`타임아웃(${DEEP_LINK_FALLBACK_MS}ms) visibility=${document.visibilityState}, appOpened=${appOpened}`);
+
+    if (appOpened) {
+      push("결과: ✅ 앱 전환 감지 — fallback 생략");
+      emitMapDirectionDebug(debug, {
+        webFallbackUrl: webFallback,
+        platform: isIOS ? "ios" : "android",
+      });
       return;
     }
-    if (webFallback) {
-      openNaverMapWebFallback(webFallback);
+
+    push("결과: ❌ 앱 전환 미감지");
+
+    if (webFallback && (isIOS || isAndroid)) {
+      push("fallback: promptNaverMapFallback 이벤트 dispatch 시도");
+      promptNaverMapFallback(webFallback, isIOS ? "ios" : "android");
+      push("fallback: dispatch 완료 (NaverMapFallbackDialog 수신 여부는 로그 확인)");
+      emitMapDirectionDebug(debug, {
+        webFallbackUrl: webFallback,
+        platform: isIOS ? "ios" : "android",
+      });
+      return;
     }
+
+    if (webFallback) {
+      push("fallback: openNaverMapWebFallback(window.open) 시도");
+      openNaverMapWebFallback(webFallback);
+    } else {
+      push("fallback: webFallback URL 없음");
+    }
+
+    emitMapDirectionDebug(debug, {
+      webFallbackUrl: webFallback,
+      platform: isIOS ? "ios" : "android",
+    });
   }, DEEP_LINK_FALLBACK_MS);
 }
 
@@ -308,6 +385,10 @@ export function openNaverMapDirections(input: {
     ...input,
     placeId,
   });
+
+  emitMapDirectionDebug([
+    `openNaverMapDirections: placeId=${placeId ?? "없음"}, coords=${input.lat ?? "?"}/${input.lon ?? "?"}`,
+  ], { webFallbackUrl: webFallback, platform: "android" });
 
   if (placeId) {
     openNaverMapPlace(placeId, webFallback);

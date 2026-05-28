@@ -1,4 +1,5 @@
 import { getStoredLocale, type AppLocale } from "@/lib/locale";
+import { emitMapDirectionDebug } from "@/lib/mapDirectionDebug";
 import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 export const NAVER_MAP_FALLBACK_EVENT = "naver-map:fallback";
@@ -76,6 +77,10 @@ export function promptNaverMapFallback(
   webFallbackUrl: string,
   platform: NaverMapFallbackPlatform,
 ): void {
+  emitMapDirectionDebug(
+    [`[fallback 이벤트] naver-map:fallback dispatch, platform=${platform}`],
+    { webFallbackUrl, platform },
+  );
   window.dispatchEvent(
     new CustomEvent<NaverMapFallbackDetail>(NAVER_MAP_FALLBACK_EVENT, {
       detail: { webFallbackUrl, platform },
