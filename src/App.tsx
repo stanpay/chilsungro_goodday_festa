@@ -32,6 +32,7 @@ import DevTools from "./pages/DevTools";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AnalyticsPageTracker from "@/components/AnalyticsPageTracker";
+import NaverMapFallbackDialog from "@/components/NaverMapFallbackDialog";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +89,7 @@ const App = () => (
         </Suspense>
         <ChatSupport />
         <PwaInstallPrompt />
+        <NaverMapFallbackDialog />
       </BrowserRouter>
       </AppLocaleProvider>
     </TooltipProvider>

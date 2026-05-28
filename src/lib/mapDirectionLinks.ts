@@ -1,3 +1,5 @@
+import { promptNaverMapFallback } from "@/lib/mapDirectionFallback";
+
 /**
  * 네이버 지도 웹에서 매장 위치 열기 (좌표가 있으면 해당 지점 중심, 없으면 매장명 검색).
  * v5 지도 중심 `c` 값은 EPSG:3857(미터) 좌표를 사용합니다.
@@ -11,8 +13,6 @@ export type MapDirectionInput = {
 
 const EARTH_RADIUS_M = 6378137;
 
-const NAVER_MAP_IOS_STORE =
-  "https://apps.apple.com/kr/app/naver-map-navigation/id311867728";
 const NAVER_MAP_ANDROID_PACKAGE = "com.nhn.android.nmap";
 
 function hasValidCoords(lat?: number, lon?: number): boolean {
@@ -59,21 +59,19 @@ function navigateToUrl(url: string) {
   anchor.remove();
 }
 
+const DEEP_LINK_FALLBACK_MS = 1500;
+
 function tryOpenDeepLink(
   deepLink: string,
-  options?: { webFallback?: string; iosStoreFallback?: boolean },
+  options?: { webFallback?: string },
 ) {
   const { isIOS, isAndroid } = getMobileEnv();
+  const webFallback = options?.webFallback;
 
   if (!isIOS && !isAndroid) {
-    if (options?.webFallback) {
-      window.open(options.webFallback, "_blank", "noopener,noreferrer");
+    if (webFallback) {
+      window.open(webFallback, "_blank", "noopener,noreferrer");
     }
-    return;
-  }
-
-  if (isAndroid) {
-    window.location.href = deepLink;
     return;
   }
 
@@ -84,19 +82,28 @@ function tryOpenDeepLink(
   };
   document.addEventListener("visibilitychange", onHide);
 
-  navigateToUrl(deepLink);
+  if (isAndroid) {
+    window.location.href = deepLink;
+  } else {
+    navigateToUrl(deepLink);
+  }
 
   window.setTimeout(() => {
     document.removeEventListener("visibilitychange", onHide);
     if (appOpened) return;
-    if (options?.iosStoreFallback) {
-      window.open(NAVER_MAP_IOS_STORE, "_blank", "noopener,noreferrer");
+    if (webFallback && (isIOS || isAndroid)) {
+      promptNaverMapFallback(webFallback, isIOS ? "ios" : "android");
       return;
     }
-    if (options?.webFallback) {
-      window.location.href = options.webFallback;
+    if (webFallback) {
+      openNaverMapWebFallback(webFallback);
     }
-  }, 1500);
+  }, DEEP_LINK_FALLBACK_MS);
+}
+
+/** 딥링크 실패·좌표 없음 등 최종 웹 fallback (모바일 포함) */
+export function openNaverMapWebFallback(url: string): void {
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 /**
@@ -129,8 +136,7 @@ function buildNaverMapMarkerDeepLinks(input: {
     `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
     `category=android.intent.category.BROWSABLE;` +
     `package=${NAVER_MAP_ANDROID_PACKAGE};end`;
-  const webUrl = buildNaverMapOpenUrl({ name, lat, lon });
-  return { nmapUrl, intentUrl, webUrl };
+  return { nmapUrl, intentUrl };
 }
 
 /**
@@ -140,16 +146,19 @@ export function openNaverMapMarker(input: {
   lat: number;
   lon: number;
   name: string;
+  webFallback?: string;
 }): void {
-  const { lat, lon, name } = input;
+  const { lat, lon, name, webFallback } = input;
   if (!hasValidCoords(lat, lon)) return;
 
-  const { nmapUrl, intentUrl, webUrl } = buildNaverMapMarkerDeepLinks({
+  const { nmapUrl, intentUrl } = buildNaverMapMarkerDeepLinks({
     lat,
     lon,
     name,
   });
   const { isIOS, isAndroid } = getMobileEnv();
+  const webUrl =
+    webFallback ?? buildNaverMapOpenUrl({ name, lat, lon });
 
   if (isAndroid) {
     tryOpenDeepLink(intentUrl, { webFallback: webUrl });
@@ -161,13 +170,13 @@ export function openNaverMapMarker(input: {
     return;
   }
 
-  window.open(webUrl, "_blank", "noopener,noreferrer");
+  openNaverMapWebFallback(webUrl);
 }
 
 /**
  * 네이버지도 앱 딥링크로 매장 위치를 열어준다.
  * - Android: Intent URI 사용 → 앱 미설치 시 Play Store 자동 이동
- * - iOS: nmap:// 스킴 시도 후 1.5s 대기 → 앱 미설치 시 App Store 이동
+ * - iOS: nmap:// 스킴 시도 후 실패 시 App Store·웹 선택 팝업
  * - 데스크탑/기타: 웹 네이버지도 새 탭
  */
 export function openNaverMapsApp(input: MapDirectionInput): void {
@@ -195,7 +204,8 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
 
   if (isIOS) {
     const appUrl = `nmap://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}`;
-    tryOpenDeepLink(appUrl, { iosStoreFallback: true });
+    const webUrl = buildNaverMapOpenUrl({ name, lat, lon });
+    tryOpenDeepLink(appUrl, { webFallback: webUrl });
     return;
   }
 
@@ -207,28 +217,52 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
   );
 }
 
+/** map.naver.com 장소 URL에서 place ID 추출 */
+export function parsePlaceIdFromNaverUrl(url: string): string | undefined {
+  try {
+    const match = new URL(url).pathname.match(/\/place\/(\d+)/);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveDirectionsWebFallback(input: {
+  url?: string;
+  placeId?: string;
+  lat?: number;
+  lon?: number;
+  name?: string;
+}): string | undefined {
+  const url = input.url?.trim();
+  if (url) return url;
+
+  const placeId = input.placeId?.trim();
+  if (placeId) {
+    return `https://map.naver.com/p/entry/place/${placeId}?placePath=%2Fhome`;
+  }
+
+  const name = input.name?.trim();
+  if (!name) return undefined;
+
+  return buildNaverMapOpenUrl({
+    name,
+    lat: input.lat,
+    lon: input.lon,
+  });
+}
+
 /**
- * 네이버 지도 장소 ID(place)로 연다. 가능하면 lat/lng/name 딥링크를 우선 사용하세요.
+ * 네이버 지도 장소 ID(place)로 연다.
+ * place ID가 있으면 nmap/intent(place?id=)를 사용하고, 좌표 마커보다 우선합니다.
  */
 export function openNaverMapPlace(
   placeId: string,
-  options?: { lat?: number; lon?: number; name?: string },
+  webFallback?: string,
 ): void {
-  if (
-    hasValidCoords(options?.lat, options?.lon) &&
-    options?.lat != null &&
-    options?.lon != null &&
-    options?.name
-  ) {
-    openNaverMapMarker({
-      lat: options.lat,
-      lon: options.lon,
-      name: options.name,
-    });
-    return;
-  }
-
-  const webUrl = `https://map.naver.com/p/entry/place/${placeId}?placePath=%2Fhome`;
+  const webUrl =
+    webFallback ??
+    `https://map.naver.com/p/entry/place/${placeId}?placePath=%2Fhome`;
   const appName = getNaverMapAppName();
   const { isAndroid, isIOS } = getMobileEnv();
   const nmapUrl = `nmap://place?id=${placeId}&appname=${appName}`;
@@ -236,8 +270,7 @@ export function openNaverMapPlace(
     `intent://place?id=${placeId}&appname=${appName}` +
     `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
     `category=android.intent.category.BROWSABLE;` +
-    `package=${NAVER_MAP_ANDROID_PACKAGE};` +
-    `S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+    `package=${NAVER_MAP_ANDROID_PACKAGE};end`;
 
   if (isAndroid) {
     tryOpenDeepLink(intentUrl, { webFallback: webUrl });
@@ -252,6 +285,12 @@ export function openNaverMapPlace(
   window.open(webUrl, "_blank", "noopener,noreferrer");
 }
 
+/**
+ * 배너 등 길안내 CTA — 앱 스킴 우선, 실패·데이터 부족 시 webFallback.
+ * 1. placeId (또는 map.naver.com URL에서 추출) → intent/nmap + 웹 fallback
+ * 2. lat/lon/name → intent/nmap + 웹 fallback
+ * 3. url / 장소명만 → 웹 fallback (모바일·iOS 포함, 좌표 없어도 동작)
+ */
 export function openNaverMapDirections(input: {
   lat?: number;
   lon?: number;
@@ -259,6 +298,19 @@ export function openNaverMapDirections(input: {
   placeId?: string;
   url?: string;
 }): void {
+  const placeId =
+    input.placeId?.trim() ||
+    (input.url ? parsePlaceIdFromNaverUrl(input.url) : undefined);
+  const webFallback = resolveDirectionsWebFallback({
+    ...input,
+    placeId,
+  });
+
+  if (placeId) {
+    openNaverMapPlace(placeId, webFallback);
+    return;
+  }
+
   if (
     hasValidCoords(input.lat, input.lon) &&
     input.lat != null &&
@@ -269,25 +321,12 @@ export function openNaverMapDirections(input: {
       lat: input.lat,
       lon: input.lon,
       name: input.name.trim(),
+      webFallback,
     });
     return;
   }
 
-  if (input.placeId) {
-    openNaverMapPlace(input.placeId, {
-      lat: input.lat,
-      lon: input.lon,
-      name: input.name,
-    });
-    return;
-  }
-
-  if (input.url) {
-    const { isIOS, isAndroid } = getMobileEnv();
-    if (isIOS || isAndroid) {
-      window.location.href = input.url;
-      return;
-    }
-    window.open(input.url, "_blank", "noopener,noreferrer");
+  if (webFallback) {
+    openNaverMapWebFallback(webFallback);
   }
 }

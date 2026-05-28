@@ -49,6 +49,7 @@ export default function ZoomablePosterImage({
   const [baseSize, setBaseSize] = useState<BaseSize | null>(null);
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
+  const dragScrollStart = useRef({ left: 0, top: 0 });
 
   const resetView = useCallback(() => {
     setScale(1);
@@ -111,6 +112,24 @@ export default function ZoomablePosterImage({
 
   const bind = useGesture(
     {
+      onDrag: ({ down, movement: [mx, my], pinching, event }) => {
+        if (scaleRef.current <= MIN_SCALE || pinching) return;
+        const scroll = scrollRef.current;
+        if (!scroll) return;
+        event.preventDefault();
+        if (down) {
+          scroll.scrollLeft = dragScrollStart.current.left - mx;
+          scroll.scrollTop = dragScrollStart.current.top - my;
+        }
+      },
+      onDragStart: () => {
+        const scroll = scrollRef.current;
+        if (!scroll) return;
+        dragScrollStart.current = {
+          left: scroll.scrollLeft,
+          top: scroll.scrollTop,
+        };
+      },
       onPinch: ({ offset: [nextScale], origin, event }) => {
         event.preventDefault();
         applyScaleAt(origin[0], origin[1], nextScale);
@@ -134,6 +153,11 @@ export default function ZoomablePosterImage({
       },
     },
     {
+      drag: {
+        filterTaps: true,
+        from: () => [0, 0],
+        enabled: () => scaleRef.current > MIN_SCALE,
+      },
       pinch: {
         scaleBounds: { min: MIN_SCALE, max: MAX_SCALE },
         rubberband: true,
@@ -145,19 +169,20 @@ export default function ZoomablePosterImage({
 
   const contentWidth = baseSize ? baseSize.width * scale : undefined;
   const contentHeight = baseSize ? baseSize.height * scale : undefined;
+  const isZoomed = scale > MIN_SCALE;
+  const viewportHeight = baseSize
+    ? `min(${baseSize.height}px, 80dvh)`
+    : undefined;
 
   return (
     <div
-      className={cn(
-        "relative h-full min-h-0 w-full overflow-hidden rounded-lg",
-        className,
-      )}
+      className={cn("relative w-full overflow-hidden rounded-lg", className)}
       role="group"
       aria-label={`${alt} — 핀치·스크롤·더블탭으로 확대·축소`}
     >
       {!ready ? (
         <div
-          className="flex h-full min-h-[12rem] w-full items-center justify-center bg-muted"
+          className="flex min-h-[8rem] w-full items-center justify-center bg-muted"
           aria-hidden="true"
         >
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -166,11 +191,17 @@ export default function ZoomablePosterImage({
         <div
           ref={scrollRef}
           {...bind()}
-          className="h-full w-full overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
-          style={{ touchAction: "pan-x pan-y pinch-zoom" }}
+          className={cn(
+            "w-full overscroll-contain [-webkit-overflow-scrolling:touch]",
+            isZoomed ? "overflow-auto" : "overflow-hidden",
+          )}
+          style={{
+            touchAction: isZoomed ? "none" : "pan-x pan-y pinch-zoom",
+            height: viewportHeight,
+          }}
         >
           <div
-            className="inline-block min-w-full"
+            className="block"
             style={{
               width: contentWidth,
               height: contentHeight,
@@ -183,7 +214,7 @@ export default function ZoomablePosterImage({
               decoding="async"
               draggable={false}
               onLoad={measureBaseSize}
-              className="block h-full w-full select-none"
+              className="block select-none"
               style={{
                 width: contentWidth,
                 height: contentHeight,

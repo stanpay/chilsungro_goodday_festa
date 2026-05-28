@@ -255,13 +255,13 @@ export default function MainPromoBanner({
           if (!open) setSelectedBanner(null);
         }}
       >
-        <DialogContent className="flex h-[min(92dvh,920px)] max-h-[min(92dvh,920px)] w-[calc(100%-2rem)] max-w-md flex-col gap-0 overflow-hidden rounded-2xl p-0">
+        <DialogContent className="flex h-auto max-h-[min(92dvh,920px)] w-[calc(100%-2rem)] max-w-md flex-col gap-0 overflow-y-auto rounded-2xl p-0">
           <DialogTitle className="sr-only">{selectedBannerAlt}</DialogTitle>
           <DialogDescription className="sr-only">
             {selectedBannerAlt}
           </DialogDescription>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-12">
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4">
+          <div className="flex flex-col pt-12">
+            <div className="flex flex-col gap-3 px-4 pb-4">
               {showNaverMapDirections ? (
                 <button
                   type="button"
@@ -291,7 +291,6 @@ export default function MainPromoBanner({
                   src={selectedPopupImageUrl}
                   alt={selectedBannerAlt}
                   ready={popupImageReady}
-                  className="min-h-0 flex-1"
                 />
               ) : null}
             </div>

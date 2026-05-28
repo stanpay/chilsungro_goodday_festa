@@ -8,14 +8,14 @@ export type MainBanner = {
   imageUrl?: string;
   /** 팝업 하단 이미지 URL (캐러셀 배너와 별도 — mainBanners.ts에서 지정) */
   popupImageUrl?: string;
-  /** 길안내 — 네이버지도 앱 딥링크용 좌표·장소명 (필수) */
+  /** 길안내 — 네이버 place ID (있으면 앱 스킴 최우선) */
+  naverMapPlaceId?: string;
+  /** 길안내 — place ID 없을 때 nmap://place?lat=&lng= 용 */
   naverMapLat?: number;
   naverMapLon?: number;
   naverMapName?: LocalizedText;
-  /** 웹 fallback URL (선택) */
+  /** 데스크톱 웹 fallback URL (선택) */
   naverMapWebUrl?: string;
-  /** @deprecated naverMapLat/Lon/Name 사용 */
-  naverMapPlaceId?: string;
   /** @deprecated naverMapLat/Lon/Name 사용 */
   naverMapUrl?: string;
   imageAlt?: LocalizedText;
@@ -29,8 +29,9 @@ export type MainBanner = {
   variant?: "primary" | "accent" | "muted";
 };
 
+const TRAVEL_CENTER_PLACE_ID = "2031464673";
 const TRAVEL_CENTER_WEB_URL =
-  "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome";
+  `https://map.naver.com/p/entry/place/${TRAVEL_CENTER_PLACE_ID}?placePath=%2Fhome`;
 /** 제주 제주시 중앙로 43 — 제주여행자센터 */
 const TRAVEL_CENTER_LAT = 33.509906;
 const TRAVEL_CENTER_LON = 126.523648;
@@ -92,6 +93,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       id: "travel-center",
       imageUrl: TRAVEL_CENTER_IMAGE[locale],
       popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
+      naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
       naverMapLat: TRAVEL_CENTER_LAT,
       naverMapLon: TRAVEL_CENTER_LON,
       naverMapName: TRAVEL_CENTER_MAP_NAME,
@@ -108,6 +110,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       id: "coupon-ko",
       imageUrl: "/banners/coupon-ko.png",
       popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
+      naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
       naverMapLat: TRAVEL_CENTER_LAT,
       naverMapLon: TRAVEL_CENTER_LON,
       naverMapName: TRAVEL_CENTER_MAP_NAME,
