@@ -8,9 +8,15 @@ export type MainBanner = {
   imageUrl?: string;
   /** 팝업 하단 이미지 URL (캐러셀 배너와 별도 — mainBanners.ts에서 지정) */
   popupImageUrl?: string;
-  /** 길안내 버튼 클릭 시 열 네이버 지도 장소 ID */
+  /** 길안내 — 네이버지도 앱 딥링크용 좌표·장소명 (필수) */
+  naverMapLat?: number;
+  naverMapLon?: number;
+  naverMapName?: LocalizedText;
+  /** 웹 fallback URL (선택) */
+  naverMapWebUrl?: string;
+  /** @deprecated naverMapLat/Lon/Name 사용 */
   naverMapPlaceId?: string;
-  /** 길안내 버튼 클릭 시 열 네이버 지도 URL (naver.me 등) */
+  /** @deprecated naverMapLat/Lon/Name 사용 */
   naverMapUrl?: string;
   imageAlt?: LocalizedText;
   imageCtaLabel?: LocalizedText;
@@ -23,7 +29,27 @@ export type MainBanner = {
   variant?: "primary" | "accent" | "muted";
 };
 
-const TRAVEL_CENTER_PLACE_ID = "2031464673";
+const TRAVEL_CENTER_WEB_URL =
+  "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome";
+/** 제주 제주시 중앙로 43 — 제주여행자센터 */
+const TRAVEL_CENTER_LAT = 33.509906;
+const TRAVEL_CENTER_LON = 126.523648;
+const TRAVEL_CENTER_MAP_NAME: LocalizedText = {
+  ko: "제주여행자센터",
+  en: "Jeju Traveler Center",
+  zh: "济州旅行者中心",
+  ja: "済州旅行者センター",
+};
+
+/** 제주 제주시 관덕로17길 27-1 — 칠성로 굿데이 페스타 (naver.me/xpjja0mM) */
+const CHILSEONGRO_FESTA_LAT = 33.515678;
+const CHILSEONGRO_FESTA_LON = 126.528875;
+const CHILSEONGRO_FESTA_MAP_NAME: LocalizedText = {
+  ko: "칠성로 굿데이 페스타",
+  en: "Chilseong-ro Good Day Festa",
+  zh: "七星路 Good Day 庆典",
+  ja: "七星路 Good Day フェスタ",
+};
 const CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL = "https://naver.me/xpjja0mM";
 
 /** 팝업용 포스터 — 모바일 표시에 맞게 리사이즈·WebP (원본 PNG 대비 ~98% 용량 절감) */
@@ -66,20 +92,26 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       id: "travel-center",
       imageUrl: TRAVEL_CENTER_IMAGE[locale],
       popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
-      naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
+      naverMapLat: TRAVEL_CENTER_LAT,
+      naverMapLon: TRAVEL_CENTER_LON,
+      naverMapName: TRAVEL_CENTER_MAP_NAME,
+      naverMapWebUrl: TRAVEL_CENTER_WEB_URL,
       imageAlt: {
         ko: "제주 여행자센터 안내",
         en: "Jeju Travel Center",
         zh: "济州旅行者中心",
         ja: "済州旅行者センター",
       },
-      href: "https://map.naver.com/p/entry/place/2031464673?placePath=%2Fhome",
+      href: TRAVEL_CENTER_WEB_URL,
     },
     {
       id: "coupon-ko",
       imageUrl: "/banners/coupon-ko.png",
       popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
-      naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
+      naverMapLat: TRAVEL_CENTER_LAT,
+      naverMapLon: TRAVEL_CENTER_LON,
+      naverMapName: TRAVEL_CENTER_MAP_NAME,
+      naverMapWebUrl: TRAVEL_CENTER_WEB_URL,
       imageAlt: {
         ko: "제주 여행자센터 쿠폰 이벤트",
         en: "Jeju Travel Center coupon event",
@@ -91,7 +123,10 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       id: "chilseongro-good-day-festa-1",
       imageUrl: "/banners/chilseongro-good-day-festa-1.png",
       popupImageUrl: CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
-      naverMapUrl: CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL,
+      naverMapLat: CHILSEONGRO_FESTA_LAT,
+      naverMapLon: CHILSEONGRO_FESTA_LON,
+      naverMapName: CHILSEONGRO_FESTA_MAP_NAME,
+      naverMapWebUrl: CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL,
       imageAlt: {
         ko: "칠성로 굿데이 페스타",
         en: "Chilseong-ro Good Day Festa",
@@ -103,7 +138,10 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       id: "chilseongro-good-day-festa-2",
       imageUrl: "/banners/chilseongro-good-day-festa-2.png",
       popupImageUrl: CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
-      naverMapUrl: CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL,
+      naverMapLat: CHILSEONGRO_FESTA_LAT,
+      naverMapLon: CHILSEONGRO_FESTA_LON,
+      naverMapName: CHILSEONGRO_FESTA_MAP_NAME,
+      naverMapWebUrl: CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL,
       imageAlt: {
         ko: "칠성로 굿데이 페스타",
         en: "Chilseong-ro Good Day Festa",
