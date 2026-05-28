@@ -43,7 +43,7 @@ const TRAVEL_CENTER_MAP_NAME: LocalizedText = {
 };
 
 /** 제주 제주시 관덕로17길 27-1 — 칠성로 굿데이 페스타 (naver.me/xpjja0mM) */
-const CHILSEONGRO_FESTA_LAT = 33.514333;
+const CHILSEONGRO_FESTA_LAT = 33.514337;
 const CHILSEONGRO_FESTA_LON =  126.525519;
 const CHILSEONGRO_FESTA_MAP_NAME: LocalizedText = {
   ko: "칠성로 굿데이 페스타",
@@ -72,11 +72,12 @@ const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
   ja: "/banners/travel-center-ja.png",
 };
 
+/** 팝업 길안내 CTA — 모바일 다이얼로그 폭에 맞게 리사이즈·WebP */
 export const NAVER_MAP_DIRECTIONS_IMAGE: Record<AppLocale, string> = {
-  ko: "/banners/naver-map-directions-ko.png",
-  en: "/banners/naver-map-directions-en.png",
-  zh: "/banners/naver-map-directions-zh.png",
-  ja: "/banners/naver-map-directions-ja.png",
+  ko: "/banners/naver-map-directions-ko.webp",
+  en: "/banners/naver-map-directions-en.webp",
+  zh: "/banners/naver-map-directions-zh.webp",
+  ja: "/banners/naver-map-directions-ja.webp",
 };
 
 export const NAVER_MAP_DIRECTIONS_ALT: Record<AppLocale, string> = {

@@ -37,6 +37,7 @@ import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { JEJU_DOWNTOWN_COORDS } from "@/lib/naverGeocodeFallback";
 import { getBrowserPosition } from "@/lib/geolocation";
+import { openStoreRedirect, prefetchStoreRedirects } from "@/lib/storeRedirect";
 import TutorialModal from "@/components/TutorialModal";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
 import { shouldShowTutorial } from "@/lib/tutorial";
@@ -1957,6 +1958,14 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     );
   }, [openStores, sortBy, currentCoords]);
 
+  useEffect(() => {
+    prefetchStoreRedirects(
+      sortedStores
+        .map((store) => store.detailUrl)
+        .filter((url): url is string => Boolean(url)),
+    );
+  }, [sortedStores]);
+
   const storesWithCoords = useMemo(() => {
     // 지도뷰: 재검색 결과 또는 불러온 매장 중 좌표 있는 것 (영업중 필터는 시트에서만 적용 가능)
     const base = mapFilteredStores
@@ -3234,7 +3243,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         highlightSelectedCard={highlightMapSheetCard}
         onSelectStoreFromCard={(store) => {
           if (store.detailUrl) {
-            window.open(store.detailUrl, "_blank", "noopener,noreferrer");
+            openStoreRedirect(store.detailUrl, {
+              lat: store.lat,
+              lon: store.lon,
+              name: store.name,
+            });
           }
           mapStoreFocusSessionRef.current += 1;
           setSelectedMapStoreId(String(store.id));

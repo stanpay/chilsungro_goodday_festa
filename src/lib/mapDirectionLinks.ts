@@ -1,5 +1,8 @@
-import { promptNaverMapFallback } from "@/lib/mapDirectionFallback";
-import { emitMapDirectionDebug } from "@/lib/mapDirectionDebug";
+import {
+  appendAndroidIntentBrowserFallback,
+  clearStashedNaverMapFallback,
+  promptNaverMapFallback,
+} from "@/lib/mapDirectionFallback";
 import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 /**
@@ -53,130 +56,72 @@ function getNaverMapAppName(): string {
 
 const DEEP_LINK_FALLBACK_MS = 1500;
 
-function truncateUrl(url: string, max = 120): string {
-  return url.length <= max ? url : `${url.slice(0, max)}…`;
-}
+const PLAY_STORE_URL_PATTERN =
+  /play\.google\.com|market\.android\.com|market:\/\/details/i;
 
-function getSchemeLabel(url: string): string {
-  if (url.startsWith("intent://")) return "intent";
-  if (url.startsWith("nmap://")) return "nmap";
-  if (url.startsWith("https://")) return "https";
-  return url.split(":")[0] || "unknown";
-}
-
-function resolveAndroidLaunchUrl(
-  intentUrl: string,
-  nativeSchemeUrl?: string,
-): string {
-  // WebAPK(PWA standalone)에서는 intent://가 차단되므로 nmap:// 직접 사용
-  if (isInStandaloneMode() && nativeSchemeUrl) {
-    return nativeSchemeUrl;
-  }
-  return intentUrl;
+function isPlayStoreNavigation(): boolean {
+  return PLAY_STORE_URL_PATTERN.test(window.location.href);
 }
 
 function tryOpenDeepLink(
-  deepLink: string,
-  options?: { webFallback?: string; nativeSchemeUrl?: string },
+  schemeUrl: string,
+  options?: { webFallback?: string; intentUrl?: string },
 ) {
   const { isIOS, isAndroid } = getMobileEnv();
-  const webFallback = options?.webFallback;
-  const debug: string[] = [];
-  const push = (line: string) => {
-    debug.push(line);
-    emitMapDirectionDebug(debug, {
-      webFallbackUrl: webFallback,
-      platform: isIOS ? "ios" : "android",
-    });
-  };
-
-  push(`── 딥링크 시도 ${new Date().toLocaleTimeString()} ──`);
-  push(`환경: Android=${isAndroid}, iOS=${isIOS}, PWA=${isInStandaloneMode()}`);
-  push(`visibility: ${document.visibilityState}`);
-  push(`display-mode: ${["standalone", "fullscreen", "browser", "minimal-ui"].map((m) => `${m}=${window.matchMedia(`(display-mode: ${m})`).matches}`).join(", ")}`);
-  if (options?.nativeSchemeUrl) {
-    push(`준비 nmap: ${truncateUrl(options.nativeSchemeUrl)}`);
-  }
-  push(`준비 intent: ${truncateUrl(deepLink)}`);
+  const webFallback = options?.webFallback ?? "https://map.naver.com/";
 
   if (!isIOS && !isAndroid) {
-    push("결과: 데스크탑 → 웹 fallback");
-    if (webFallback) {
-      window.open(webFallback, "_blank", "noopener,noreferrer");
-    }
+    openNaverMapWebFallback(webFallback);
     return;
   }
 
   let appOpened = false;
   const onHide = () => {
     appOpened = true;
-    push(`감지: visibilitychange → 앱 전환으로 판단 (${document.visibilityState})`);
+    clearStashedNaverMapFallback();
     document.removeEventListener("visibilitychange", onHide);
-  };
-  const onBlur = () => {
-    push("감지: window blur");
-  };
-  const onPageHide = () => {
-    push("감지: pagehide");
   };
 
   document.addEventListener("visibilitychange", onHide);
-  window.addEventListener("blur", onBlur);
-  window.addEventListener("pagehide", onPageHide);
 
-  const launchUrl = isAndroid
-    ? resolveAndroidLaunchUrl(deepLink, options?.nativeSchemeUrl)
-    : deepLink;
-  push(`실행: ${getSchemeLabel(launchUrl)} (${isInStandaloneMode() ? "PWA→nmap 우선" : "브라우저→intent"})`);
-  push(`실행 URL: ${truncateUrl(launchUrl)}`);
+  let launchUrl = schemeUrl;
+  if (isAndroid && options?.intentUrl && !isInStandaloneMode()) {
+    launchUrl = appendAndroidIntentBrowserFallback(
+      options.intentUrl,
+      webFallback,
+    );
+  }
 
   try {
-    openExternalUrl(launchUrl, { targetBlank: isAndroid });
-    push("실행: openExternalUrl(anchor click) 호출됨");
-  } catch (error) {
-    push(`실행: openExternalUrl 실패 — ${error instanceof Error ? error.message : String(error)}`);
+    openExternalUrl(launchUrl);
+  } catch {
+    // openExternalUrl 실패 시 타임아웃 fallback으로 처리
   }
 
   window.setTimeout(() => {
     document.removeEventListener("visibilitychange", onHide);
-    window.removeEventListener("blur", onBlur);
-    window.removeEventListener("pagehide", onPageHide);
 
-    push(`타임아웃(${DEEP_LINK_FALLBACK_MS}ms) visibility=${document.visibilityState}, appOpened=${appOpened}`);
-
-    if (appOpened) {
-      push("결과: ✅ 앱 전환 감지 — fallback 생략");
-      emitMapDirectionDebug(debug, {
-        webFallbackUrl: webFallback,
-        platform: isIOS ? "ios" : "android",
-      });
+    // Play Store로 넘어간 경우(visibility만 바뀐 케이스)에도 팝업 표시
+    if (appOpened && !isPlayStoreNavigation()) {
       return;
     }
 
-    push("결과: ❌ 앱 전환 미감지");
+    if (isPlayStoreNavigation()) {
+      clearStashedNaverMapFallback();
+      window.history.back();
+      window.setTimeout(() => {
+        promptNaverMapFallback(webFallback, isIOS ? "ios" : "android");
+      }, 300);
+      return;
+    }
 
-    if (webFallback && (isIOS || isAndroid)) {
-      push("fallback: promptNaverMapFallback 이벤트 dispatch 시도");
+    if (isIOS || isAndroid) {
+      clearStashedNaverMapFallback();
       promptNaverMapFallback(webFallback, isIOS ? "ios" : "android");
-      push("fallback: dispatch 완료 (NaverMapFallbackDialog 수신 여부는 로그 확인)");
-      emitMapDirectionDebug(debug, {
-        webFallbackUrl: webFallback,
-        platform: isIOS ? "ios" : "android",
-      });
       return;
     }
 
-    if (webFallback) {
-      push("fallback: openNaverMapWebFallback(window.open) 시도");
-      openNaverMapWebFallback(webFallback);
-    } else {
-      push("fallback: webFallback URL 없음");
-    }
-
-    emitMapDirectionDebug(debug, {
-      webFallbackUrl: webFallback,
-      platform: isIOS ? "ios" : "android",
-    });
+    openNaverMapWebFallback(webFallback);
   }, DEEP_LINK_FALLBACK_MS);
 }
 
@@ -240,7 +185,7 @@ export function openNaverMapMarker(input: {
     webFallback ?? buildNaverMapOpenUrl({ name, lat, lon });
 
   if (isAndroid) {
-    tryOpenDeepLink(intentUrl, { webFallback: webUrl, nativeSchemeUrl: nmapUrl });
+    tryOpenDeepLink(nmapUrl, { webFallback: webUrl, intentUrl });
     return;
   }
 
@@ -254,8 +199,8 @@ export function openNaverMapMarker(input: {
 
 /**
  * 네이버지도 앱 딥링크로 매장 위치를 열어준다.
- * - Android: Intent URI 사용 → 앱 미설치 시 Play Store 자동 이동
- * - iOS: nmap:// 스킴 시도 후 실패 시 App Store·웹 선택 팝업
+ * - Android: intent(+browser_fallback_url) 또는 PWA에서 nmap://
+ * - iOS: nmap:// 시도 후 실패 시 설치·웹 선택 팝업
  * - 데스크탑/기타: 웹 네이버지도 새 탭
  */
 export function openNaverMapsApp(input: MapDirectionInput): void {
@@ -280,7 +225,7 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
   const webUrl = buildNaverMapOpenUrl({ name, lat, lon });
 
   if (isAndroid) {
-    tryOpenDeepLink(intentUrl, { webFallback: webUrl, nativeSchemeUrl: nmapUrl });
+    tryOpenDeepLink(nmapUrl, { webFallback: webUrl, intentUrl });
     return;
   }
 
@@ -353,7 +298,7 @@ export function openNaverMapPlace(
     `package=${NAVER_MAP_ANDROID_PACKAGE};end`;
 
   if (isAndroid) {
-    tryOpenDeepLink(intentUrl, { webFallback: webUrl, nativeSchemeUrl: nmapUrl });
+    tryOpenDeepLink(nmapUrl, { webFallback: webUrl, intentUrl });
     return;
   }
 
@@ -385,10 +330,6 @@ export function openNaverMapDirections(input: {
     ...input,
     placeId,
   });
-
-  emitMapDirectionDebug([
-    `openNaverMapDirections: placeId=${placeId ?? "없음"}, coords=${input.lat ?? "?"}/${input.lon ?? "?"}`,
-  ], { webFallbackUrl: webFallback, platform: "android" });
 
   if (placeId) {
     openNaverMapPlace(placeId, webFallback);

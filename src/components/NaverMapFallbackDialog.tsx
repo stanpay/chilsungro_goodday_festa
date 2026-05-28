@@ -14,11 +14,11 @@ import {
   getNaverMapFallbackCopy,
   NAVER_MAP_FALLBACK_EVENT,
   openNaverMapStore,
+  resumeNaverMapFallbackFromNavigation,
   type NaverMapFallbackDetail,
   type NaverMapFallbackPlatform,
 } from "@/lib/mapDirectionFallback";
 import { openNaverMapWebFallback } from "@/lib/mapDirectionLinks";
-import { emitMapDirectionDebug } from "@/lib/mapDirectionDebug";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -32,17 +32,16 @@ export default function NaverMapFallbackDialog() {
 
   const handleEvent = useCallback((event: Event) => {
     const detail = (event as CustomEvent<NaverMapFallbackDetail>).detail;
-    emitMapDirectionDebug([
-      `[fallback 다이얼로그] 이벤트 수신: url=${detail?.webFallbackUrl ? "있음" : "없음"}, platform=${detail?.platform ?? "없음"}`,
-    ]);
     if (!detail?.webFallbackUrl || !detail.platform) {
-      emitMapDirectionDebug(["[fallback 다이얼로그] ❌ detail 누락 — 팝업 표시 안 함"]);
       return;
     }
-    emitMapDirectionDebug(["[fallback 다이얼로그] ✅ AlertDialog open=true"]);
     setWebFallbackUrl(detail.webFallbackUrl);
     setPlatform(detail.platform);
     setOpen(true);
+  }, []);
+
+  useEffect(() => {
+    resumeNaverMapFallbackFromNavigation();
   }, []);
 
   useEffect(() => {

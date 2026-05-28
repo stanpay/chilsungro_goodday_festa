@@ -8,6 +8,7 @@ import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { openStoreRedirect } from "@/lib/storeRedirect";
 
 interface StoreCardProps {
   id: string;
@@ -165,7 +166,7 @@ const StoreCard = ({
     }
 
     if (detailUrl) {
-      window.open(detailUrl, "_blank", "noopener,noreferrer");
+      openStoreRedirect(detailUrl, { lat, lon, name });
     }
   };
 

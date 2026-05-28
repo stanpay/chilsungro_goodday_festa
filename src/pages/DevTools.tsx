@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { promptNaverMapFallback } from "@/lib/mapDirectionFallback";
 
 const getStorageEntries = (storage: Storage) => {
   const entries: Record<string, string> = {};
@@ -110,12 +111,28 @@ const tdStyle: React.CSSProperties = {
 };
 
 const DevTools = () => {
+  const openNaverMapFallbackPreview = () => {
+    const ua = navigator.userAgent;
+    const platform = /iPhone|iPad|iPod/i.test(ua) ? "ios" : "android";
+    promptNaverMapFallback("https://map.naver.com/", platform);
+  };
+
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "32px 20px", fontFamily: "monospace" }}>
       <h1 style={{ fontSize: 20, marginBottom: 4 }}>Dev Tools</h1>
       <p style={{ color: "#888", fontSize: 12, marginBottom: 32 }}>
         이 페이지는 URL을 아는 사람만 접근할 수 있습니다.
       </p>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>UI 미리보기</h2>
+        <button
+          type="button"
+          onClick={openNaverMapFallbackPreview}
+          style={btnStyle("#2563eb")}
+        >
+          네이버 지도 fallback 팝업 열기
+        </button>
+      </div>
       <StoragePanel label="localStorage" storage={localStorage} />
       <StoragePanel label="sessionStorage" storage={sessionStorage} />
     </div>
