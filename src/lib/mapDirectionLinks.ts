@@ -125,6 +125,14 @@ function tryOpenDeepLink(
   }, DEEP_LINK_FALLBACK_MS);
 }
 
+/** 리다이렉트 해석 후 nmap/intent 등 네이티브 스킴 실행 */
+export function openNativeDeepLink(
+  schemeUrl: string,
+  options?: { webFallback?: string; intentUrl?: string },
+): void {
+  tryOpenDeepLink(schemeUrl, options);
+}
+
 /** 딥링크 실패·좌표 없음 등 최종 웹 fallback (모바일 포함) */
 export function openNaverMapWebFallback(url: string): void {
   window.open(url, "_blank", "noopener,noreferrer");
