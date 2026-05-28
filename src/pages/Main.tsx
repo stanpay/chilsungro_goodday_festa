@@ -732,6 +732,24 @@ interface StoreData {
     );
   }, [getSelectedStoreMarker]);
 
+  const handleMapSheetDraggingChange = useCallback((dragging: boolean) => {
+    const map = mapInstanceRef.current;
+    if (!map?.setOptions) return;
+    try {
+      map.setOptions({
+        draggable: !dragging,
+        pinchZoom: !dragging,
+        scrollWheel: !dragging,
+        keyboardShortcuts: !dragging,
+        disableDoubleTapZoom: dragging,
+        disableDoubleClickZoom: dragging,
+        disableTwoFingerTapZoom: dragging,
+      });
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const selectedMapStoreIdRef = useRef<string | null>(null);
   selectedMapStoreIdRef.current = selectedMapStoreId;
 
@@ -1806,13 +1824,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     if (isMapView) {
       return (
         <div
-          className="-mr-4 w-[calc(100%+1rem)] py-1 pointer-events-none"
+          className="-mx-4 w-[calc(100%+2rem)] py-1 pointer-events-none"
           role="toolbar"
           aria-label={ariaLabel}
         >
           <div
             className={cn(
-              "w-full overflow-x-auto pointer-events-auto",
+              "w-full overflow-x-auto pointer-events-auto pl-4 pr-4",
               chipScrollClassName
             )}
           >
@@ -3103,7 +3121,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               </Button>
             )}
           </div>
-          <div className="space-y-2 -mr-4">
+          <div className="space-y-2">
             {renderFilterChipRow(
               benefitFilterChipOrder,
               benefitFilterChips,
@@ -3217,6 +3235,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           bumpMapFocus();
         }}
         onPanelHeightChange={handleMapSheetPanelHeightChange}
+        onDraggingChange={handleMapSheetDraggingChange}
         title={t.mapSheetTitle}
         dragHint={t.mapSheetDragHint}
         sortBy={sortBy}
