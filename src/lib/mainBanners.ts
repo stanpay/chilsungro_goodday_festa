@@ -26,10 +26,17 @@ export type MainBanner = {
 const TRAVEL_CENTER_PLACE_ID = "2031464673";
 const CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL = "https://naver.me/xpjja0mM";
 
+/** 팝업용 포스터 — 모바일 표시에 맞게 리사이즈·WebP (원본 PNG 대비 ~98% 용량 절감) */
 const JEJU_TRAVELER_CENTER_COUPON_POSTER =
-  "/banners/jeju-traveler-center-coupon-poster.png";
+  "/banners/jeju-traveler-center-coupon-poster.webp";
 const CHILSEONGRO_GOOD_DAY_FESTA_POSTER =
-  "/banners/chilseongro-good-day-festa-poster.png";
+  "/banners/chilseongro-good-day-festa-poster.webp";
+
+/** 메인 배너 마운트 시 팝업 이미지 선로딩용 */
+export const MAIN_BANNER_POPUP_IMAGE_URLS = [
+  JEJU_TRAVELER_CENTER_COUPON_POSTER,
+  CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
+] as const;
 
 const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
   ko: "/banners/travel-center-ko.png",

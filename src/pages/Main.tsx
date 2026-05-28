@@ -2211,8 +2211,8 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 <Languages className="h-4 w-4 shrink-0" />
                 <AutoFitMarquee
                   text={LOCALE_MENU_LABELS[locale]}
-                  className="flex-1"
-                  textClassName="text-left text-sm font-medium !leading-4"
+                  className="flex-1 pr-0"
+                  textClassName="text-center text-sm !leading-4"
                   fontSizeClasses={["text-sm", "text-xs"]}
                 />
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -2292,20 +2292,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           )}
         </div>
 
-        {isLoadingStores ? (
-          <div
-            className={cn(
-              "grid grid-cols-2 gap-4 animate-fade-in",
-              isMapView && "relative z-30 px-4"
-            )}
-            aria-busy="true"
-            aria-label={t.loadingStores}
-          >
-            {Array.from({ length: 8 }, (_, index) => (
-              <StoreCardSkeleton key={`store-skeleton-${index}`} />
-            ))}
-          </div>
-        ) : isMapView ? (
+        {isMapView ? (
           <div className="animate-fade-in relative z-30">
             <div
               className="pointer-events-none fixed left-1/2 z-[25] flex w-full max-w-md -translate-x-1/2 justify-end px-4"
@@ -2338,6 +2325,16 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               sortDistanceLabel={currentCoords ? t.sortDistance : t.sortName}
               sortDiscountLabel={t.sortDiscount}
             />
+          </div>
+        ) : isLoadingStores ? (
+          <div
+            className="grid grid-cols-2 gap-4 animate-fade-in"
+            aria-busy="true"
+            aria-label={t.loadingStores}
+          >
+            {Array.from({ length: 8 }, (_, index) => (
+              <StoreCardSkeleton key={`store-skeleton-${index}`} />
+            ))}
           </div>
         ) : sortedStores.length > 0 ? (
           <>

@@ -15,6 +15,7 @@ import {
 import {
   getBannerText,
   getMainBanners,
+  MAIN_BANNER_POPUP_IMAGE_URLS,
   NAVER_MAP_DIRECTIONS_ALT,
   NAVER_MAP_DIRECTIONS_IMAGE,
   type MainBanner,
@@ -23,8 +24,15 @@ import type { AppLocale } from "@/lib/locale";
 import { openNaverMapDirections } from "@/lib/mapDirectionLinks";
 import { cn } from "@/lib/utils";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
+import ZoomablePosterImage from "@/components/ZoomablePosterImage";
 
 const AUTO_SLIDE_MS = 1500;
+
+function preloadImage(url: string) {
+  const img = new Image();
+  img.decoding = "async";
+  img.src = url;
+}
 
 const VARIANT_CLASS: Record<NonNullable<MainBanner["variant"]>, string> = {
   primary: "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground",
@@ -69,6 +77,7 @@ function BannerSlide({
 
   const handleClick = () => {
     if (skippedClick.current) return;
+    if (banner.popupImageUrl) preloadImage(banner.popupImageUrl);
     onOpen();
   };
 
@@ -135,6 +144,12 @@ export default function MainPromoBanner({
   const [activeIndex, setActiveIndex] = useState(0);
   const [isAutoSlidePaused, setIsAutoSlidePaused] = useState(false);
   const [selectedBanner, setSelectedBanner] = useState<MainBanner | null>(null);
+  const [popupImageReady, setPopupImageReady] = useState(false);
+
+  useEffect(() => {
+    MAIN_BANNER_POPUP_IMAGE_URLS.forEach(preloadImage);
+    Object.values(NAVER_MAP_DIRECTIONS_IMAGE).forEach(preloadImage);
+  }, []);
 
   const selectedBannerAlt = selectedBanner
     ? getBannerText(selectedBanner.imageAlt, locale) ||
@@ -144,6 +159,21 @@ export default function MainPromoBanner({
   const showNaverMapDirections =
     !!selectedBanner?.naverMapPlaceId || !!selectedBanner?.naverMapUrl;
   const directionsAlt = NAVER_MAP_DIRECTIONS_ALT[locale];
+
+  useEffect(() => {
+    if (!selectedPopupImageUrl) {
+      setPopupImageReady(false);
+      return;
+    }
+    setPopupImageReady(false);
+    const img = new Image();
+    img.decoding = "async";
+    const markReady = () => setPopupImageReady(true);
+    img.onload = markReady;
+    img.onerror = markReady;
+    img.src = selectedPopupImageUrl;
+    if (img.complete) markReady();
+  }, [selectedPopupImageUrl]);
 
   const pauseAutoSlide = useCallback(() => {
     setIsAutoSlidePaused(true);
@@ -251,10 +281,10 @@ export default function MainPromoBanner({
                   </button>
                 ) : null}
                 {selectedPopupImageUrl ? (
-                  <img
+                  <ZoomablePosterImage
                     src={selectedPopupImageUrl}
                     alt={selectedBannerAlt}
-                    className="w-full object-contain"
+                    ready={popupImageReady}
                   />
                 ) : null}
               </div>
