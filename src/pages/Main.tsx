@@ -81,6 +81,10 @@ const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
 /** 위치를 알 수 없을 때 매장 목록을 불러오는 기본 좌표 (제주 원도심) */
 const JEJU_DOWNTOWN_COORDS = { latitude: 33.5098, longitude: 126.5219 };
 const MAP_MAX_ZOOM = 21;
+/** 클러스터 확대 시 한 단계 줌 애니메이션 길이(ms) */
+const MAP_CLUSTER_ZOOM_ANIM_MS = 420;
+/** zoomend 미발생 시 다음 줌 단계로 넘기는 폴백 여유(ms) */
+const MAP_CLUSTER_ZOOM_FALLBACK_PAD_MS = 80;
 
 function getMapMaxZoom(map: { getMaxZoom?: () => number }): number {
   const max = map.getMaxZoom?.();
@@ -95,11 +99,15 @@ const MAP_SPIDERFY_RADIUS_PX = 32;
 const MAP_SPIDERFY_MAX_RADIUS_PX = 96;
 const MAP_VIEW_PADDING = { top: 100, right: 48, bottom: 220, left: 48 };
 const PIN_LABEL_GAP_PX = 4;
-const PIN_TAIL_HEIGHT_PX = 8;
-const PIN_BALLOON_PADDING_X = 16;
-const PIN_BALLOON_PADDING_Y = 8;
-const PIN_LABEL_FONT = "700 11px system-ui, -apple-system, sans-serif";
-const PIN_LABEL_LINE_HEIGHT = 1.35;
+const PIN_TAIL_HEIGHT_PX = 5;
+const PIN_BALLOON_PADDING_X = 14;
+const PIN_BALLOON_PADDING_Y = 2;
+const PIN_LABEL_FONT_SIZE_PX = 10;
+const PIN_LABEL_FONT = `700 ${PIN_LABEL_FONT_SIZE_PX}px system-ui, -apple-system, sans-serif`;
+const PIN_LABEL_LINE_HEIGHT = 1.15;
+const PIN_CLUSTER_SIZE_PX = 30;
+const PIN_CLUSTER_FONT_SIZE_PX = 11;
+const PIN_CLUSTER_BORDER_PX = 2;
 
 type PinLabelRect = { left: number; top: number; right: number; bottom: number };
 
@@ -124,8 +132,8 @@ function measurePinLabelRect(
   labelText: string,
   spiderfyOffset = { x: 0, y: 0 }
 ): PinLabelRect {
-  const width = Math.max(measurePinLabelTextWidth(labelText) + PIN_BALLOON_PADDING_X, 24);
-  const height = Math.ceil(11 * PIN_LABEL_LINE_HEIGHT) + PIN_BALLOON_PADDING_Y;
+  const width = Math.max(measurePinLabelTextWidth(labelText) + PIN_BALLOON_PADDING_X, 22);
+  const height = Math.ceil(PIN_LABEL_FONT_SIZE_PX * PIN_LABEL_LINE_HEIGHT) + PIN_BALLOON_PADDING_Y;
   const x = anchorX + spiderfyOffset.x;
   const y = anchorY + spiderfyOffset.y;
   return {
@@ -149,8 +157,9 @@ function labelRectsOverlapForCluster(a: PinLabelRect, b: PinLabelRect, zoom: num
   if (!labelRectsOverlap(a, b, 0)) return false;
   const overlapW = Math.min(a.right, b.right) - Math.max(a.left, b.left);
   const overlapH = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-  const minW = zoom >= 16 ? 18 : 12;
-  const minH = zoom >= 16 ? 12 : 8;
+  // minW/minH = "이만큼 이상 겹쳐야 같은 클러스터" → 값이 클수록 묶임이 어려워져 클러스터 개수↑
+  const minW = zoom >= 16 ? 18 : zoom >= 15 ? 44 : 12;
+  const minH = zoom >= 16 ? 12 : zoom >= 15 ? 22 : 8;
   return overlapW >= minW && overlapH >= minH;
 }
 
@@ -167,13 +176,17 @@ function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number):
 }
 
 function getMaxClusterDistanceM(zoom: number): number {
-  if (zoom >= 16) return 45;
-  if (zoom >= 15) return 90;
-  if (zoom >= 13) return 180;
-  return 320;
+  // v5 타일 줌 15≈100m — 100m 구간만 타이트하게, 50m(16~17)은 기존 유지
+  if (zoom >= 18) return 20;
+  if (zoom >= 16) return 40;
+  if (zoom >= 15) return 4;
+  if (zoom >= 13) return 160;
+  return 280;
 }
 
 type ClusterPinItem = {
+  id: string;
+  marker: any;
   bounds: PinLabelRect;
   pos: { lat: () => number; lng: () => number };
 };
@@ -536,6 +549,10 @@ interface StoreData {
   const fitMapToStoresRef = useRef<(() => void) | null>(null);
   const mapOverlaysReadyRef = useRef(false);
   const mapClusteringEnabledRef = useRef(false);
+  const clusterExpansionFocusRef = useRef<string[] | null>(null);
+  const activeClusterExpansionRef = useRef<{ memberIds: string[]; centroid: any } | null>(null);
+  const clusterExpansionSessionRef = useRef(0);
+  const lastClusterUpdateZoomRef = useRef<number | null>(null);
   const mapBootstrapFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rebuildStoreOverlaysTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const myLocationMarkerRef = useRef<any>(null);
@@ -1630,24 +1647,53 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   };
 
   const renderFilterChipRow = (
-    className: string,
     order: StoreFilterChipId[],
     activeChips: ReadonlySet<StoreFilterChipId>,
     onToggle: (id: StoreFilterChipId) => void,
     ariaLabel: string
-  ) => (
-    <div className={className} role="toolbar" aria-label={ariaLabel}>
-      {order.map((id) => (
-        <ChipButton
-          key={id}
-          id={id}
-          active={activeChips.has(id)}
-          label={chipLabelMap[id]}
-          onToggle={() => onToggle(id)}
-        />
-      ))}
-    </div>
-  );
+  ) => {
+    const chips = order.map((id) => (
+      <ChipButton
+        key={id}
+        id={id}
+        active={activeChips.has(id)}
+        label={chipLabelMap[id]}
+        onToggle={() => onToggle(id)}
+      />
+    ));
+
+    const chipScrollClassName =
+      "gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+
+    if (isMapView) {
+      return (
+        <div
+          className="-mr-4 w-[calc(100%+1rem)] py-1 pointer-events-none"
+          role="toolbar"
+          aria-label={ariaLabel}
+        >
+          <div
+            className={cn(
+              "w-full overflow-x-auto pointer-events-auto",
+              chipScrollClassName
+            )}
+          >
+            <div className="flex w-max flex-nowrap gap-2">{chips}</div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={cn("flex w-full py-1 pr-4", chipScrollClassName)}
+        role="toolbar"
+        aria-label={ariaLabel}
+      >
+        {chips}
+      </div>
+    );
+  };
 
   // 검색어로 필터링
   const filteredStores = useMemo(() =>
@@ -1783,11 +1829,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       const balloon = document.createElement("div");
       balloon.dataset.pinDot = "1";
       balloon.style.cssText =
-        "background:#2D8CFF;border-radius:8px;padding:4px 8px;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transition:background .15s ease,transform .15s ease,box-shadow .15s ease;";
+        "background:#2D8CFF;border-radius:6px;padding:1px 7px;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transition:background .15s ease,transform .15s ease,box-shadow .15s ease;";
 
       const label = document.createElement("span");
       label.setAttribute("data-store-label", "1");
-      label.style.cssText = "font-size:11px;font-weight:700;color:#fff;line-height:1.35;";
+      label.style.cssText = `font-size:${PIN_LABEL_FONT_SIZE_PX}px;font-weight:700;color:#fff;line-height:${PIN_LABEL_LINE_HEIGHT};`;
       label.textContent = mapPinLabelsRef.current[store.id] ?? store.name;
 
       balloon.appendChild(label);
@@ -1795,7 +1841,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       const tail = document.createElement("div");
       tail.dataset.pinTail = "1";
       tail.style.cssText =
-        "width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #2D8CFF;transition:border-top-color .15s ease;";
+        "width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #2D8CFF;transition:border-top-color .15s ease;";
 
       wrapper.appendChild(balloon);
       wrapper.appendChild(tail);
@@ -1815,10 +1861,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       const el = document.createElement("div");
       el.style.cssText =
         "position:absolute;display:flex;align-items:center;justify-content:center;" +
-        "width:36px;height:36px;transform:translate(-50%,-50%);border-radius:9999px;" +
-        "background:#2D8CFF;border:2.5px solid #fff;" +
+        `width:${PIN_CLUSTER_SIZE_PX}px;height:${PIN_CLUSTER_SIZE_PX}px;transform:translate(-50%,-50%);border-radius:9999px;` +
+        `background:#2D8CFF;border:${PIN_CLUSTER_BORDER_PX}px solid #fff;` +
         "box-shadow:0 2px 8px rgba(0,0,0,.32);" +
-        "font-size:13px;font-weight:700;color:#fff;cursor:pointer;";
+        `font-size:${PIN_CLUSTER_FONT_SIZE_PX}px;font-weight:700;color:#fff;cursor:pointer;`;
       el.textContent = String(count);
       root.appendChild(el);
       return { root, el };
@@ -1900,6 +1946,8 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           zoom: coords ? 14 : 13,
           maxZoom: MAP_MAX_ZOOM,
           minZoom: 9,
+          tileTransition: true,
+          tileDuration: MAP_CLUSTER_ZOOM_ANIM_MS,
         });
         mapInstanceRef.current = map;
 
@@ -2010,40 +2058,37 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           return measurePinLabelRect(pt.x, pt.y, text, offset);
         };
 
-        const buildMemberLabelRects = (memberIds: string[]) => {
-          const proj = map.getProjection();
-          if (!proj) return [] as PinLabelRect[];
-          const idSet = new Set(memberIds);
-          return storeMarkersRef.current
-            .filter(({ id }) => idSet.has(id))
-            .map(({ marker }) => buildMarkerLabelRect(marker, proj));
-        };
+        const morphMapView = (coord: any, zoom: number, onComplete?: () => void) => {
+          const prevZoom = map.getZoom();
+          if (typeof map.morph === "function") {
+            map.morph(coord, zoom);
+          } else {
+            map.setCenter(coord);
+            map.setZoom(zoom, true);
+          }
 
-        const memberLabelsOverlap = (memberIds: string[]) =>
-          pinLabelRectsOverlap(buildMemberLabelRects(memberIds));
+          if (!onComplete) return;
 
-        const allMemberLabelsInView = (memberIds: string[]) => {
-          const rects = buildMemberLabelRects(memberIds);
-          const mapEl = mapContainerRef.current;
-          if (!mapEl) return true;
-          return pinLabelRectsFitInView(rects, mapEl.clientWidth, mapEl.clientHeight);
-        };
+          if (Math.abs(zoom - prevZoom) < 1e-6) {
+            onComplete();
+            return;
+          }
 
-        const fitClusterMembersInView = (memberIds: string[], extraPadding = 0) => {
-          const idSet = new Set(memberIds);
-          const bounds = new naver.maps.LatLngBounds();
-          let hasAny = false;
-          storeMarkersRef.current.forEach(({ id, marker }) => {
-            if (!idSet.has(id)) return;
-            bounds.extend(marker.getPosition());
-            hasAny = true;
-          });
-          if (!hasAny) return;
-          map.fitBounds(bounds, {
-            top: MAP_VIEW_PADDING.top + extraPadding,
-            right: MAP_VIEW_PADDING.right + extraPadding,
-            bottom: MAP_VIEW_PADDING.bottom + extraPadding,
-            left: MAP_VIEW_PADDING.left + extraPadding,
+          let finished = false;
+          const finish = () => {
+            if (finished) return;
+            finished = true;
+            onComplete();
+          };
+
+          const fallbackTimer = window.setTimeout(
+            finish,
+            MAP_CLUSTER_ZOOM_ANIM_MS + MAP_CLUSTER_ZOOM_FALLBACK_PAD_MS
+          );
+
+          naver.maps.Event.once(map, "zoomend", () => {
+            window.clearTimeout(fallbackTimer);
+            finish();
           });
         };
 
@@ -2087,71 +2132,147 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           applyPositions(MAP_SPIDERFY_MAX_RADIUS_PX);
         };
 
-        const expandClusterUntilSeparated = (memberIds: string[], centroid: any) => {
-          clearClusterMarkers();
+        const getMemberClusterGroups = (memberIds: string[]) => {
+          const proj = map.getProjection();
+          if (!proj) return null;
           const idSet = new Set(memberIds);
-          storeMarkersRef.current.forEach(({ id, marker }) => {
-            if (!idSet.has(id)) return;
-            resetMarkerSpiderfy(marker);
-            marker.setMap(map);
-          });
-
-          let expandStepCount = 0;
-          const MAX_EXPAND_STEPS = 16;
-
-          const spreadClusterMembers = () => {
-            const memberIdSet = new Set(memberIds);
-            const members = storeMarkersRef.current.filter(({ id }) => memberIdSet.has(id));
-            spreadClusterMarkers(members);
-            fitClusterMembersInView(memberIds, MAP_SPIDERFY_MAX_RADIUS_PX + 24);
-            naver.maps.Event.once(map, "idle", () => {
-              if (!isCancelled) updateClusters();
+          const memberPins = storeMarkersRef.current
+            .filter(({ id }) => idSet.has(id))
+            .map(({ id, marker }) => {
+              const pos = marker.getPosition();
+              const pt = proj.fromCoordToOffset(pos);
+              return {
+                id,
+                marker,
+                pos,
+                px: pt.x,
+                py: pt.y,
+                bounds: buildMarkerLabelRect(marker, proj),
+              };
             });
-          };
+          return groupPinsForClustering(memberPins, map.getZoom());
+        };
 
-          const finishOrContinue = () => {
-            if (isCancelled) return;
+        const isTargetClusterFullySplit = (memberIds: string[]) => {
+          const groups = getMemberClusterGroups(memberIds);
+          if (!groups?.length) return false;
+          if (groups.length === 1 && groups[0].length === memberIds.length) return false;
+          const represented = new Set<string>();
+          groups.forEach((group) => group.forEach((pin) => represented.add(pin.id)));
+          return represented.size === memberIds.length;
+        };
 
-            const separated = !memberLabelsOverlap(memberIds);
-            const inView = allMemberLabelsInView(memberIds);
-            if (separated && inView) {
-              updateClusters();
+        const renderExternalClustersWhileExpanding = (
+          externalPins: ClusterPinItem[],
+          zoom: number
+        ) => {
+          groupPinsForClustering(externalPins, zoom).forEach((cluster) => {
+            if (cluster.length === 1) {
+              cluster[0].marker.setMap(null);
               return;
             }
+            addClusterBubble(cluster);
+          });
+        };
 
-            if (separated && !inView) {
-              fitClusterMembersInView(memberIds, 32);
-              naver.maps.Event.once(map, "idle", finishOrContinue);
+        const renderMemberClustersWhileExpanding = (
+          memberPins: ClusterPinItem[],
+          memberIds: string[]
+        ) => {
+          const memberGroups = groupPinsForClustering(memberPins, map.getZoom());
+          const stillUnified =
+            memberGroups.length === 1 && memberGroups[0].length === memberIds.length;
+
+          memberGroups.forEach((cluster) => {
+            if (stillUnified) {
+              addClusterBubble(cluster);
+              return;
+            }
+            if (cluster.length === 1) {
+              resetMarkerSpiderfy(cluster[0].marker);
+              cluster[0].marker.setMap(map);
+              return;
+            }
+            addClusterBubble(cluster);
+          });
+        };
+
+        const expandCluster = (memberIds: string[], centroid: any) => {
+          const sessionId = ++clusterExpansionSessionRef.current;
+          activeClusterExpansionRef.current = { memberIds, centroid };
+          clusterExpansionFocusRef.current = null;
+          lastClusterUpdateZoomRef.current = null;
+
+          const isActive = () =>
+            !isCancelled && clusterExpansionSessionRef.current === sessionId;
+
+          const finishExpansion = () => {
+            if (!isActive()) return;
+            activeClusterExpansionRef.current = null;
+            clusterExpansionFocusRef.current = [...memberIds];
+            lastClusterUpdateZoomRef.current = map.getZoom();
+            updateClusters();
+          };
+
+          const renderExpanding = () => {
+            if (!isActive()) return;
+            updateClusters();
+          };
+
+          const zoomStep = () => {
+            if (!isActive()) return;
+
+            if (isTargetClusterFullySplit(memberIds)) {
+              finishExpansion();
               return;
             }
 
             if (isMapAtMaxZoom(map)) {
-              spreadClusterMembers();
-              return;
-            }
-
-            expandStepCount += 1;
-            if (expandStepCount >= MAX_EXPAND_STEPS) {
-              spreadClusterMembers();
+              finishExpansion();
               return;
             }
 
             const prevZoom = map.getZoom();
-            map.setZoom(Math.min(getMapMaxZoom(map), prevZoom + 1));
-            map.setCenter(centroid);
-            naver.maps.Event.once(map, "idle", () => {
-              if (isCancelled) return;
+            const nextZoom = Math.min(getMapMaxZoom(map), prevZoom + 1);
+            morphMapView(centroid, nextZoom, () => {
+              if (!isActive()) return;
+              renderExpanding();
               if (map.getZoom() <= prevZoom) {
-                spreadClusterMembers();
+                finishExpansion();
                 return;
               }
-              finishOrContinue();
+              zoomStep();
             });
           };
 
-          map.setCenter(centroid);
-          fitClusterMembersInView(memberIds);
-          naver.maps.Event.once(map, "idle", finishOrContinue);
+          renderExpanding();
+          zoomStep();
+        };
+
+        const addClusterBubble = (cluster: ClusterPinItem[]) => {
+          cluster.forEach(({ marker }) => marker.setMap(null));
+          const avgLat = cluster.reduce((s, p) => s + p.pos.lat(), 0) / cluster.length;
+          const avgLng = cluster.reduce((s, p) => s + p.pos.lng(), 0) / cluster.length;
+          const centroid = new naver.maps.LatLng(avgLat, avgLng);
+          const { root: clusterRoot, el: clusterEl } = buildClusterPin(cluster.length);
+          const clusterMarker = new naver.maps.Marker({
+            position: centroid,
+            map,
+            zIndex: 20,
+            clickable: true,
+            icon: {
+              content: clusterRoot,
+              anchor: new naver.maps.Point(0, 0),
+            },
+          });
+          clusterMarkersRef.current.push(clusterMarker);
+          clusterEl.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            expandCluster(
+              cluster.map((member) => member.id),
+              centroid
+            );
+          });
         };
 
         const updateClusters = () => {
@@ -2215,6 +2336,22 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           }
           clusterRetryCount = 0;
 
+          const activeExpansion = activeClusterExpansionRef.current;
+          if (activeExpansion) {
+            hideAllStoreMarkers();
+            clearClusterMarkers();
+
+            const expandingIdSet = new Set(activeExpansion.memberIds);
+            const externalPins = pins.filter((pin) => !expandingIdSet.has(pin.id));
+            const memberPins = pins.filter((pin) => expandingIdSet.has(pin.id));
+
+            renderExternalClustersWhileExpanding(externalPins, currentZoom);
+            renderMemberClustersWhileExpanding(memberPins, activeExpansion.memberIds);
+            return;
+          }
+
+          storeMarkersRef.current.forEach(({ marker }) => resetMarkerSpiderfy(marker));
+
           if (isMapAtMaxZoom(map)) {
             clearClusterMarkers();
             const maxZoomClusters = groupPinsForClustering(pins, currentZoom);
@@ -2229,8 +2366,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             return;
           }
 
-          storeMarkersRef.current.forEach(({ marker }) => resetMarkerSpiderfy(marker));
-
           const clusters = groupPinsForClustering(pins, currentZoom);
 
           clusters.forEach((cluster) => {
@@ -2238,29 +2373,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               resetMarkerSpiderfy(cluster[0].marker);
               cluster[0].marker.setMap(map);
             } else {
-              cluster.forEach(({ marker }) => marker.setMap(null));
-              const avgLat = cluster.reduce((s, p) => s + p.pos.lat(), 0) / cluster.length;
-              const avgLng = cluster.reduce((s, p) => s + p.pos.lng(), 0) / cluster.length;
-              const centroid = new naver.maps.LatLng(avgLat, avgLng);
-              const { root: clusterRoot, el: clusterEl } = buildClusterPin(cluster.length);
-              const clusterMarker = new naver.maps.Marker({
-                position: centroid,
-                map,
-                zIndex: 20,
-                clickable: true,
-                icon: {
-                  content: clusterRoot,
-                  anchor: new naver.maps.Point(0, 0),
-                },
-              });
-              clusterMarkersRef.current.push(clusterMarker);
-              clusterEl.addEventListener("click", (ev) => {
-                ev.stopPropagation();
-                expandClusterUntilSeparated(
-                  cluster.map((member) => member.id),
-                  centroid
-                );
-              });
+              addClusterBubble(cluster);
             }
           });
         };
@@ -2269,6 +2382,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           if (isCancelled) return;
           clusterRetryCount = 0;
           mapClusteringEnabledRef.current = false;
+          activeClusterExpansionRef.current = null;
+          clusterExpansionFocusRef.current = null;
+          lastClusterUpdateZoomRef.current = null;
 
           syncStorePinsToMap();
           updateStoreLabels();
@@ -2291,6 +2407,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
             clusterRetryCount = 0;
             mapClusteringEnabledRef.current = false;
+            activeClusterExpansionRef.current = null;
+            clusterExpansionFocusRef.current = null;
+            lastClusterUpdateZoomRef.current = null;
             syncStorePinsToMap();
             updateStoreLabels();
             hideAllStoreMarkers();
@@ -2317,7 +2436,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             bootstrapMapOverlays();
             return;
           }
+          if (activeClusterExpansionRef.current) return;
           if (mapClusteringEnabledRef.current) {
+            const zoom = map.getZoom();
+            const skipForFocusedPan =
+              !!clusterExpansionFocusRef.current &&
+              lastClusterUpdateZoomRef.current !== null &&
+              Math.abs(zoom - lastClusterUpdateZoomRef.current) < 1e-6;
+            if (skipForFocusedPan) return;
+            lastClusterUpdateZoomRef.current = zoom;
             updateClusters();
           }
         };
@@ -2349,6 +2476,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       isCancelled = true;
       mapOverlaysReadyRef.current = false;
       mapClusteringEnabledRef.current = false;
+      activeClusterExpansionRef.current = null;
+      clusterExpansionFocusRef.current = null;
+      lastClusterUpdateZoomRef.current = null;
       rebuildStoreOverlaysRef.current = null;
       fitMapToStoresRef.current = null;
       if (readyTimer !== null) clearTimeout(readyTimer);
@@ -2683,7 +2813,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className={cn("mb-6 space-y-3", isMapView && "relative z-20 px-4")}>
+        <div className={cn("mb-6 space-y-3", isMapView && "relative z-20 px-4 pointer-events-none")}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-2xl font-bold">{t.storesHeading}</h2>
@@ -2707,14 +2837,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           </div>
           <div className="space-y-2 -mr-4">
             {renderFilterChipRow(
-              "flex w-full gap-2 overflow-x-auto py-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               benefitFilterChipOrder,
               benefitFilterChips,
               toggleBenefitFilterChip,
               (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria
             )}
             {renderFilterChipRow(
-              "flex w-full gap-2 overflow-x-auto py-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
               STORE_CATEGORY_CHIP_ORDER,
               categoryFilterChips,
               toggleCategoryFilterChip,
@@ -2722,7 +2850,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             )}
           </div>
           {isMapView && showResearchButton && (
-            <div className="flex justify-center pt-0.5">
+            <div className="pointer-events-auto flex justify-center pt-0.5">
               <button
                 type="button"
                 onClick={handleResearch}
