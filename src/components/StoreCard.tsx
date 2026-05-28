@@ -34,6 +34,8 @@ interface StoreCardProps {
   isHighlighted?: boolean;
   disabled?: boolean;
   detailUrl?: string;
+  /** 부모에서 카드 활성화 동작(예: 지도 동기화/리다이렉트)을 직접 처리할 때 사용 */
+  onActivate?: () => void;
 }
 
 const brandLogos: Record<string, string> = {
@@ -73,6 +75,7 @@ const StoreCard = ({
   isHighlighted = false,
   disabled = false,
   detailUrl,
+  onActivate,
 }: StoreCardProps) => {
   const { locale } = useAppLocale();
   const sc = storeCardStrings(locale);
@@ -136,9 +139,9 @@ const StoreCard = ({
     updateNameLayout();
     document.fonts?.ready.then(updateNameLayout);
 
-    if (!("ResizeObserver" in window)) {
-      window.addEventListener("resize", updateNameLayout);
-      return () => window.removeEventListener("resize", updateNameLayout);
+    if (!("ResizeObserver" in globalThis)) {
+      globalThis.addEventListener("resize", updateNameLayout);
+      return () => globalThis.removeEventListener("resize", updateNameLayout);
     }
 
     const observer = new ResizeObserver(updateNameLayout);
@@ -149,6 +152,12 @@ const StoreCard = ({
 
   const handleClick = () => {
     if (disabled) return;
+
+    // 부모에서 동작을 직접 제어하는 경우 (예: 지도 선택 + 리다이렉트)
+    if (onActivate) {
+      onActivate();
+      return;
+    }
 
     if (isTutorial) {
       navigate(`/tutorial/payment/${id}`);
@@ -214,9 +223,9 @@ const StoreCard = ({
     updateChipsLayout();
     document.fonts?.ready.then(updateChipsLayout);
 
-    if (!("ResizeObserver" in window)) {
-      window.addEventListener("resize", updateChipsLayout);
-      return () => window.removeEventListener("resize", updateChipsLayout);
+    if (!("ResizeObserver" in globalThis)) {
+      globalThis.addEventListener("resize", updateChipsLayout);
+      return () => globalThis.removeEventListener("resize", updateChipsLayout);
     }
 
     const observer = new ResizeObserver(updateChipsLayout);
@@ -247,7 +256,10 @@ const StoreCard = ({
     >
       <Card
         className={cn(
-          "relative h-full overflow-hidden bg-card border-border/50",
+          "relative h-full overflow-hidden bg-card",
+          isHighlighted
+            ? "box-border border-[3px] border-solid border-primary shadow-sm"
+            : "border-border/50",
           !disabled && "cursor-pointer"
         )}
       >

@@ -24,7 +24,7 @@ import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { paymentHistoryApi } from "@/api/paymentHistory";
@@ -80,6 +80,7 @@ const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
 
 /** 위치를 알 수 없을 때 매장 목록을 불러오는 기본 좌표 (제주 원도심) */
 const JEJU_DOWNTOWN_COORDS = { latitude: 33.5098, longitude: 126.5219 };
+
 const MAP_MAX_ZOOM = 21;
 /** 클러스터 확대 시 한 단계 줌 애니메이션 길이(ms) */
 const MAP_CLUSTER_ZOOM_ANIM_MS = 420;
@@ -509,12 +510,16 @@ interface StoreData {
   const [showTutorialModal, setShowTutorialModal] = useState(false);
   const [showLocationPermModal, setShowLocationPermModal] = useState(false);
   const isMapView = searchParams.get("map") === "1";
+  const isMapViewRef = useRef(isMapView);
+  isMapViewRef.current = isMapView;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const storeMarkersRef = useRef<{ id: string; marker: any }[]>([]);
   const clusterMarkersRef = useRef<any[]>([]);
   const selectStoreOnMapRef = useRef<(id: string) => void>(() => {});
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null);
+  /** 바텀시트 카드 테두리 강조 — 지도 핀 클릭 시에만 true */
+  const [highlightMapSheetCard, setHighlightMapSheetCard] = useState(false);
   const [showResearchButton, setShowResearchButton] = useState(false);
   const [mapFilteredStores, setMapFilteredStores] = useState<any[] | null>(null);
   const allFetchedStoresRef = useRef<any[]>([]);
@@ -558,11 +563,46 @@ interface StoreData {
   const myLocationMarkerRef = useRef<any>(null);
   const currentCoordsRef = useRef(currentCoords);
   const skipNextFitMapRef = useRef(false);
+  const cardScrollYRef = useRef(0);
 
   const getMarkerPinContent = (marker: any): HTMLElement | null => {
     const icon = marker?.getIcon?.();
     return (icon?.content as HTMLElement) ?? null;
   };
+
+  const selectedMapStoreIdRef = useRef<string | null>(null);
+  selectedMapStoreIdRef.current = selectedMapStoreId;
+
+  const applySelectedPinStylesRef = useRef<() => void>(() => {});
+
+  const applySelectedPinStyles = useCallback(() => {
+    const selectedId = selectedMapStoreIdRef.current;
+    storeMarkersRef.current.forEach(({ id, marker }) => {
+      const isSelected =
+        selectedId != null && String(id) === String(selectedId);
+      try {
+        marker.setZIndex(isSelected ? 45 : 10);
+      } catch {}
+      const el = getMarkerPinContent(marker);
+      if (!el) return;
+      const balloon = el.querySelector("[data-pin-dot]") as HTMLElement | null;
+      const tail = el.querySelector("[data-pin-tail]") as HTMLElement | null;
+      if (!balloon) return;
+      if (isSelected) {
+        balloon.style.background = "#ea580c";
+        balloon.style.transform = "scale(1.1)";
+        balloon.style.boxShadow = "0 2px 8px rgba(234,88,12,.45)";
+        if (tail) tail.style.borderTopColor = "#ea580c";
+      } else {
+        balloon.style.background = "#2D8CFF";
+        balloon.style.transform = "scale(1)";
+        balloon.style.boxShadow = "0 2px 6px rgba(0,0,0,.3)";
+        if (tail) tail.style.borderTopColor = "#2D8CFF";
+      }
+    });
+  }, []);
+
+  applySelectedPinStylesRef.current = applySelectedPinStyles;
 
   const mapPinTranslationKey = useMemo(
     () =>
@@ -596,6 +636,9 @@ interface StoreData {
   }, [locale, mapPinTranslationKey]);
 
   const toggleMapView = () => {
+    if (!isMapView) {
+      cardScrollYRef.current = window.scrollY;
+    }
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -608,17 +651,33 @@ interface StoreData {
   };
 
   selectStoreOnMapRef.current = (id: string) => {
-    setSelectedMapStoreId(id);
+    setSelectedMapStoreId(String(id));
+    setHighlightMapSheetCard(true);
   };
 
   useEffect(() => {
-    if (!isMapView) {
-      setSelectedMapStoreId(null);
-      setShowResearchButton(false);
-      setMapFilteredStores(null);
-    }
+    if (isMapView) return;
+    const y = cardScrollYRef.current;
+    requestAnimationFrame(() => {
+      window.scrollTo(0, y);
+    });
   }, [isMapView]);
 
+  useEffect(() => {
+    if (!isMapView || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const naver = (window as any).naver;
+    requestAnimationFrame(() => {
+      try {
+        naver?.maps?.Event?.trigger(map, "resize");
+      } catch {}
+      requestAnimationFrame(() => {
+        if (mapOverlaysReadyRef.current) {
+          rebuildStoreOverlaysRef.current?.();
+        }
+      });
+    });
+  }, [isMapView]);
 
   useEffect(() => {
     // 이전 로그인 상태를 추적하기 위한 ref 사용
@@ -796,25 +855,8 @@ interface StoreData {
         setIsManualLocation(false);
       }
       
-      // 직접 설정한 위치가 없으면 기본적으로 현재 위치 가져오기
+      // 직접 설정한 위치가 없으면 GPS 시도
       console.log("🌍 [위치 정보] 현재 위치 가져오기 시작");
-
-      // 권한 상태 확인 — prompt 상태면 모달로 먼저 안내
-      if (navigator.permissions) {
-        try {
-          const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName });
-          if (perm.state === "prompt") {
-            setShowLocationPermModal(true);
-            setIsLoadingLocation(false);
-            setCurrentLocation(LOCATION_FETCH_FAILED_KO);
-            ensureJejuStores();
-            return; // 모달에서 허용 후 onGranted 콜백으로 이어짐
-          }
-        } catch {
-          // permissions API 미지원 브라우저는 바로 요청
-        }
-      }
-
       await fetchBrowserLocation();
     };
 
@@ -860,12 +902,11 @@ interface StoreData {
         if (geoError?.message) console.log("에러 메시지:", geoError.message);
 
         clearAutoSavedLocation();
+        setCurrentLocation(LOCATION_FETCH_FAILED_KO);
+        setIsLoadingLocation(false);
+        ensureJejuStores();
 
         if (geoError?.code === 1) {
-          console.warn("⚠️ [위치 권한] 사용자가 위치 권한을 거부했습니다");
-          setCurrentLocation(LOCATION_FETCH_FAILED_KO);
-          setIsLoadingLocation(false);
-          ensureJejuStores();
           toast({
             title: "위치 권한 필요",
             description: "위치 권한을 허용하면 자동으로 현재 위치가 설정됩니다.",
@@ -874,9 +915,6 @@ interface StoreData {
           return;
         }
 
-        setCurrentLocation(LOCATION_FETCH_FAILED_KO);
-        setIsLoadingLocation(false);
-        ensureJejuStores();
         toast({
           title: "위치를 불러올 수 없습니다",
           description: "현재 위치를 확인하지 못했습니다. 상단에서 위치를 직접 설정해 주세요.",
@@ -890,67 +928,76 @@ interface StoreData {
     return () => {};
   }, [toast, navigate, locale]);
 
+  const applyCoordinatesAsLocation = async (
+    latitude: number,
+    longitude: number,
+    options?: { fetchStores?: boolean; skipMapFit?: boolean; toastMessage?: string }
+  ) => {
+    const address = await getAddressFromCoords(latitude, longitude, locale);
+    const displayAddress =
+      address === "위치를 확인할 수 없음"
+        ? headerStrings(locale).locationUnknownGeo
+        : address;
+
+    localStorage.setItem("selectedLocation", displayAddress);
+    localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+    localStorage.removeItem("isManualLocation");
+    setIsManualLocation(false);
+    setCurrentLocation(displayAddress);
+    skipNextFitMapRef.current = options?.skipMapFit === true;
+    setCurrentCoords({ latitude, longitude });
+    setMapFilteredStores(null);
+
+    if (options?.fetchStores !== false) {
+      await fetchNearbyStoresRef.current?.(latitude, longitude);
+    }
+
+    if (options?.toastMessage) {
+      toast({
+        title: "위치 업데이트 완료",
+        description: options.toastMessage,
+      });
+    }
+  };
+
   const handleRefreshLocation = async () => {
     console.log("🔄🔄🔄 [수동 새로고침] 위치 재조회 시작 🔄🔄🔄");
 
-    console.log("🔄 [수동 새로고침 전] localStorage 상태:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
-      obj[key] = localStorage.getItem(key);
-      return obj;
-    }, {} as Record<string, string | null>));
-    
-    // 수동 새로고침 시 타임스탬프 업데이트하여 위치를 새로 조회
-    const refreshTimestamp = Date.now();
-    const refreshTimestampString = refreshTimestamp.toString();
-    localStorage.setItem("lastLocationFetchTime", refreshTimestampString);
-    console.log("✅ [수동 새로고침] 타임스탬프 업데이트:", refreshTimestamp, "(문자열:", refreshTimestampString, ")");
+    localStorage.setItem("lastLocationFetchTime", Date.now().toString());
 
-    const refreshedValue = localStorage.getItem("lastLocationFetchTime");
-    console.log("✅ [수동 새로고침 후] localStorage에서 읽은 값:", refreshedValue, "(일치:", refreshedValue === refreshTimestampString ? "✅" : "❌", ")");
-    
     setIsLoadingLocation(true);
     setCurrentLocation("위치 확인 중...");
-    
-    if (navigator.geolocation) {
-      try {
-        const { latitude, longitude } = await getBrowserPosition();
-        const address = await getAddressFromCoords(latitude, longitude, locale);
 
-        localStorage.setItem("selectedLocation", address);
-        localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-        localStorage.removeItem("isManualLocation");
-        setIsManualLocation(false);
-        setCurrentLocation(address);
-        setCurrentCoords({ latitude, longitude });
-        setIsLoadingLocation(false);
-
-        await fetchNearbyStores(latitude, longitude);
-
-        toast({
-          title: "위치 업데이트 완료",
-          description: "현재 위치가 업데이트되었습니다.",
-        });
-      } catch (error) {
-        console.error("❌ [위치 새로고침] 실패:", error);
+    try {
+      if (!navigator.geolocation) {
         clearAutoSavedLocation();
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
-        setIsLoadingLocation(false);
         ensureJejuStores();
-
         toast({
-          title: "위치 업데이트 실패",
-          description: "위치를 가져올 수 없습니다. 위치 설정에서 직접 선택해 주세요.",
+          title: "위치 서비스 미지원",
+          description: "이 환경에서는 위치를 가져올 수 없습니다.",
           variant: "destructive",
-          duration: 2000,
         });
+        return;
       }
-    } else {
-      setIsLoadingLocation(false);
+
+      const { latitude, longitude } = await getBrowserPosition();
+      await applyCoordinatesAsLocation(latitude, longitude, {
+        toastMessage: "현재 위치가 업데이트되었습니다.",
+      });
+    } catch (error) {
+      console.error("❌ [위치 새로고침] GPS 실패:", error);
+      clearAutoSavedLocation();
+      setCurrentLocation(LOCATION_FETCH_FAILED_KO);
       ensureJejuStores();
       toast({
-        title: "위치 서비스 미지원",
-        description: "이 환경에서는 위치를 가져올 수 없습니다.",
+        title: "위치 업데이트 실패",
+        description: "위치를 가져올 수 없습니다. 위치 설정에서 직접 선택해 주세요.",
         variant: "destructive",
+        duration: 2000,
       });
+    } finally {
+      setIsLoadingLocation(false);
     }
   };
 
@@ -1079,6 +1126,9 @@ interface StoreData {
 
       console.log("🏪 [매장 검색] 총 매장 수 (중복 제거 후):", allStores.length);
       console.log("📋 [매장 검색] 최종 매장 목록:", allStores);
+
+      // 지도 재검색용: 할인 정보 조회 전에도 전체 매장 좌표를 즉시 캐시
+      allFetchedStoresRef.current = allStores;
 
       // 거리순으로 정렬하여 초기 8개 선택
       const initialStores = allStores.slice(0, 8);
@@ -1310,10 +1360,13 @@ interface StoreData {
 
       console.log("✅ [할인 정보 조회] 초기 8개 완료");
       
-      // 초기 8개 먼저 표시
+      // 초기 8개 먼저 표시 (캐시에는 할인 정보가 반영된 항목만 병합)
       if (isStale()) return;
       setStores(initialStoresWithDiscount);
-      allFetchedStoresRef.current = initialStoresWithDiscount;
+      const enrichedById = new Map(initialStoresWithDiscount.map((s) => [s.id, s]));
+      allFetchedStoresRef.current = allFetchedStoresRef.current.map(
+        (s) => enrichedById.get(s.id) ?? s
+      );
       setIsLoadingStores(false);
       console.log("✅ [초기 로딩] 완료 - 초기 8개 매장 표시");
       
@@ -1736,10 +1789,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     const bounds = map.getBounds?.();
     if (!bounds) return;
 
-    const center = map.getCenter();
-    const centerLat = center.lat();
-    const centerLng = center.lng();
-
     const isInViewport = (lat: number, lon: number): boolean => {
       if (typeof bounds.hasLatLng === "function" && naver?.maps?.LatLng) {
         return bounds.hasLatLng(new naver.maps.LatLng(lat, lon));
@@ -1755,22 +1804,31 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     };
 
     // 칩 필터가 적용된 목록 중 현재 지도 화면(뷰포트) 안에 있는 매장만 표시
-    const filtered = categoryFilteredStores.flatMap((s) => {
+    // 할인 정보 로딩 전에도 API 캐시(allFetchedStoresRef)로 즉시 필터링
+    const cachedStores =
+      allFetchedStoresRef.current.length > 0 ? allFetchedStoresRef.current : stores;
+    const searchFiltered = searchQuery.trim()
+      ? cachedStores.filter((store) =>
+          store.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : cachedStores;
+    const chipFiltered = searchFiltered.filter(
+      (store) =>
+        storeMatchesBenefitChipFilters(store, benefitFilterChips, locale) &&
+        storeMatchesCategoryChipFilters(store, categoryFilterChips)
+    );
+
+    // 재검색은 뷰포트 필터만 일시 적용 — currentCoords(현재 위치)는 변경하지 않음
+    const filtered = chipFiltered.flatMap((s) => {
       if (!hasStoreCoords(s)) return [];
       if (!isInViewport(s.lat!, s.lon!)) return [];
-      const distM = calculateDistance(centerLat, centerLng, s.lat!, s.lon!) * 1000;
-      return [
-        {
-          ...s,
-          distance:
-            distM < 1000 ? `${Math.round(distM)}m` : `${(distM / 1000).toFixed(1)}km`,
-          distanceNum: Math.round(distM),
-        },
-      ];
+      return [s];
     });
 
     console.log(`🔍 [재검색] 지도 화면 영역 내 매장: ${filtered.length}개`);
     skipNextFitMapRef.current = true;
+    setSelectedMapStoreId(null);
+    setHighlightMapSheetCard(false);
     setMapFilteredStores(filtered);
     setShowResearchButton(false);
   };
@@ -1808,8 +1866,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     );
   }, [mapFilteredStores, categoryFilteredStores, sortBy, currentCoords]);
 
+  storesWithCoordsRef.current = storesWithCoords;
+
   useEffect(() => {
-    if (!isMapView || !mapContainerRef.current) return;
+    if (!mapContainerRef.current) return;
 
     let isCancelled = false;
     let mapReady = false;
@@ -1817,6 +1877,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
     // 핀 요소: zero-size anchor div + inner wrapper (CSS로 tip=anchor 구현)
     const buildStorePin = (store: StoreData) => {
+      const isSelected =
+        selectedMapStoreIdRef.current != null &&
+        String(store.id) === String(selectedMapStoreIdRef.current);
+
       const root = document.createElement("div");
       root.style.cssText = "position:absolute;width:0;height:0;user-select:none;";
       root.dataset.storeId = store.id;
@@ -1828,8 +1892,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
       const balloon = document.createElement("div");
       balloon.dataset.pinDot = "1";
-      balloon.style.cssText =
-        "background:#2D8CFF;border-radius:6px;padding:1px 7px;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transition:background .15s ease,transform .15s ease,box-shadow .15s ease;";
+      balloon.style.cssText = isSelected
+        ? "background:#ea580c;border-radius:6px;padding:1px 7px;box-shadow:0 2px 8px rgba(234,88,12,.45);white-space:nowrap;transform:scale(1.1);transition:background .15s ease,transform .15s ease,box-shadow .15s ease;"
+        : "background:#2D8CFF;border-radius:6px;padding:1px 7px;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transition:background .15s ease,transform .15s ease,box-shadow .15s ease;";
 
       const label = document.createElement("span");
       label.setAttribute("data-store-label", "1");
@@ -1840,8 +1905,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
       const tail = document.createElement("div");
       tail.dataset.pinTail = "1";
-      tail.style.cssText =
-        "width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #2D8CFF;transition:border-top-color .15s ease;";
+      tail.style.cssText = isSelected
+        ? "width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #ea580c;transition:border-top-color .15s ease;"
+        : "width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #2D8CFF;transition:border-top-color .15s ease;";
 
       wrapper.appendChild(balloon);
       wrapper.appendChild(tail);
@@ -1882,10 +1948,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
         const createStoreMarker = (store: StoreData) => {
           const content = buildStorePin(store);
+          const isSelected =
+            selectedMapStoreIdRef.current != null &&
+            String(store.id) === String(selectedMapStoreIdRef.current);
           const marker = new naver.maps.Marker({
             position: new naver.maps.LatLng(store.lat!, store.lon!),
             map: null,
-            zIndex: 10,
+            zIndex: isSelected ? 45 : 10,
             clickable: true,
             icon: {
               content,
@@ -1928,6 +1997,19 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           clusterRetryCount = 0;
           mapClusteringEnabledRef.current = true;
           updateClusters();
+          applySelectedPinStylesRef.current();
+        };
+
+        /** hidden 지도에서는 idle이 안 올 수 있어 timeout fallback 포함 */
+        const scheduleApplyClustering = (fallbackMs = 200) => {
+          let applied = false;
+          const run = () => {
+            if (applied || isCancelled) return;
+            applied = true;
+            applyClustering();
+          };
+          naver.maps.Event.once(map, "idle", run);
+          window.setTimeout(run, fallbackMs);
         };
 
         let clusterRetryCount = 0;
@@ -2389,13 +2471,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           syncStorePinsToMap();
           updateStoreLabels();
           hideAllStoreMarkers();
-          naver.maps.Event.once(map, "idle", () => {
-            if (!isCancelled) applyClustering();
-          });
+          scheduleApplyClustering();
         };
 
         rebuildStoreOverlaysRef.current = () => {
           if (isCancelled || !mapOverlaysReadyRef.current) return;
+          if (!isMapViewRef.current) return;
 
           if (rebuildStoreOverlaysTimerRef.current) {
             clearTimeout(rebuildStoreOverlaysTimerRef.current);
@@ -2405,6 +2486,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             rebuildStoreOverlaysTimerRef.current = null;
             if (isCancelled || !mapOverlaysReadyRef.current) return;
 
+            const skipFit = skipNextFitMapRef.current;
+            if (skipFit) {
+              skipNextFitMapRef.current = false;
+            }
+
             clusterRetryCount = 0;
             mapClusteringEnabledRef.current = false;
             activeClusterExpansionRef.current = null;
@@ -2412,13 +2498,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             lastClusterUpdateZoomRef.current = null;
             syncStorePinsToMap();
             updateStoreLabels();
+            applySelectedPinStylesRef.current();
             hideAllStoreMarkers();
-            if (!skipNextFitMapRef.current) {
+            if (!skipFit) {
               fitMapToStores();
+              scheduleApplyClustering();
+            } else {
+              // 재검색 등 지도 이동 없이 핀만 바꿀 때 idle이 안 오므로 즉시 클러스터링
+              applyClustering();
             }
-            naver.maps.Event.once(map, "idle", () => {
-              if (!isCancelled) applyClustering();
-            });
           }, 100);
         };
 
@@ -2427,6 +2515,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           if (isCancelled || mapBootstrapped) return;
           mapBootstrapped = true;
           mapOverlaysReadyRef.current = true;
+          if (!isMapViewRef.current) return;
           applyPinsToMap();
           fitMapToStores();
         };
@@ -2505,7 +2594,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         mapContainerRef.current.innerHTML = "";
       }
     };
-  }, [isMapView, locale]);
+  }, [locale]);
 
   useEffect(() => {
     currentCoordsRef.current = currentCoords;
@@ -2567,16 +2656,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   // storesWithCoords 변경 시 ref 업데이트 + 지도 핀 교체 (지도 재생성 없음)
   useEffect(() => {
     storesWithCoordsRef.current = storesWithCoords;
-    if (!isMapView || !mapInstanceRef.current) return;
+    if (!mapInstanceRef.current || !isMapView) return;
 
     const map = mapInstanceRef.current;
     const naver = (window as any).naver;
 
     const run = () => {
       rebuildStoreOverlaysRef.current?.();
-      if (skipNextFitMapRef.current) {
-        skipNextFitMapRef.current = false;
-      }
     };
 
     if (mapOverlaysReadyRef.current) {
@@ -2589,21 +2675,25 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     }
   }, [isMapView, storesWithCoords]);
 
-  // 핀 선택 시 해당 매장으로 지도 이동
+  // 매장 선택 시 해당 위치로 지도 이동 (카드·핀 공통)
   useEffect(() => {
     if (!isMapView || !selectedMapStoreId || !mapInstanceRef.current) return;
     const naver = (window as any).naver;
     if (!naver?.maps) return;
-    const store = storesWithCoords.find((s) => s.id === selectedMapStoreId);
+    const selectedId = String(selectedMapStoreId);
+    const store = storesWithCoords.find((s) => String(s.id) === selectedId);
     if (!store || !hasStoreCoords(store)) return;
     const map = mapInstanceRef.current;
     map.setCenter(new naver.maps.LatLng(store.lat!, store.lon!));
     const zoom = map.getZoom();
     if (zoom < 15) map.setZoom(15);
-  }, [isMapView, selectedMapStoreId, storesWithCoords]);
+    applySelectedPinStyles();
+    naver.maps.Event.once(map, "idle", () => {
+      applySelectedPinStylesRef.current();
+    });
+  }, [isMapView, selectedMapStoreId, storesWithCoords, applySelectedPinStyles]);
 
   useEffect(() => {
-    if (!isMapView) return;
     storeMarkersRef.current.forEach(({ id, marker }) => {
       const root = getMarkerPinContent(marker);
       const el = root?.querySelector("[data-store-label]") as HTMLElement | null;
@@ -2612,34 +2702,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       const fallback = stores.find((s) => s.id === id)?.name ?? "";
       el.textContent = translated !== undefined && translated !== "" ? translated : fallback;
     });
-  }, [isMapView, mapPinLabels, stores]);
+  }, [mapPinLabels, stores]);
 
   useEffect(() => {
-    storeMarkersRef.current.forEach(({ id, marker }) => {
-      try {
-        marker.setZIndex(id === selectedMapStoreId ? 45 : 10);
-      } catch {}
-      const el = getMarkerPinContent(marker);
-      if (!el) return;
-      const balloon = el.querySelector("[data-pin-dot]") as HTMLElement | null;
-      const tail = el.querySelector("[data-pin-tail]") as HTMLElement | null;
-      if (!balloon) return;
-      if (id === selectedMapStoreId) {
-        balloon.style.background = "#ea580c";
-        balloon.style.transform = "scale(1.1)";
-        balloon.style.boxShadow = "0 2px 8px rgba(234,88,12,.45)";
-        if (tail) tail.style.borderTopColor = "#ea580c";
-      } else {
-        balloon.style.background = "#2D8CFF";
-        balloon.style.transform = "scale(1)";
-        balloon.style.boxShadow = "0 2px 6px rgba(0,0,0,.3)";
-        if (tail) tail.style.borderTopColor = "#2D8CFF";
-      }
-    });
-  }, [selectedMapStoreId]);
+    applySelectedPinStyles();
+  }, [selectedMapStoreId, applySelectedPinStyles]);
 
-
-  const showMapFillLayer = isMapView;
 
   useEffect(() => {
     if (!isMapView) return;
@@ -2725,11 +2793,15 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             : "px-4 pt-3 pb-6"
         )}
       >
-        {showMapFillLayer && (
-          <div className="fixed inset-x-0 top-0 z-[5] h-[calc(100dvh-4rem)] w-full bg-card">
-            <div ref={mapContainerRef} className="map-container h-full w-full overflow-hidden" />
-          </div>
-        )}
+        <div
+          className={cn(
+            "fixed inset-x-0 top-0 z-[5] h-[calc(100dvh-4rem)] w-full bg-card",
+            !isMapView && "invisible pointer-events-none"
+          )}
+          aria-hidden={!isMapView}
+        >
+          <div ref={mapContainerRef} className="map-container h-full w-full overflow-hidden" />
+        </div>
         {!isMapView && <MainPromoBanner locale={locale} />}
         <div className={cn("mb-4 flex items-center gap-2", isMapView && "relative z-20 px-4")}>
           <div className="relative min-w-0 flex-1">
@@ -2864,7 +2936,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           )}
         </div>
 
-        {isMapView ? (
+        {isMapView && (
           <div
             className="pointer-events-none fixed left-1/2 z-[25] flex w-full max-w-md -translate-x-1/2 justify-end px-4"
             style={{ bottom: "calc(4rem + 4.5rem)" }}
@@ -2885,39 +2957,43 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               )}
             </Button>
           </div>
-        ) : isLoadingStores ? (
-          <div
-            className="grid grid-cols-2 gap-4 animate-fade-in"
-            aria-busy="true"
-            aria-label={t.loadingStores}
-          >
-            {Array.from({ length: 8 }, (_, index) => (
-              <StoreCardSkeleton key={`store-skeleton-${index}`} />
-            ))}
-          </div>
-        ) : sortedStores.length > 0 ? (
-          <>
-            <div className="grid grid-cols-2 gap-4 animate-fade-in">
-              {sortedStores.map((store) => (
-                <StoreCard 
-                  key={store.id} 
-                  {...store}
-                />
+        )}
+
+        <div className={cn(isMapView && "hidden")} aria-hidden={isMapView}>
+          {isLoadingStores ? (
+            <div
+              className="grid grid-cols-2 gap-4 animate-fade-in"
+              aria-busy="true"
+              aria-label={t.loadingStores}
+            >
+              {Array.from({ length: 8 }, (_, index) => (
+                <StoreCardSkeleton key={`store-skeleton-${index}`} />
               ))}
             </div>
-            {isLoadingMoreStores && (
-              <div className="mt-4 grid grid-cols-2 gap-4 animate-fade-in">
-                {Array.from({ length: 4 }, (_, index) => (
-                  <StoreCardSkeleton key={`store-skeleton-more-${index}`} />
+          ) : sortedStores.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                {sortedStores.map((store) => (
+                  <StoreCard 
+                    key={store.id} 
+                    {...store}
+                  />
                 ))}
               </div>
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-muted-foreground">{t.noStores}</p>
-          </div>
-        )}
+              {isLoadingMoreStores && (
+                <div className="mt-4 grid grid-cols-2 gap-4 animate-fade-in">
+                  {Array.from({ length: 4 }, (_, index) => (
+                    <StoreCardSkeleton key={`store-skeleton-more-${index}`} />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12">
+              <p className="text-muted-foreground">{t.noStores}</p>
+            </div>
+          )}
+        </div>
       </main>
 
       <BottomNav
@@ -2928,19 +3004,26 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         }}
       />
 
-      {isMapView && (
-        <MapViewBottomSheet
-          stores={storesWithCoords}
-          selectedStoreId={selectedMapStoreId}
-          onSelectStore={setSelectedMapStoreId}
-          title={t.mapSheetTitle}
-          dragHint={t.mapSheetDragHint}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-          sortDistanceLabel={currentCoords ? t.sortDistance : t.sortName}
-          sortDiscountLabel={t.sortDiscount}
-        />
-      )}
+      <MapViewBottomSheet
+        className={cn(!isMapView && "invisible pointer-events-none")}
+        aria-hidden={!isMapView}
+        stores={storesWithCoords}
+        selectedStoreId={selectedMapStoreId}
+        highlightSelectedCard={highlightMapSheetCard}
+        onSelectStoreFromCard={(store) => {
+          setSelectedMapStoreId(String(store.id));
+          setHighlightMapSheetCard(false);
+          if (store.detailUrl) {
+            window.open(store.detailUrl, "_blank", "noopener,noreferrer");
+          }
+        }}
+        title={t.mapSheetTitle}
+        dragHint={t.mapSheetDragHint}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        sortDistanceLabel={currentCoords ? t.sortDistance : t.sortName}
+        sortDiscountLabel={t.sortDiscount}
+      />
     </div>
   );
 };
