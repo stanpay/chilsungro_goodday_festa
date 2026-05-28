@@ -78,6 +78,7 @@ type MainCopy = {
   sortByDiscount: string;
   sortDistance: string;
   sortDiscount: string;
+  sortName: string;
   mapStoreCount: (n: number) => string;
   mapSheetTitle: string;
   mapSheetDragHint: string;
@@ -108,6 +109,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     sortByDiscount: "최대 할인율 순으로 정렬됩니다",
     sortDistance: "거리순",
     sortDiscount: "할인순",
+    sortName: "가나다순",
     mapStoreCount: (n: number) => `총 ${n}개 매장이 지도에 표시됩니다.`,
     mapSheetTitle: "주변 매장",
     mapSheetDragHint: "위로 당겨 카드 보기",
@@ -136,6 +138,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     sortByDiscount: "Sorted by max discount",
     sortDistance: "Distance",
     sortDiscount: "Discount",
+    sortName: "Name (A–Z)",
     mapStoreCount: (n: number) => `${n} stores shown on the map.`,
     mapSheetTitle: "Nearby stores",
     mapSheetDragHint: "Pull up to see cards",
@@ -164,6 +167,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     sortByDiscount: "按最高折扣排序",
     sortDistance: "距离",
     sortDiscount: "折扣",
+    sortName: "名称",
     mapStoreCount: (n: number) => `地图上显示 ${n} 家门店。`,
     mapSheetTitle: "附近门店",
     mapSheetDragHint: "上拉查看卡片",
@@ -193,6 +197,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     sortByDiscount: "最大割引率順に並びます",
     sortDistance: "距離順",
     sortDiscount: "割引順",
+    sortName: "名称順",
     mapStoreCount: (n: number) => `地図に${n}件の店舗を表示しています。`,
     mapSheetTitle: "周辺の店舗",
     mapSheetDragHint: "上にスワイプしてカードを表示",

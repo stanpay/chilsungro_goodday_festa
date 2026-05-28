@@ -13,9 +13,10 @@ import {
 interface LocationPermissionModalProps {
   open: boolean;
   onGranted: (coords: { latitude: number; longitude: number }) => void;
+  onDenied?: () => void;
 }
 
-const LocationPermissionModal = ({ open, onGranted }: LocationPermissionModalProps) => {
+const LocationPermissionModal = ({ open, onGranted, onDenied }: LocationPermissionModalProps) => {
   const [status, setStatus] = useState<"idle" | "loading" | "denied">("idle");
 
   const handleAllow = async () => {
@@ -27,6 +28,7 @@ const LocationPermissionModal = ({ open, onGranted }: LocationPermissionModalPro
     } catch (err) {
       console.warn("위치 권한 거부 또는 타임아웃:", err);
       setStatus("denied");
+      onDenied?.();
     }
   };
 

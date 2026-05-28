@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import StoreCard from "@/components/StoreCard";
+import StoreCardSkeleton from "@/components/StoreCardSkeleton";
 import MapViewBottomSheet from "@/components/MapViewBottomSheet";
 import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
@@ -32,7 +33,6 @@ import { gifticonsApi } from "@/api/gifticons";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { getBrowserPosition } from "@/lib/geolocation";
-import { Skeleton } from "@/components/ui/skeleton";
 import TutorialModal from "@/components/TutorialModal";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
 import { shouldShowTutorial } from "@/lib/tutorial";
@@ -77,6 +77,13 @@ const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
   "shopping",
   "other",
 ];
+
+/** 위치를 알 수 없을 때 매장 목록을 불러오는 기본 좌표 (제주 원도심) */
+const JEJU_DOWNTOWN_COORDS = { latitude: 33.5098, longitude: 126.5219 };
+
+function sortStoresByName<T extends { name: string }>(stores: T[]): T[] {
+  return [...stores].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+}
 
 function inferChainImageFromPlaceName(placeName: string): string | null {
   const rules: [string, string][] = [
@@ -328,6 +335,20 @@ interface StoreData {
   const [showResearchButton, setShowResearchButton] = useState(false);
   const [mapFilteredStores, setMapFilteredStores] = useState<any[] | null>(null);
   const allFetchedStoresRef = useRef<any[]>([]);
+  const fetchNearbyStoresRef = useRef<
+    ((latitude: number, longitude: number, options?: { sortAlphabetically?: boolean }) => Promise<void>) | null
+  >(null);
+  const fallbackStoresLoadStartedRef = useRef(false);
+
+  const loadFallbackStores = () => {
+    if (fallbackStoresLoadStartedRef.current) return;
+    fallbackStoresLoadStartedRef.current = true;
+    void fetchNearbyStoresRef.current?.(
+      JEJU_DOWNTOWN_COORDS.latitude,
+      JEJU_DOWNTOWN_COORDS.longitude,
+      { sortAlphabetically: true }
+    );
+  };
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
   const storesWithCoordsRef = useRef<any[]>([]);
@@ -481,7 +502,7 @@ interface StoreData {
               
               // 매장 정보 가져오기
               console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
-              await fetchNearbyStores(latitude, longitude);
+              await fetchNearbyStoresRef.current?.(latitude, longitude);
               return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
             } else {
               console.warn("⚠️ [위치 정보] 저장된 좌표가 유효하지 않음:", { latitude, longitude });
@@ -537,7 +558,7 @@ interface StoreData {
               
               // 매장 정보 가져오기
               console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
-              await fetchNearbyStores(latitude, longitude);
+              await fetchNearbyStoresRef.current?.(latitude, longitude);
               return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
             } else {
               console.warn("⚠️ [위치 정보] 주소 검색 결과 없음:", savedLocation);
@@ -563,6 +584,7 @@ interface StoreData {
             localStorage.removeItem("isManualLocation");
             setIsManualLocation(false);
             setCurrentLocation(LOCATION_FETCH_FAILED_KO);
+            loadFallbackStores();
           }
         }
       } else if (isManualLocationValue && !savedLocation) {
@@ -583,6 +605,9 @@ interface StoreData {
           const perm = await navigator.permissions.query({ name: "geolocation" as PermissionName });
           if (perm.state === "prompt") {
             setShowLocationPermModal(true);
+            setIsLoadingLocation(false);
+            setCurrentLocation(LOCATION_FETCH_FAILED_KO);
+            loadFallbackStores();
             return; // 모달에서 허용 후 onGranted 콜백으로 이어짐
           }
         } catch {
@@ -612,7 +637,7 @@ interface StoreData {
       setIsLoadingLocation(false);
 
       console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
-      await fetchNearbyStores(latitude, longitude);
+      await fetchNearbyStoresRef.current?.(latitude, longitude);
     };
 
     const fetchBrowserLocation = async () => {
@@ -620,7 +645,7 @@ interface StoreData {
         clearAutoSavedLocation();
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
         setIsLoadingLocation(false);
-        setIsLoadingStores(false);
+        loadFallbackStores();
         return;
       }
 
@@ -640,7 +665,7 @@ interface StoreData {
           console.warn("⚠️ [위치 권한] 사용자가 위치 권한을 거부했습니다");
           setCurrentLocation(LOCATION_FETCH_FAILED_KO);
           setIsLoadingLocation(false);
-          setIsLoadingStores(false);
+          loadFallbackStores();
           toast({
             title: "위치 권한 필요",
             description: "위치 권한을 허용하면 자동으로 현재 위치가 설정됩니다.",
@@ -651,7 +676,7 @@ interface StoreData {
 
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
         setIsLoadingLocation(false);
-        setIsLoadingStores(false);
+        loadFallbackStores();
         toast({
           title: "위치를 불러올 수 없습니다",
           description: "현재 위치를 확인하지 못했습니다. 상단에서 위치를 직접 설정해 주세요.",
@@ -709,7 +734,7 @@ interface StoreData {
         clearAutoSavedLocation();
         setCurrentLocation(LOCATION_FETCH_FAILED_KO);
         setIsLoadingLocation(false);
-        setIsLoadingStores(false);
+        loadFallbackStores();
 
         toast({
           title: "위치 업데이트 실패",
@@ -720,7 +745,7 @@ interface StoreData {
       }
     } else {
       setIsLoadingLocation(false);
-      setIsLoadingStores(false);
+      loadFallbackStores();
       toast({
         title: "위치 서비스 미지원",
         description: "이 환경에서는 위치를 가져올 수 없습니다.",
@@ -765,11 +790,15 @@ interface StoreData {
       clearAutoSavedLocation();
       setCurrentLocation(LOCATION_FETCH_FAILED_KO);
       setIsLoadingLocation(false);
-      setIsLoadingStores(false);
+      loadFallbackStores();
     }
   };
 
-  const fetchNearbyStores = async (latitude: number, longitude: number) => {
+  const fetchNearbyStores = async (
+    latitude: number,
+    longitude: number,
+    options?: { sortAlphabetically?: boolean }
+  ) => {
     try {
       setIsLoadingStores(true);
       setShowResearchButton(false);
@@ -832,7 +861,11 @@ interface StoreData {
       console.log("✅ [매장 검색] 실제 API 응답:", nearbyStores.length, "개");
 
       const mergedRaw = nearbyStores.map(mapNearbyStoreToStore);
-      mergedRaw.sort((a, b) => a.distanceNum - b.distanceNum);
+      if (options?.sortAlphabetically) {
+        mergedRaw.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+      } else {
+        mergedRaw.sort((a, b) => a.distanceNum - b.distanceNum);
+      }
       const seenIds = new Set<string>();
       const allStores: any[] = [];
       for (const s of mergedRaw) {
@@ -1303,6 +1336,9 @@ interface StoreData {
     } catch (error) {
       console.error("❌ [매장 검색] 실패:", error);
       console.error("에러 스택:", (error as Error).stack);
+      if (options?.sortAlphabetically) {
+        fallbackStoresLoadStartedRef.current = false;
+      }
       setIsLoadingStores(false);
       toast({
         title: "매장 정보 로딩 실패",
@@ -1311,6 +1347,14 @@ interface StoreData {
       });
     }
   };
+
+  fetchNearbyStoresRef.current = fetchNearbyStores;
+
+  // 위치 조회와 무관하게, 위치 없이 화면에 남았을 때 매장 목록 보장
+  useEffect(() => {
+    if (isLoadingLocation || currentCoords || stores.length > 0) return;
+    loadFallbackStores();
+  }, [isLoadingLocation, currentCoords, stores.length]);
 
   mapPinLabelsRef.current = mapPinLabels;
 
@@ -1479,22 +1523,38 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     setShowResearchButton(false);
   };
 
-  const sortedStores = useMemo(() =>
-    [...openStores].sort((a, b) =>
+  const sortedStores = useMemo(() => {
+    const list = [...openStores];
+    if (!currentCoords) {
+      if (sortBy === "discount") {
+        return list.sort(
+          (a, b) => b.discountNum - a.discountNum || a.name.localeCompare(b.name, "ko")
+        );
+      }
+      return sortStoresByName(list);
+    }
+    return list.sort((a, b) =>
       sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
-    ),
-    [openStores, sortBy]
-  );
+    );
+  }, [openStores, sortBy, currentCoords]);
 
   const storesWithCoords = useMemo(() => {
     // 지도뷰: 재검색 결과 또는 불러온 매장 중 좌표 있는 것 (영업중 필터는 시트에서만 적용 가능)
     const base = mapFilteredStores
       ? mapFilteredStores.filter(hasStoreCoords)
       : categoryFilteredStores.filter(hasStoreCoords);
+    if (!currentCoords) {
+      if (sortBy === "discount") {
+        return [...base].sort(
+          (a, b) => b.discountNum - a.discountNum || a.name.localeCompare(b.name, "ko")
+        );
+      }
+      return sortStoresByName(base);
+    }
     return [...base].sort((a, b) =>
       sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
     );
-  }, [mapFilteredStores, categoryFilteredStores, sortBy]);
+  }, [mapFilteredStores, categoryFilteredStores, sortBy, currentCoords]);
 
   useEffect(() => {
     if (!isMapView || !mapContainerRef.current) return;
@@ -1617,7 +1677,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
         let clusterRetryCount = 0;
 
-        const jejuDowntownCenter = new naver.maps.LatLng(33.5098, 126.5219);
+        const jejuDowntownCenter = new naver.maps.LatLng(
+          JEJU_DOWNTOWN_COORDS.latitude,
+          JEJU_DOWNTOWN_COORDS.longitude
+        );
         const initialCenter = currentCoords
           ? new naver.maps.LatLng(currentCoords.latitude, currentCoords.longitude)
           : jejuDowntownCenter;
@@ -2034,6 +2097,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       <LocationPermissionModal
         open={showLocationPermModal}
         onGranted={handleLocationGranted}
+        onDenied={() => {
+          setShowLocationPermModal(false);
+          setCurrentLocation(LOCATION_FETCH_FAILED_KO);
+        }}
       />
       {/* Header — 지도뷰에서는 숨기고 지도 위 FAB로 위치만 조정 */}
       {!isMapView && (
@@ -2186,7 +2253,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 style={{backgroundColor:"white", color:"#26222A"}}
               >
                 <ArrowUpDown className="w-4 h-4" />
-                {sortBy === "distance" ? t.sortDistance : t.sortDiscount}
+                {sortBy === "distance"
+                  ? currentCoords
+                    ? t.sortDistance
+                    : t.sortName
+                  : t.sortDiscount}
               </Button>
             )}
           </div>
@@ -2222,9 +2293,17 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         </div>
 
         {isLoadingStores ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-            <p className="text-muted-foreground">{t.loadingStores}</p>
+          <div
+            className={cn(
+              "grid grid-cols-2 gap-4 animate-fade-in",
+              isMapView && "relative z-30 px-4"
+            )}
+            aria-busy="true"
+            aria-label={t.loadingStores}
+          >
+            {Array.from({ length: 8 }, (_, index) => (
+              <StoreCardSkeleton key={`store-skeleton-${index}`} />
+            ))}
           </div>
         ) : isMapView ? (
           <div className="animate-fade-in relative z-30">
@@ -2256,7 +2335,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               dragHint={t.mapSheetDragHint}
               sortBy={sortBy}
               onSortChange={setSortBy}
-              sortDistanceLabel={t.sortDistance}
+              sortDistanceLabel={currentCoords ? t.sortDistance : t.sortName}
               sortDiscountLabel={t.sortDiscount}
             />
           </div>
@@ -2271,21 +2350,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               ))}
             </div>
             {isLoadingMoreStores && (
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                {[...Array(4)].map((_, index) => (
-                  <div key={`skeleton-${index}`} className="animate-fade-in">
-                    <div className="overflow-hidden rounded-lg border border-border/50 bg-card">
-                      <div className="flex flex-col">
-                        <div className="flex-1 bg-primary/10 flex items-center justify-center p-4 relative">
-                          <Skeleton className="w-20 h-20 rounded-md" />
-                        </div>
-                        <div className="p-3 bg-card">
-                          <Skeleton className="h-4 w-24 mb-2" />
-                          <Skeleton className="h-3 w-16" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              <div className="mt-4 grid grid-cols-2 gap-4 animate-fade-in">
+                {Array.from({ length: 4 }, (_, index) => (
+                  <StoreCardSkeleton key={`store-skeleton-more-${index}`} />
                 ))}
               </div>
             )}
