@@ -23,10 +23,13 @@ const SLIGHT_EXPAND_FROM_SINGLE_ROW_PX = 10;
 const COLLAPSE_FROM_EXPANDED_PX = 30;
 /** StoreCard 고정 높이: h-28(112) + 본문 그리드·패딩(128) */
 const STORE_CARD_HEIGHT_PX = 240;
-/** 1행 스냅 시트 높이 = 핸들 + 헤더 + 카드 스크롤(240) */
+/** 1행 스냅 시트 높이 = 핸들 + 헤더 + 카드 스크롤(240+pb-3) */
 const MAP_VIEW_SHEET_HEADER_PX = 40;
-/** StoreCard 높이와 동일 — 바깥 py로 줄이지 않음 */
-const MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX = STORE_CARD_HEIGHT_PX;
+/** 제거한 pb-3(0.75rem) 만큼 스크롤 뷰포트 확장 */
+const MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_EXTRA_PX = 12;
+/** 카드 높이 + 하단 여유(구 pb-3) */
+const MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX =
+  STORE_CARD_HEIGHT_PX + MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_EXTRA_PX;
 /** 별도 스크롤바 트랙 너비 */
 const MAP_VIEW_SHEET_SCROLLBAR_PX = 4;
 /** 카드 1행만 보이도록 고정 (동적 측정 없음) */
@@ -706,20 +709,26 @@ const MapViewBottomSheet = ({
           <div
             className={cn(
               "relative min-h-0 overscroll-contain",
-              isSingleRowPanel
-                ? "h-[240px] shrink-0"
-                : "flex-1 pb-3"
+              isSingleRowPanel ? "shrink-0" : "flex-1"
             )}
+            style={
+              isSingleRowPanel
+                ? { height: MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX }
+                : undefined
+            }
           >
             <div
               ref={scrollBodyRef}
               className={cn(
                 "scrollbar-hide min-h-0 overflow-y-auto overscroll-contain px-3",
-                isSingleRowPanel ? "h-[240px]" : "h-full"
+                !isSingleRowPanel && "h-full"
               )}
               style={{
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
+                ...(isSingleRowPanel
+                  ? { height: MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX }
+                  : {}),
               }}
             >
               <div
