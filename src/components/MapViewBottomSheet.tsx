@@ -17,6 +17,8 @@ const CONTENT_REVEAL_EXTRA = 36;
 const MIN_EXPANDED = 280;
 /** 피크에서 핸들을 살짝만 위로 당겨도 펼쳐지도록 낮은 스냅 기준(px) */
 const SLIGHT_EXPAND_FROM_PEEK_PX = 10;
+/** 1행 스냅에서 살짝만 위로 당겨도 전체 펼침으로 스냅 */
+const SLIGHT_EXPAND_FROM_SINGLE_ROW_PX = 10;
 /** 펼쳐진 상태에서 이만큼 내리면 바로 접힘 (핸들 드래그) */
 const COLLAPSE_FROM_EXPANDED_PX = 30;
 /** StoreCard 고정 높이: h-28(112) + 본문 그리드·패딩(128) */
@@ -400,6 +402,14 @@ const MapViewBottomSheet = ({
 
     if (startedPeek && h >= startH + SLIGHT_EXPAND_FROM_PEEK_PX) {
       snapToSingleRow();
+      return;
+    }
+
+    const startedSingleRow = startH <= MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT + 8;
+
+    if (startedSingleRow && h >= startH + SLIGHT_EXPAND_FROM_SINGLE_ROW_PX) {
+      panelHeightRef.current = max;
+      setPanelHeight(max);
       return;
     }
 
