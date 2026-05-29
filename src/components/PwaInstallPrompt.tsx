@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { TouchEvent } from "react";
+import { useLocation } from "react-router-dom";
 import { X, Share } from "lucide-react";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { pwaInstallStrings } from "@/lib/locale";
+
+const HOME_PATHS = new Set(["/", "/jeju", "/main"]);
+
+function isHomePath(pathname: string) {
+  return HOME_PATHS.has(pathname);
+}
 
 const PROMPT_STORAGE_PREFIX = `pwa-prompt:${__APP_BUILD_ID__}`;
 const SESSION_KEY = `${PROMPT_STORAGE_PREFIX}:shown`;
@@ -37,6 +45,9 @@ function dismissForToday() {
 type Step = "popup" | "ios-guide" | null;
 
 const PwaInstallPrompt = () => {
+  const location = useLocation();
+  const isMobile = useIsMobile();
+  const shouldShow = isMobile && isHomePath(location.pathname);
   const { locale } = useAppLocale();
   const t = pwaInstallStrings(locale);
   const [step, setStep] = useState<Step>(null);
@@ -70,6 +81,7 @@ const PwaInstallPrompt = () => {
   }, [step]);
 
   useEffect(() => {
+    if (!shouldShow) return;
     if (isInStandaloneMode()) return;
     if (isDismissedToday()) return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
@@ -98,7 +110,7 @@ const PwaInstallPrompt = () => {
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
+  }, [shouldShow]);
 
   const handleDismissToday = () => {
     dismissForToday();
@@ -150,6 +162,8 @@ const PwaInstallPrompt = () => {
       onDismiss();
     }
   };
+
+  if (!shouldShow) return null;
 
   if (step === "ios-guide") {
     return (
