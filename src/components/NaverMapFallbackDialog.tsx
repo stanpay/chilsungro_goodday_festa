@@ -4,7 +4,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -56,7 +55,6 @@ export default function NaverMapFallbackDialog() {
       <AlertDialogContent className="max-w-sm rounded-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>{copy.title}</AlertDialogTitle>
-          <AlertDialogDescription>{copy.description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
           <AlertDialogAction
@@ -66,7 +64,10 @@ export default function NaverMapFallbackDialog() {
             {copy.install}
           </AlertDialogAction>
           <AlertDialogAction
-            className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "w-full text-foreground",
+            )}
             onClick={() => openNaverMapWebFallback(webFallbackUrl)}
           >
             {copy.web}
