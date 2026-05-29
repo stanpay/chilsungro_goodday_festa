@@ -23,10 +23,10 @@ const SLIGHT_EXPAND_FROM_SINGLE_ROW_PX = 10;
 const COLLAPSE_FROM_EXPANDED_PX = 30;
 /** StoreCard 고정 높이: h-28(112) + 본문 그리드·패딩(128) */
 const STORE_CARD_HEIGHT_PX = 240;
-/** 1행 스냅 시트 높이 = 핸들 + 헤더 + 스크롤(pt-2 + 카드 240, gap은 클립) */
+/** 1행 스냅 시트 높이 = 핸들 + 헤더 + 카드 스크롤(240) */
 const MAP_VIEW_SHEET_HEADER_PX = 40;
-/** py-2(16) + 카드 240 — 그리드 gap-3(12)는 overflow로 잘림 */
-const MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX = 256;
+/** StoreCard 높이와 동일 — 바깥 py로 줄이지 않음 */
+const MAP_VIEW_SHEET_SINGLE_ROW_SCROLL_PX = STORE_CARD_HEIGHT_PX;
 /** 별도 스크롤바 트랙 너비 */
 const MAP_VIEW_SHEET_SCROLLBAR_PX = 4;
 /** 카드 1행만 보이도록 고정 (동적 측정 없음) */
@@ -706,18 +706,29 @@ const MapViewBottomSheet = ({
           <div
             className={cn(
               "relative min-h-0 overscroll-contain",
-              isSingleRowPanel ? "h-[256px] shrink-0 py-2" : "flex-1 pb-3"
+              isSingleRowPanel
+                ? "h-[240px] shrink-0"
+                : "flex-1 pb-3"
             )}
           >
             <div
               ref={scrollBodyRef}
-              className="scrollbar-hide h-full min-h-0 overflow-y-auto overscroll-contain px-3"
+              className={cn(
+                "scrollbar-hide min-h-0 overflow-y-auto overscroll-contain px-3",
+                isSingleRowPanel ? "h-[240px]" : "h-full"
+              )}
               style={{
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
               }}
             >
-              <div className="grid grid-cols-2 gap-3 pb-1" style={{ gridAutoRows: "1fr" }}>
+              <div
+                className={cn(
+                  "grid grid-cols-2 gap-3",
+                  isSingleRowPanel ? "pb-0" : "pb-1"
+                )}
+                style={{ gridAutoRows: isSingleRowPanel ? `${STORE_CARD_HEIGHT_PX}px` : "1fr" }}
+              >
                 {stores.map((store) => (
                   <div
                     key={store.id}
@@ -725,7 +736,10 @@ const MapViewBottomSheet = ({
                       if (node) cardWrapRefs.current.set(store.id, node);
                       else cardWrapRefs.current.delete(store.id);
                     }}
-                    className="h-full rounded-lg transition-[box-shadow,transform]"
+                    className={cn(
+                      "rounded-lg transition-[box-shadow,transform]",
+                      isSingleRowPanel ? "h-[240px]" : "h-full"
+                    )}
                   >
                     <StoreCard
                       {...store}

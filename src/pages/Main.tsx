@@ -700,6 +700,8 @@ interface StoreData {
   const myLocationMarkerRef = useRef<any>(null);
   const currentCoordsRef = useRef(currentCoords);
   const skipNextFitMapRef = useRef(false);
+  /** true면 center/fit/pan으로 뷰포트 변경 금지 (검색 지우기·재검색 등, rebuild마다 리셋되지 않음) */
+  const preserveMapViewportRef = useRef(false);
   /** 첫 지도 세팅: fitMapToStores 생략, applyInitialMapView로 center+zoom만 적용 */
   const skipInitialMapFitRef = useRef(true);
   /** 현재 위치로 지도 center/fitBounds — 첫 접속·위치 새로고침 때만 true */
@@ -720,14 +722,6 @@ interface StoreData {
     return (icon?.content as HTMLElement) ?? null;
   };
 
-  const getSelectedStoreMarker = useCallback((storeId: string | null) => {
-    if (!storeId) return null;
-    return (
-      storeMarkersRef.current.find(({ id }) => String(id) === String(storeId))?.marker ??
-      null
-    );
-  }, []);
-
   const handleMapSheetPanelHeightChange = useCallback((height: number) => {
     if (mapSheetPanelHeightRef.current === height) return;
     mapSheetPanelHeightRef.current = height;
@@ -735,20 +729,7 @@ interface StoreData {
       isMapView: isMapViewRef.current,
       mapSheetPanelHeight: height,
     });
-
-    if (!selectedMapStoreIdRef.current) return;
-    const map = mapInstanceRef.current;
-    const naver = (window as any).naver;
-    if (!map || !naver?.maps) return;
-    panMapPinAboveSheet(
-      map,
-      naver,
-      mapContainerRef.current,
-      mapResearchButtonRef.current,
-      height,
-      getSelectedStoreMarker(selectedMapStoreIdRef.current)
-    );
-  }, [getSelectedStoreMarker]);
+  }, []);
 
   const handleMapSheetDraggingChange = useCallback((dragging: boolean) => {
     const map = mapInstanceRef.current;
@@ -1119,6 +1100,7 @@ interface StoreData {
     skipNextFitMapRef.current = options?.skipMapFit === true;
     if (options?.skipMapFit !== true) {
       alignMapToCurrentLocationRef.current = true;
+      preserveMapViewportRef.current = false;
     }
     setCurrentCoords({ latitude, longitude });
     setMapFilteredStores(null);
@@ -1774,6 +1756,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     });
 
     skipNextFitMapRef.current = true;
+    preserveMapViewportRef.current = true;
     setSelectedMapStoreId(null);
     setHighlightMapSheetCard(false);
     setMapFilteredStores(filtered);
@@ -1992,6 +1975,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
         const applyInitialMapView = () => {
           if (isCancelled || !isMapViewRef.current || !skipInitialMapFitRef.current) return;
+          if (preserveMapViewportRef.current) return;
           const coords = currentCoordsRef.current;
           const alignToCurrent = alignMapToCurrentLocationRef.current && coords;
           const center = alignToCurrent
@@ -2008,7 +1992,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         applyInitialMapViewRef.current = applyInitialMapView;
 
         const fitMapToStores = () => {
-          if (skipInitialMapFitRef.current) return;
+          if (skipInitialMapFitRef.current || preserveMapViewportRef.current) return;
           const list = storesWithCoordsRef.current.filter(
             (s: StoreData) => Number.isFinite(s.lat) && Number.isFinite(s.lon)
           );
@@ -2058,6 +2042,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
         naver.maps.Event.addListener(map, "dragend", () => {
           skipInitialMapFitRef.current = false;
+          preserveMapViewportRef.current = false;
         });
 
         window.setTimeout(() => {
@@ -2564,7 +2549,8 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
             const skipDueToNext = skipNextFitMapRef.current;
             const skipDueToInitial = skipInitialMapFitRef.current;
-            const skipFit = skipDueToNext || skipDueToInitial;
+            const skipDueToPreserve = preserveMapViewportRef.current;
+            const skipFit = skipDueToNext || skipDueToInitial || skipDueToPreserve;
             if (skipDueToNext) {
               skipNextFitMapRef.current = false;
             }
@@ -2580,9 +2566,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               fitMapToStores();
               scheduleApplyClustering();
             } else {
-              // 재검색·검색 지우기 등: 핀만 갱신, 지도 위치는 유지
+              // 재검색·검색 지우기·뷰포트 고정 등: 핀만 갱신, 지도 위치는 유지
               applyClustering();
-              if (skipDueToInitial && !skipDueToNext) {
+              if (skipDueToInitial && !skipDueToNext && !skipDueToPreserve) {
                 applyInitialMapView();
               }
             }
@@ -2685,6 +2671,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   // 위치 확보 후: 첫 접속·위치 새로고침 때만 현재 위치로 지도 정렬
   useEffect(() => {
     if (!currentCoords || !isMapView || !mapInstanceRef.current) return;
+    if (preserveMapViewportRef.current) return;
     if (!alignMapToCurrentLocationRef.current) return;
     if (skipInitialMapFitRef.current) {
       applyInitialMapViewRef.current?.();
@@ -2757,6 +2744,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         setMapFilteredStores(null);
         setSelectedMapStoreId(null);
         setHighlightMapSheetCard(false);
+        preserveMapViewportRef.current = false;
         skipInitialMapFitRef.current = false;
         skipNextFitMapRef.current = false;
       }
@@ -2771,10 +2759,12 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     setHighlightMapSheetCard(false);
 
     if (!trimmed) {
+      preserveMapViewportRef.current = true;
       skipNextFitMapRef.current = true;
       return;
     }
 
+    preserveMapViewportRef.current = false;
     skipInitialMapFitRef.current = false;
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
@@ -2971,6 +2961,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               <button
                 type="button"
                 onClick={() => {
+                  preserveMapViewportRef.current = true;
                   skipNextFitMapRef.current = true;
                   setSearchInput("");
                   setSearchQuery("");
