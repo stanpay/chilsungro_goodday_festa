@@ -1,7 +1,7 @@
 {
-  "name": "스탠(Stan) - 할인의 기준",
+  "name": "스탠(Stan)",
   "short_name": "스탠",
-  "description": "결제의 기준이 되는 심플한 결제 플랫폼",
+  "description": "원도심 할인 큐레이션 서비스",
   "id": "/",
   "start_url": "/",
   "scope": "/",
