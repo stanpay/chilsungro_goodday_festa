@@ -7,7 +7,6 @@ export interface Store {
   kakao_place_id: string;
   local_currency_available: boolean;
   local_currency_discount_rate: number | null;
-  gifticon_available: boolean;
   parking_available: boolean;
   free_parking: boolean;
   parking_size: string | null;

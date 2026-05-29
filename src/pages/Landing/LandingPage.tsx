@@ -32,7 +32,7 @@ const LandingPage = () => {
               AI 개인화 할인 비서 stan
             </p>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-              기프티콘을 넘어 할인·적립까지 원스톱 솔루션
+              제주 여행 할인·적립 정보를 한곳에서
             </p>
             <Button
               onClick={handleDownload}
@@ -207,16 +207,16 @@ const LandingPage = () => {
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
             <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-              내 기프티콘 통합관리
+              stan이 도와드리는 혜택
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="bg-card rounded-2xl p-8 border border-border text-center hover:shadow-lg transition-shadow">
                 <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
                   <Package className="w-8 h-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-bold mb-3">기프티콘 통합관리</h3>
+                <h3 className="text-xl font-bold mb-3">여행자 소비쿠폰</h3>
                 <p className="text-muted-foreground">
-                  모든 기프티콘을 한 곳에서 관리하고 사용하세요
+                  칠성로·제주 여행자센터 등 쿠폰 사용 매장을 찾아보세요
                 </p>
               </div>
               <div className="bg-card rounded-2xl p-8 border border-border text-center hover:shadow-lg transition-shadow">
@@ -240,7 +240,7 @@ const LandingPage = () => {
             </div>
             <div className="mt-12 text-center">
               <p className="text-xl md:text-2xl font-semibold text-foreground mb-4">
-                기프티콘을 넘어 할인·적립까지 원스톱 솔루션
+                제주 여행 할인·적립 정보를 한곳에서
               </p>
               <Button
                 onClick={handleDownload}

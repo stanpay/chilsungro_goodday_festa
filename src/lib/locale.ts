@@ -448,8 +448,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
       "/": "메인",
       "/main": "메인",
       "/location": "위치 설정",
-      "/mypage": "마이페이지",
-      "/my-gifticons": "내 기프티콘",
     },
   },
   en: {
@@ -464,8 +462,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
       "/": "Main",
       "/main": "Main",
       "/location": "Location",
-      "/mypage": "My Page",
-      "/my-gifticons": "My Gifticons",
     },
   },
   zh: {
@@ -480,8 +476,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
       "/": "主页",
       "/main": "主页",
       "/location": "位置设置",
-      "/mypage": "我的主页",
-      "/my-gifticons": "我的礼品券",
     },
   },
   ja: {
@@ -496,8 +490,6 @@ const CHAT_SUPPORT_COPY: Record<AppLocale, ChatSupportCopy> = {
       "/": "メイン",
       "/main": "メイン",
       "/location": "位置設定",
-      "/mypage": "マイページ",
-      "/my-gifticons": "マイギフティコン",
     },
   },
 };

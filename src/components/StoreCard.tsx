@@ -29,7 +29,7 @@ interface StoreCardProps {
   todayHours?: { open: string; close: string } | null;
   photos?: string[];
   closedDayNote?: string;
-  hasGifticonDiscount?: boolean;
+  hasTravelConsumerCoupon?: boolean;
   tutorialMode?: boolean;
   isHighlighted?: boolean;
   disabled?: boolean;
@@ -70,7 +70,7 @@ const StoreCard = ({
   todayHours,
   photos,
   closedDayNote,
-  hasGifticonDiscount = false,
+  hasTravelConsumerCoupon = false,
   tutorialMode = false,
   isHighlighted = false,
   disabled = false,
@@ -189,7 +189,7 @@ const StoreCard = ({
       : sc.localCurrency;
   const showChipsRow =
     showLocalCurrencyChip ||
-    hasGifticonDiscount ||
+    hasTravelConsumerCoupon ||
     (locale === "ko" && high_oil_support_available) ||
     showParkingChip;
 
@@ -226,7 +226,7 @@ const StoreCard = ({
     return () => observer.disconnect();
   }, [
     showChipsRow,
-    hasGifticonDiscount,
+    hasTravelConsumerCoupon,
     showLocalCurrencyChip,
     localCurrencyText,
     high_oil_support_available,
@@ -366,7 +366,7 @@ const StoreCard = ({
                       ref={chipsInnerRef}
                       className="inline-flex flex-nowrap items-center gap-1"
                     >
-                      {hasGifticonDiscount && (
+                      {hasTravelConsumerCoupon && (
                         <span
                           className={cn(
                             chipClassName,

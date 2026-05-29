@@ -5,9 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Main from "./pages/Main";
 import Location from "./pages/Location";
-import BarcodePrototype from "./pages/BarcodePrototype";
-import MyPage from "./pages/MyPage";
-import MyGifticons from "./pages/MyGifticons";
 import NotFound from "./pages/NotFound";
 
 import ChatSupport from "./components/ChatSupport";
@@ -50,9 +47,6 @@ const App = () => (
           <Route path="/landing" element={<LandingPage />} />
           <Route path="/location" element={<Location />} />
           <Route path="/jejuqronedosim" element={<RedirectToJeju />} />
-          <Route path="/prototype/barcode/:storeId" element={<BarcodePrototype />} />
-          <Route path="/mypage" element={<MyPage />} />
-          <Route path="/my-gifticons" element={<MyGifticons />} />
           <Route path="/dev-tools-9f3k" element={<DevTools />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -94,7 +94,6 @@ export default function App() {
                 // href로 확인
                 const href = btn.getAttribute('href');
                 if (href && (href.startsWith('/main') || 
-                            href.startsWith('/mypage') || 
                             (href.startsWith('/') && href !== window.location.pathname))) {
                   btn.click();
                   return;
@@ -661,7 +660,6 @@ export default function App() {
               // href 속성으로 확인 (뒤로가기 링크)
               const href = btn.getAttribute('href') || '';
               if (href && (href.startsWith('/main') || 
-                          href.startsWith('/mypage') || 
                           href.startsWith('/') && href !== window.location.pathname)) {
                 // header 내의 링크는 뒤로가기로 간주
                 hasBack = true;
