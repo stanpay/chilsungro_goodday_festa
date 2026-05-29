@@ -30,7 +30,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { paymentHistoryApi } from "@/api/paymentHistory";
 import { storesApi, type NearbyStore } from "@/api/stores";
 import { gifticonsApi } from "@/api/gifticons";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
@@ -38,9 +37,7 @@ import { getAddressFromCoords } from "@/lib/geocoding";
 import { JEJU_DOWNTOWN_COORDS } from "@/lib/naverGeocodeFallback";
 import { getBrowserPosition } from "@/lib/geolocation";
 import { openStoreRedirect, prefetchStoreRedirects } from "@/lib/storeRedirect";
-import TutorialModal from "@/components/TutorialModal";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
-import { shouldShowTutorial } from "@/lib/tutorial";
 import {
   mainStrings,
   LOCALE_MENU_LABELS,
@@ -632,7 +629,6 @@ interface StoreData {
         : BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport"),
     [locale]
   );
-  const [showTutorialModal, setShowTutorialModal] = useState(false);
   const [showLocationPermModal, setShowLocationPermModal] = useState(false);
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
@@ -878,19 +874,6 @@ interface StoreData {
 
       // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
       prevSessionRef.current = isLoggedIn ? { user: { id: "user-001" } } : null;
-
-      // 튜토리얼 모달 표시 여부 확인
-      if (isLoggedIn) {
-        try {
-          const count = await paymentHistoryApi.getCount("user-001");
-          const paymentHistoryExists = count > 0;
-          const needTutorial = await shouldShowTutorial(paymentHistoryExists);
-          if (needTutorial) {
-            setShowTutorialModal(true);
-          }
-        } catch (error) {
-        }
-      }
 
       // Naver Maps SDK 로드 (실패해도 GPS 위치 조회는 계속 진행)
       try {
@@ -1343,30 +1326,7 @@ interface StoreData {
           } catch (e) {
           }
 
-          // 2. 프랜차이즈별 결제 방식 적립/할인 정보 조회
-          let franchiseDiscountRate = 0;
-          if (franchiseData) {
-            try {
-              const paymentMethods = await storesApi.getPaymentMethods(franchiseData.id);
-              const paymentMethodsError = null;
-              if (!paymentMethodsError && paymentMethods && paymentMethods.length > 0) {
-                // 파스쿠찌: 해피포인트 적립 (5%)
-                if (store.image === 'pascucci') {
-                  const happyPoint = paymentMethods.find((pm: any) => 
-                    pm.method_name === '해피포인트' && (pm.method_type === '적립' || pm.method_type === 'accumulation')
-                  );
-                  if (happyPoint && (happyPoint as any).rate) {
-                    franchiseDiscountRate = (happyPoint as any).rate;
-                  }
-                }
-                // 투썸플레이스: 투썸하트는 스탬프 타입이므로 할인율에 포함하지 않음 (할인율 없음)
-                // 투썸플레이스는 지역화폐 할인율과 기프티콘 할인율만 고려
-              }
-            } catch (e) {
-            }
-          }
-
-          // 3. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
+          // 2. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
           let localCurrencyDiscount = 0;
           let maxGifticonDiscount = 0;
           let storeData: any = preloadedStoreData;
@@ -1462,8 +1422,8 @@ interface StoreData {
           } catch (e) {
           }
 
-          // 4. 최대 할인율 계산 (프랜차이즈 적립/할인, 지역화폐 할인율, 기프티콘 할인율 중 최대값)
-          const maxDiscountPercent = Math.max(franchiseDiscountRate, localCurrencyDiscount, maxGifticonDiscount);
+          // 3. 최대 할인율 계산 (지역화폐 할인율, 기프티콘 할인율 중 최대값)
+          const maxDiscountPercent = Math.max(localCurrencyDiscount, maxGifticonDiscount);
 
           return {
             ...store,
@@ -1547,28 +1507,7 @@ interface StoreData {
             } catch (e) {
             }
 
-            // 2. 프랜차이즈별 결제 방식 적립/할인 정보 조회
-            let franchiseDiscountRate = 0;
-            if (franchiseData) {
-              try {
-                const paymentMethods = await storesApi.getPaymentMethods(franchiseData.id);
-                const paymentMethodsError = null;
-                if (!paymentMethodsError && paymentMethods && paymentMethods.length > 0) {
-                  // 파스쿠찌: 해피포인트 적립 (5%)
-                  if (store.image === 'pascucci') {
-                    const happyPoint = paymentMethods.find((pm: any) =>
-                      pm.method_name === '해피포인트' && (pm.method_type === '적립' || pm.method_type === 'accumulation')
-                    );
-                    if (happyPoint && (happyPoint as any).rate) {
-                      franchiseDiscountRate = (happyPoint as any).rate;
-                    }
-                  }
-                }
-              } catch (e) {
-              }
-            }
-
-            // 3. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
+            // 2. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
             let localCurrencyDiscount = 0;
             let maxGifticonDiscount = 0;
             let storeData: any = preloadedStoreData;
@@ -1664,8 +1603,8 @@ interface StoreData {
             } catch (e) {
             }
 
-            // 4. 최대 할인율 계산 (프랜차이즈 적립/할인, 지역화폐 할인율, 기프티콘 할인율 중 최대값)
-            const maxDiscountPercent = Math.max(franchiseDiscountRate, localCurrencyDiscount, maxGifticonDiscount);
+            // 3. 최대 할인율 계산 (지역화폐 할인율, 기프티콘 할인율 중 최대값)
+            const maxDiscountPercent = Math.max(localCurrencyDiscount, maxGifticonDiscount);
 
             return {
               ...store,
@@ -2962,10 +2901,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           : "min-h-screen pb-20"
       )}
     >
-      <TutorialModal
-        open={showTutorialModal}
-        onClose={() => setShowTutorialModal(false)}
-      />
       <LocationPermissionModal
         open={showLocationPermModal}
         onGranted={handleLocationGranted}

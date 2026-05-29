@@ -1,6 +1,5 @@
 import { Card } from "@/components/ui/card";
 import { Coffee, MapPin, ShoppingBag, UtensilsCrossed } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
@@ -81,9 +80,6 @@ const StoreCard = ({
   const { locale } = useAppLocale();
   const sc = storeCardStrings(locale);
   const displayName = useTranslatedKoreanText(name, locale);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isTutorial = location.pathname.includes("/tutorial");
   const brandLogoUrl = brandLogos[image as keyof typeof brandLogos];
   const nameContainerRef = useRef<HTMLHeadingElement>(null);
   const chipsContainerRef = useRef<HTMLDivElement>(null);
@@ -157,11 +153,6 @@ const StoreCard = ({
     // 부모에서 동작을 직접 제어하는 경우 (예: 지도 선택 + 리다이렉트)
     if (onActivate) {
       onActivate();
-      return;
-    }
-
-    if (isTutorial) {
-      navigate(`/tutorial/payment/${id}`);
       return;
     }
 

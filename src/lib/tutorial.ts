@@ -44,25 +44,3 @@ export const setTutorialStep = (step: string | null): void => {
     localStorage.setItem(TUTORIAL_STEP_KEY, step);
   }
 };
-
-/**
- * 튜토리얼이 필요한지 확인 (결제 이력이 없고 튜토리얼이 완료되지 않은 경우)
- */
-export const shouldShowTutorial = async (
-  hasPaymentHistory: boolean
-): Promise<boolean> => {
-  // 결제 이력이 있으면 튜토리얼 불필요
-  if (hasPaymentHistory) {
-    return false;
-  }
-  
-  // 튜토리얼이 이미 완료되었으면 불필요
-  if (isTutorialCompleted()) {
-    return false;
-  }
-  
-  // 튜토리얼 모드가 설정되어 있어도 완료되지 않았으면 다시 보여줌
-  // (사용자가 튜토리얼을 시작했지만 완료하지 않은 경우)
-  
-  return true;
-};

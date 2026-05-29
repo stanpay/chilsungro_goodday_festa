@@ -28,7 +28,6 @@ export interface UsedGifticon {
   status: string;
 }
 
-// 인메모리 더미 저장소 (로컬에서만 변경 사항 유지)
 let gifticonStore = [...DUMMY_GIFTICONS] as Gifticon[];
 let usedGifticonStore = [...DUMMY_USED_GIFTICONS] as UsedGifticon[];
 
@@ -42,47 +41,6 @@ export const gifticonsApi = {
       ...g,
       sale_price: usedMap.get(g.id)?.sale_price,
     }));
-  },
-
-  sellGifticon: async (
-    gifticonId: string,
-    sellerId: string,
-    salePrice: number
-  ): Promise<void> => {
-    // TODO: POST /api/gifticons/{id}/sell
-    await delay(300);
-    const gifticon = gifticonStore.find((g) => g.id === gifticonId);
-    if (!gifticon) throw new Error("기프티콘을 찾을 수 없습니다.");
-
-    const existingIdx = usedGifticonStore.findIndex((u) => u.id === gifticonId);
-    const usedEntry: UsedGifticon = {
-      id: gifticonId,
-      seller_id: sellerId,
-      available_at: gifticon.brand,
-      name: gifticon.name,
-      barcode: gifticon.barcode || "",
-      original_price: gifticon.original_price,
-      sale_price: salePrice,
-      expiry_date: gifticon.expiry_date,
-      status: "판매중",
-    };
-
-    if (existingIdx >= 0) {
-      usedGifticonStore[existingIdx] = usedEntry;
-    } else {
-      usedGifticonStore.push(usedEntry);
-    }
-
-    const idx = gifticonStore.findIndex((g) => g.id === gifticonId);
-    if (idx >= 0) gifticonStore[idx] = { ...gifticonStore[idx], is_selling: true };
-  },
-
-  cancelSell: async (gifticonId: string): Promise<void> => {
-    // TODO: DELETE /api/gifticons/{id}/sell
-    await delay(300);
-    usedGifticonStore = usedGifticonStore.filter((u) => u.id !== gifticonId);
-    const idx = gifticonStore.findIndex((g) => g.id === gifticonId);
-    if (idx >= 0) gifticonStore[idx] = { ...gifticonStore[idx], is_selling: false };
   },
 
   restoreGifticon: async (gifticonId: string): Promise<void> => {
@@ -108,7 +66,7 @@ export const gifticonsApi = {
 
   reserveGifticon: async (
     gifticonId: string,
-    userId: string
+    _userId: string
   ): Promise<UsedGifticon> => {
     // TODO: POST /api/used-gifticons/{id}/reserve
     await delay(300);

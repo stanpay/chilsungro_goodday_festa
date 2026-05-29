@@ -1,8 +1,4 @@
-import {
-  DUMMY_STORES,
-  DUMMY_FRANCHISES,
-  DUMMY_FRANCHISE_PAYMENT_METHODS,
-} from "./dummyData";
+import { DUMMY_STORES, DUMMY_FRANCHISES } from "./dummyData";
 
 export interface Store {
   id: string;
@@ -36,13 +32,6 @@ export interface NearbyStore {
 export interface Franchise {
   id: string;
   name: string;
-}
-
-export interface FranchisePaymentMethod {
-  franchise_id: string;
-  method_name: string;
-  method_type: string | null;
-  rate: number | null;
 }
 
 const STORE_API_BASE_URL =
@@ -106,16 +95,6 @@ export const storesApi = {
     // TODO: GET /api/franchises?name={name}
     await delay(200);
     return DUMMY_FRANCHISES[name] ?? null;
-  },
-
-  getPaymentMethods: async (
-    franchiseId: string
-  ): Promise<FranchisePaymentMethod[]> => {
-    // TODO: GET /api/franchises/{franchiseId}/payment-methods
-    await delay(200);
-    return DUMMY_FRANCHISE_PAYMENT_METHODS.filter(
-      (m) => m.franchise_id === franchiseId
-    );
   },
 };
 

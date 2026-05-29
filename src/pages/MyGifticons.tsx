@@ -1,17 +1,15 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpDown, Plus, Gift, ArrowLeft } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { ArrowUpDown, Gift, ArrowLeft } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, } from "@/components/ui/dropdown-menu";
 import BottomNav from "@/components/BottomNav";
 import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import JsBarcode from "jsbarcode";
-import { useGifticons, useSellGifticon, useCancelSell, useRestoreGifticon } from "@/hooks/use-gifticons";
+import { useGifticons, useRestoreGifticon } from "@/hooks/use-gifticons";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Gifticon } from "@/api/gifticons";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
@@ -21,18 +19,13 @@ const MyGifticons = () => {
     const { isLoggedIn } = useAuth();
     const [searchParams] = useSearchParams();
     const [filterStatus, setFilterStatus] = useState<"사용 가능" | "완료/만료">("사용 가능");
-    const [subFilter, setSubFilter] = useState<"전체" | "보유중" | "판매중" | "사용완료" | "판매완료" | "기한만료">("전체");
+    const [subFilter, setSubFilter] = useState<"전체" | "사용완료" | "판매완료" | "기한만료">("전체");
     const [sortOrder, setSortOrder] = useState<SortOrder>("유효기간임박순");
     const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
     const [restoreTargetGifticon, setRestoreTargetGifticon] = useState<Gifticon | null>(null);
     const [selectedGifticon, setSelectedGifticon] = useState<Gifticon | null>(null);
     const [isBarcodeDialogOpen, setIsBarcodeDialogOpen] = useState(false);
-    const [isSellDialogOpen, setIsSellDialogOpen] = useState(false);
-    const [sellingGifticon, setSellingGifticon] = useState<Gifticon | null>(null);
-    const [salePrice, setSalePrice] = useState<string>("");
     const { data: gifticons = [], isLoading } = useGifticons();
-    const sellMutation = useSellGifticon();
-    const cancelSellMutation = useCancelSell();
     const restoreMutation = useRestoreGifticon();
     const handleFilterStatusChange = (newFilterStatus: "사용 가능" | "완료/만료") => {
         setFilterStatus(newFilterStatus);
@@ -63,13 +56,7 @@ const MyGifticons = () => {
                 return false;
             if (isExpired(g))
                 return false;
-            if (subFilter === "전체")
-                return true;
-            if (subFilter === "보유중" && g.is_selling)
-                return false;
-            if (subFilter === "판매중" && !g.is_selling)
-                return false;
-            return true;
+            return subFilter === "전체";
         }
         else {
             if (subFilter === "전체") {
@@ -106,39 +93,6 @@ const MyGifticons = () => {
                 return 0;
         }
     });
-    const handleSellClick = (g: Gifticon) => {
-        if (g.status === "판매완료") {
-            toast({ title: "판매 불가", description: "판매완료된 기프티콘은 더 이상 판매할 수 없습니다.", variant: "destructive" });
-            return;
-        }
-        if (g.status !== "사용가능") {
-            toast({ title: "판매 불가", description: "사용가능 상태의 기프티콘만 판매할 수 있습니다.", variant: "destructive" });
-            return;
-        }
-        setSellingGifticon(g);
-        setSalePrice(g.sale_price?.toString() || "");
-        setIsSellDialogOpen(true);
-    };
-    const handleSellConfirm = () => {
-        if (!sellingGifticon)
-            return;
-        const price = parseInt(salePrice.replace(/,/g, ""));
-        if (isNaN(price) || price <= 0) {
-            toast({ title: "가격 오류", description: "올바른 가격을 입력해주세요.", variant: "destructive" });
-            return;
-        }
-        if (price > sellingGifticon.original_price) {
-            toast({ title: "가격 오류", description: "판매 가격은 원가보다 높을 수 없습니다.", variant: "destructive" });
-            return;
-        }
-        sellMutation.mutate({ gifticonId: sellingGifticon.id, salePrice: price }, {
-            onSuccess: () => {
-                setIsSellDialogOpen(false);
-                setSellingGifticon(null);
-                setSalePrice("");
-            },
-        });
-    };
     const handleGifticonClick = (g: Gifticon) => {
         if (g.status === "판매완료") {
             toast({ title: "접근 불가", description: "판매완료된 기프티콘은 더 이상 확인할 수 없습니다.", variant: "destructive" });
@@ -234,7 +188,7 @@ const MyGifticons = () => {
       <div className="max-w-md mx-auto px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           {filterStatus === "사용 가능" && (<>
-              {(["전체", "보유중", "판매중"] as const).map((f) => (<Badge key={f} variant={subFilter === f ? "default" : "outline"} className="cursor-pointer px-3 py-1" onClick={() => setSubFilter(f)}>{f}</Badge>))}
+              <Badge variant={subFilter === "전체" ? "default" : "outline"} className="cursor-pointer px-3 py-1" onClick={() => setSubFilter("전체")}>전체</Badge>
             </>)}
           {filterStatus === "완료/만료" && (<>
               {(["전체", "사용완료", "판매완료", "기한만료"] as const).map((f) => (<Badge key={f} variant={subFilter === f ? "default" : "outline"} className="cursor-pointer px-3 py-1" onClick={() => setSubFilter(f)}>{f}</Badge>))}
@@ -298,17 +252,6 @@ const MyGifticons = () => {
                   <p className="text-xs text-muted-foreground">
                     ~{new Date(g.expiry_date).toLocaleDateString("ko-KR")}
                   </p>
-                  {filterStatus === "사용 가능" && g.status === "사용가능" && (<Button variant={g.is_selling ? "outline" : "default"} size="sm" className={`w-full mt-2 ${g.is_selling ? "text-primary border-primary hover:bg-primary/10" : ""}`} onClick={(e) => {
-                    e.stopPropagation();
-                    if (g.is_selling) {
-                        cancelSellMutation.mutate(g.id);
-                    }
-                    else {
-                        handleSellClick(g);
-                    }
-                }} disabled={!isLoggedIn || g.status === "판매완료"}>
-                      {g.is_selling ? "판매중" : "판매하기"}
-                    </Button>)}
                   {filterStatus === "완료/만료" && (<>
                       {g.status === "판매완료" ? (<div className="text-xs text-muted-foreground text-center mt-2">판매 완료된 기프티콘입니다</div>) : (<Button variant="outline" size="sm" className="w-full mt-2" onClick={(e) => {
                         e.stopPropagation();
@@ -322,39 +265,6 @@ const MyGifticons = () => {
               </Card>)))}
         </div>
       </div>
-
-      <Link to="/sell">
-        <Button size="icon" className="fixed bottom-40 right-6 h-14 w-14 rounded-full shadow-lg z-40 bg-background border-2 border-primary hover:bg-primary/10">
-          <Plus className="h-6 w-6 text-primary"/>
-        </Button>
-      </Link>
-
-      {/* 판매 가격 입력 모달 */}
-      <Dialog open={isSellDialogOpen} onOpenChange={setIsSellDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>판매 가격 설정</DialogTitle>
-            <DialogDescription>
-              판매할 가격을 입력해주세요. (최대 {sellingGifticon?.original_price.toLocaleString()}원)
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="salePrice">판매 가격 (원)</Label>
-              <Input id="salePrice" type="text" placeholder="예: 8000" value={salePrice} onChange={(e) => setSalePrice(e.target.value.replace(/[^0-9]/g, ""))} onBlur={(e) => {
-            const n = parseInt(e.target.value.replace(/,/g, ""));
-            if (!isNaN(n))
-                setSalePrice(n.toLocaleString());
-        }}/>
-              {sellingGifticon && (<div className="text-sm text-muted-foreground">원가: {sellingGifticon.original_price.toLocaleString()}원</div>)}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsSellDialogOpen(false); setSellingGifticon(null); setSalePrice(""); }}>취소</Button>
-            <Button onClick={handleSellConfirm} disabled={sellMutation.isPending}>판매 등록</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* 복구 확인 모달 */}
       <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>

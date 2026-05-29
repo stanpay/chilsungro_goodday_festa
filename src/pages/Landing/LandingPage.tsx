@@ -7,7 +7,7 @@ const LandingPage = () => {
   
   // 현재 사이트 URL (iframe용)
   const siteUrl = window.location.origin;
-  const tutorialUrl = `${siteUrl}/tutorial`;
+  const demoUrl = `${siteUrl}/main`;
 
   const handleDownload = () => {
     if (appDownloadLink && appDownloadLink !== "#") {
@@ -25,14 +25,14 @@ const LandingPage = () => {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center animate-fade-in">
             <h1 className="text-4xl md:text-6xl font-bold mb-6 text-foreground">
-              할인부터 적립, 결제까지<br />
+              할인부터 적립까지<br />
               한번에
             </h1>
             <p className="text-2xl md:text-3xl font-semibold mb-4 text-primary">
               AI 개인화 할인 비서 stan
             </p>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-              기프티콘을 넘어 할인, 적립, 결제까지 원스톱 솔루션
+              기프티콘을 넘어 할인·적립까지 원스톱 솔루션
             </p>
             <Button
               onClick={handleDownload}
@@ -177,7 +177,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* 체험 섹션 - 튜토리얼 iframe */}
+      {/* 체험 섹션 - 앱 미리보기 iframe */}
       <section className="py-16 md:py-24 bg-card">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
@@ -190,9 +190,9 @@ const LandingPage = () => {
             <div className="bg-background rounded-2xl border border-border overflow-hidden shadow-xl">
               <div className="aspect-video w-full">
                 <iframe
-                  src={tutorialUrl}
+                  src={demoUrl}
                   className="w-full h-full border-0"
-                  title="Stan 튜토리얼 체험"
+                  title="Stan 앱 미리보기"
                   allow="geolocation"
                   sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
                 />
@@ -232,15 +232,15 @@ const LandingPage = () => {
                 <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
                   <CreditCard className="w-8 h-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-bold mb-3">원스톱 결제</h3>
+                <h3 className="text-xl font-bold mb-3">원스톱 혜택</h3>
                 <p className="text-muted-foreground">
-                  할인, 적립, 결제까지 한 번에 처리하세요
+                  할인과 적립을 한 번에 확인하세요
                 </p>
               </div>
             </div>
             <div className="mt-12 text-center">
               <p className="text-xl md:text-2xl font-semibold text-foreground mb-4">
-                기프티콘을 넘어 할인, 적립, 결제까지 원스톱 솔루션
+                기프티콘을 넘어 할인·적립까지 원스톱 솔루션
               </p>
               <Button
                 onClick={handleDownload}
