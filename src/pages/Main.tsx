@@ -261,8 +261,9 @@ function labelRectsOverlapForCluster(a: PinLabelRect, b: PinLabelRect, zoom: num
   const overlapW = Math.min(a.right, b.right) - Math.max(a.left, b.left);
   const overlapH = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
   // minW/minH = "이만큼 이상 겹쳐야 같은 클러스터" → 값이 클수록 묶임이 어려워져 클러스터 개수↑
-  const minW = zoom >= 16 ? 18 : zoom >= 15 ? 44 : 12;
-  const minH = zoom >= 16 ? 12 : zoom >= 15 ? 22 : 8;
+  // v5 타일 기준: 줌 16≈100m, 줌 15≈300m 확대비율. 줌 15도 일반 구간과 동일 기준으로 묶는다.
+  const minW = zoom >= 16 ? 18 : 12;
+  const minH = zoom >= 16 ? 12 : 8;
   return overlapW >= minW && overlapH >= minH;
 }
 
@@ -279,10 +280,11 @@ function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number):
 }
 
 function getMaxClusterDistanceM(zoom: number): number {
-  // v5 타일 줌 15≈100m — 100m 구간만 타이트하게, 50m(16~17)은 기존 유지
+  // v5 타일 확대비율: 줌 16≈100m, 줌 15≈300m, 줌 13~14≈500m~1km.
+  // 줌이 커질수록(확대) 화면상 같은 픽셀이 더 작은 실거리를 덮으므로 묶는 최대 거리도 단조 감소.
   if (zoom >= 18) return 20;
   if (zoom >= 16) return 40;
-  if (zoom >= 15) return 4;
+  if (zoom >= 15) return 100; // 300m 확대비율 구간
   if (zoom >= 13) return 160;
   return 280;
 }
@@ -3043,11 +3045,16 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             </button>
             <input
               type="text"
+              inputMode="search"
+              enterKeyHint="search"
               placeholder={t.searchPlaceholder}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") setSearchQuery(searchInput);
+                if (e.key === "Enter") {
+                  setSearchQuery(searchInput);
+                  e.currentTarget.blur();
+                }
               }}
               className={cn(
                 "w-full h-12 pl-10 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all",
