@@ -1,12 +1,9 @@
-import { MAP_VIEW_SHEET_BOTTOM_NAV_PX } from "@/components/MapViewBottomSheet";
-
 export const CHATWOOT_BASE_URL = "http://mac.kurl.kr:3000";
 export const CHATWOOT_WEBSITE_TOKEN = "ZsvpfT9oQbiuhpDwoM6qnBYk";
 
 /** 기존 ChatSupport 버튼과 동일: bottom-[calc(4rem+30px-1.75rem)] */
 export const CHATWOOT_DEFAULT_BOTTOM = "calc(4rem + 30px - 1.75rem)";
 export const CHATWOOT_LAUNCHER_RIGHT = "1.5rem";
-const MAP_LAUNCHER_GAP_PX = 12;
 const BUBBLE_HOLDER_ID = "cw-bubble-holder";
 
 declare global {
@@ -23,38 +20,39 @@ export type ChatwootBubblePositionOptions = {
   mapSheetPanelHeight: number;
 };
 
-export const updateChatwootBubblePosition = ({
-  isMapView,
-  mapSheetPanelHeight,
-}: ChatwootBubblePositionOptions) => {
-  const root = document.documentElement;
-
-  if (!isMapView) {
-    root.style.setProperty("--chatwoot-widget-bottom", CHATWOOT_DEFAULT_BOTTOM);
-  } else {
-    const bottomPx =
-      MAP_VIEW_SHEET_BOTTOM_NAV_PX + mapSheetPanelHeight + MAP_LAUNCHER_GAP_PX;
-    root.style.setProperty("--chatwoot-widget-bottom", `${bottomPx}px`);
-  }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const updateChatwootBubblePosition = (_options: ChatwootBubblePositionOptions) => {
+  // 카드뷰·지도뷰 모두 동일한 하단 위치를 사용한다.
+  document.documentElement.style.setProperty(
+    "--chatwoot-widget-bottom",
+    CHATWOOT_DEFAULT_BOTTOM
+  );
 
   applyChatwootHolderLayout();
 };
 
 /** SDK가 top/left로 잡은 런처를 bottom/right 기준으로 통일 */
 export const applyChatwootHolderLayout = () => {
-  const holder = document.getElementById(BUBBLE_HOLDER_ID);
-  if (!holder) return;
+  const bottom =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--chatwoot-widget-bottom")
+      .trim() || CHATWOOT_DEFAULT_BOTTOM;
 
-  holder.style.setProperty("top", "auto", "important");
-  holder.style.setProperty("left", "auto", "important");
-  holder.style.setProperty("right", CHATWOOT_LAUNCHER_RIGHT, "important");
-  holder.style.setProperty(
-    "bottom",
-    getComputedStyle(document.documentElement).getPropertyValue("--chatwoot-widget-bottom").trim() ||
-      CHATWOOT_DEFAULT_BOTTOM,
-    "important"
-  );
-  holder.style.setProperty("z-index", "60", "important");
+  const positionElement = (el: HTMLElement | null) => {
+    if (!el) return;
+    el.style.setProperty("top", "auto", "important");
+    el.style.setProperty("left", "auto", "important");
+    el.style.setProperty("right", CHATWOOT_LAUNCHER_RIGHT, "important");
+    el.style.setProperty("bottom", bottom, "important");
+    el.style.setProperty("z-index", "60", "important");
+  };
+
+  positionElement(document.getElementById(BUBBLE_HOLDER_ID));
+
+  // 실제 런처 버튼은 holder와 별개로 position:fixed라서 직접 띄워야 한다.
+  document
+    .querySelectorAll<HTMLElement>(".woot-widget-bubble")
+    .forEach(positionElement);
 };
 
 const logChatwootTrace = (phase: string, extra?: Record<string, unknown>) => {

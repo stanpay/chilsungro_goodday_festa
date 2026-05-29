@@ -210,6 +210,18 @@ All colors MUST be HSL.
     bottom: var(--chatwoot-widget-bottom, calc(4rem + 30px - 1.75rem)) !important;
   }
 
+  /* 실제 런처 버튼은 holder와 별개로 position:fixed(bottom:20px)로 잡혀 있어
+     모바일에서 하단 내비게이션과 겹친다. 버튼 자체를 직접 띄운다. */
+  .woot-widget-bubble,
+  .woot-widget-bubble.woot-elements--right,
+  .woot-widget-bubble.woot-widget-bubble--close.woot-elements--right {
+    z-index: 60 !important;
+    top: auto !important;
+    left: auto !important;
+    right: 1.5rem !important;
+    bottom: var(--chatwoot-widget-bottom, calc(4rem + 30px - 1.75rem)) !important;
+  }
+
   #woot-widget-holder {
     z-index: 60 !important;
     right: 1.5rem !important;
