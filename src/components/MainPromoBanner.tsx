@@ -157,10 +157,11 @@ export default function MainPromoBanner({
     : "";
   const selectedPopupImageUrl = selectedBanner?.popupImageUrl;
   const showNaverMapDirections =
-    (typeof selectedBanner?.naverMapLat === "number" &&
+    !selectedBanner?.hideNaverMapDirections &&
+    ((typeof selectedBanner?.naverMapLat === "number" &&
       typeof selectedBanner?.naverMapLon === "number") ||
-    !!selectedBanner?.naverMapPlaceId ||
-    !!selectedBanner?.naverMapUrl;
+      !!selectedBanner?.naverMapPlaceId ||
+      !!selectedBanner?.naverMapUrl);
   const directionsAlt = NAVER_MAP_DIRECTIONS_ALT[locale];
 
   useEffect(() => {
@@ -255,44 +256,47 @@ export default function MainPromoBanner({
           if (!open) setSelectedBanner(null);
         }}
       >
-        <DialogContent className="flex h-auto max-h-[min(92dvh,920px)] w-[calc(100%-2rem)] max-w-md flex-col gap-0 overflow-y-auto rounded-2xl p-0">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md gap-0 overflow-hidden rounded-2xl p-0">
           <DialogTitle className="sr-only">{selectedBannerAlt}</DialogTitle>
           <DialogDescription className="sr-only">
             {selectedBannerAlt}
           </DialogDescription>
-          <div className="flex flex-col pt-12">
-            <div className="flex flex-col gap-3 px-4 pb-4">
-              {showNaverMapDirections ? (
-                <button
-                  type="button"
-                  className="block w-full shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  aria-label={directionsAlt}
-                  onClick={() =>
-                    openNaverMapDirections({
-                      lat: selectedBanner?.naverMapLat,
-                      lon: selectedBanner?.naverMapLon,
-                      name: getBannerText(selectedBanner?.naverMapName, locale),
-                      placeId: selectedBanner?.naverMapPlaceId,
-                      url:
-                        selectedBanner?.naverMapWebUrl ??
-                        selectedBanner?.naverMapUrl,
-                    })
-                  }
-                >
-                  <img
-                    src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
-                    alt={directionsAlt}
-                    className="w-full object-contain"
+          <div className="flex max-h-[min(92dvh,920px)] flex-col overflow-hidden">
+            <div className="h-10 shrink-0 bg-background" aria-hidden="true" />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="flex flex-col gap-3 px-4 pb-4">
+                {showNaverMapDirections ? (
+                  <button
+                    type="button"
+                    className="block w-full shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={directionsAlt}
+                    onClick={() =>
+                      openNaverMapDirections({
+                        lat: selectedBanner?.naverMapLat,
+                        lon: selectedBanner?.naverMapLon,
+                        name: getBannerText(selectedBanner?.naverMapName, locale),
+                        placeId: selectedBanner?.naverMapPlaceId,
+                        url:
+                          selectedBanner?.naverMapWebUrl ??
+                          selectedBanner?.naverMapUrl,
+                      })
+                    }
+                  >
+                    <img
+                      src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
+                      alt={directionsAlt}
+                      className="w-full object-contain"
+                    />
+                  </button>
+                ) : null}
+                {selectedPopupImageUrl ? (
+                  <ZoomablePosterImage
+                    src={selectedPopupImageUrl}
+                    alt={selectedBannerAlt}
+                    ready={popupImageReady}
                   />
-                </button>
-              ) : null}
-              {selectedPopupImageUrl ? (
-                <ZoomablePosterImage
-                  src={selectedPopupImageUrl}
-                  alt={selectedBannerAlt}
-                  ready={popupImageReady}
-                />
-              ) : null}
+                ) : null}
+              </div>
             </div>
           </div>
         </DialogContent>

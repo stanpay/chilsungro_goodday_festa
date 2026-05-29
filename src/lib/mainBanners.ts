@@ -58,11 +58,13 @@ const JEJU_TRAVELER_CENTER_COUPON_POSTER =
   "/banners/jeju-traveler-center-coupon-poster.webp";
 const CHILSEONGRO_GOOD_DAY_FESTA_POSTER =
   "/banners/chilseongro-good-day-festa-poster.webp";
+const EVENT_VENUE_MAP_POPUP = "/banners/event-venue-map-popup.jpeg";
 
 /** 메인 배너 마운트 시 팝업 이미지 선로딩용 */
 export const MAIN_BANNER_POPUP_IMAGE_URLS = [
   JEJU_TRAVELER_CENTER_COUPON_POSTER,
   CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
+  EVENT_VENUE_MAP_POPUP,
 ] as const;
 
 const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
@@ -151,6 +153,17 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
         en: "Chilseong-ro Good Day Festa",
         zh: "七星路 Good Day 庆典",
         ja: "七星路 Good Day フェスタ",
+      },
+    },
+    {
+      id: "event-venue-map",
+      imageUrl: "/banners/event-venue-map-banner.png",
+      popupImageUrl: EVENT_VENUE_MAP_POPUP,
+      imageAlt: {
+        ko: "행사장 배치도",
+        en: "Event venue layout",
+        zh: "活动场地布置图",
+        ja: "会場配置図",
       },
     },
   ];
