@@ -700,6 +700,8 @@ interface StoreData {
   const skipNextFitMapRef = useRef(false);
   /** 첫 지도 세팅: fitMapToStores 생략, applyInitialMapView로 center+zoom만 적용 */
   const skipInitialMapFitRef = useRef(true);
+  /** 지도뷰 진입 직후 검색 fit 오동작 방지 — null이면 아직 동기화 전 */
+  const prevSearchForMapFitRef = useRef<string | null>(null);
   const applyInitialMapViewRef = useRef<(() => void) | null>(null);
   const cardScrollYRef = useRef(0);
   const mapSheetPanelHeightRef = useRef(MAP_VIEW_SHEET_PEEK_HEIGHT);
@@ -2709,6 +2711,24 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
     naver.maps.Event.once(map, "idle", syncMyLocationMarker);
   }, [isMapView, currentCoords, locale]);
+
+  // 검색어 변경 시 칩·검색 필터 결과가 지도 안에 보이도록 bounds 맞춤
+  useEffect(() => {
+    if (!isMapView) {
+      prevSearchForMapFitRef.current = null;
+      return;
+    }
+    const prev = prevSearchForMapFitRef.current;
+    if (prev === searchQuery) return;
+    prevSearchForMapFitRef.current = searchQuery;
+    if (prev === null) return;
+
+    setMapFilteredStores(null);
+    setSelectedMapStoreId(null);
+    setHighlightMapSheetCard(false);
+    skipInitialMapFitRef.current = false;
+    skipNextFitMapRef.current = false;
+  }, [searchQuery, isMapView]);
 
   // storesWithCoords 변경 시 ref 업데이트 + 지도 핀 교체 (지도 재생성 없음)
   useEffect(() => {
