@@ -603,6 +603,15 @@ interface StoreData {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingSearchSubmitRef = useRef(false);
+
+  const submitSearch = (input: HTMLInputElement) => {
+    const value = input.value;
+    setSearchInput(value);
+    setSearchQuery(value);
+    input.blur();
+  };
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [benefitFilterChips, setBenefitFilterChips] = useState<Set<StoreFilterChipId>>(
     () => new Set<StoreFilterChipId>(["all", "openNow"])
@@ -2848,24 +2857,41 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           <div className="relative min-w-0 flex-1">
             <button
               type="button"
-              onClick={() => setSearchQuery(searchInput)}
+              onClick={() => {
+                const input = searchInputRef.current;
+                if (input) submitSearch(input);
+                else setSearchQuery(searchInput);
+              }}
               className="absolute left-3 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
               aria-label={t.searchPlaceholder}
             >
               <Search className="w-5 h-5" />
             </button>
             <input
+              ref={searchInputRef}
               type="text"
               inputMode="search"
               enterKeyHint="search"
               placeholder={t.searchPlaceholder}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  setSearchQuery(searchInput);
+              onCompositionEnd={(e) => {
+                const value = e.currentTarget.value;
+                setSearchInput(value);
+                if (pendingSearchSubmitRef.current) {
+                  pendingSearchSubmitRef.current = false;
+                  setSearchQuery(value);
                   e.currentTarget.blur();
                 }
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                if (e.nativeEvent.isComposing) {
+                  pendingSearchSubmitRef.current = true;
+                  return;
+                }
+                submitSearch(e.currentTarget);
               }}
               className={cn(
                 "w-full h-12 pl-10 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all",

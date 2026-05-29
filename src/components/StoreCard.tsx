@@ -256,7 +256,12 @@ const StoreCard = ({
         )}
       >
         <div className="flex flex-col">
-          <div className="relative flex h-28 items-center justify-center overflow-hidden bg-primary/10 p-4">
+          <div
+            className={cn(
+              "relative flex h-28 items-center justify-center overflow-hidden",
+              brandLogoUrl || !(photos && photos.length > 0) ? "bg-primary/10 p-4" : ""
+            )}
+          >
             {/* 비브랜드 매장: 더미 사진 배경 */}
             {!brandLogoUrl && photos && photos.length > 0 && (
               <img
@@ -266,10 +271,6 @@ const StoreCard = ({
                 className="absolute inset-0 h-full w-full object-cover"
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
               />
-            )}
-            {/* 사진 위 오버레이 */}
-            {!brandLogoUrl && photos && photos.length > 0 && (
-              <div className="absolute inset-0 bg-black/25" aria-hidden />
             )}
 
             {/* 로고 / 아이콘 */}
