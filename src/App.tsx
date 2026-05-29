@@ -7,7 +7,6 @@ import Main from "./pages/Main";
 import Location from "./pages/Location";
 import NotFound from "./pages/NotFound";
 
-import ChatSupport from "./components/ChatSupport";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import LandingPage from "./pages/Landing/LandingPage";
 import RedirectToJeju from "./pages/RedirectToJeju";
@@ -50,7 +49,6 @@ const App = () => (
           <Route path="/dev-tools-9f3k" element={<DevTools />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-        <ChatSupport />
         <PwaInstallPrompt />
         <NaverMapFallbackDialog />
       </BrowserRouter>

@@ -23,6 +23,7 @@ import MapViewBottomSheet, {
   MAP_VIEW_SHEET_BOTTOM_NAV_PX,
   MAP_VIEW_SHEET_PEEK_HEIGHT,
 } from "@/components/MapViewBottomSheet";
+import { updateChatwootBubblePosition } from "@/lib/chatwoot";
 import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
@@ -715,6 +716,10 @@ interface StoreData {
   const handleMapSheetPanelHeightChange = useCallback((height: number) => {
     if (mapSheetPanelHeightRef.current === height) return;
     mapSheetPanelHeightRef.current = height;
+    updateChatwootBubblePosition({
+      isMapView: isMapViewRef.current,
+      mapSheetPanelHeight: height,
+    });
 
     if (!selectedMapStoreIdRef.current) return;
     const map = mapInstanceRef.current;
@@ -841,6 +846,13 @@ interface StoreData {
     const y = cardScrollYRef.current;
     requestAnimationFrame(() => {
       window.scrollTo(0, y);
+    });
+  }, [isMapView]);
+
+  useEffect(() => {
+    updateChatwootBubblePosition({
+      isMapView,
+      mapSheetPanelHeight: mapSheetPanelHeightRef.current,
     });
   }, [isMapView]);
 

@@ -2,7 +2,11 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { initClarity } from "@/lib/analytics";
+import { bootChatwoot, updateChatwootBubblePosition } from "@/lib/chatwoot";
+
+bootChatwoot();
 initClarity();
+updateChatwootBubblePosition({ isMapView: false, mapSheetPanelHeight: 0 });
 createRoot(document.getElementById("root")!).render(<App />);
 document.addEventListener("dragstart", (event) => {
     const target = event.target as HTMLElement | null;

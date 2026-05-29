@@ -200,5 +200,19 @@ All colors MUST be HSL.
   a {
     -webkit-user-drag: none;
   }
+
+  /* Chatwoot 런처 — 뷰포트 우측 하단 고정 여백 */
+  #cw-bubble-holder {
+    z-index: 60 !important;
+    top: auto !important;
+    left: auto !important;
+    right: 1.5rem !important;
+    bottom: var(--chatwoot-widget-bottom, calc(4rem + 30px - 1.75rem)) !important;
+  }
+
+  #woot-widget-holder {
+    z-index: 60 !important;
+    right: 1.5rem !important;
+  }
 }
 
