@@ -2562,9 +2562,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             rebuildStoreOverlaysTimerRef.current = null;
             if (isCancelled || !mapOverlaysReadyRef.current) return;
 
-            const skipFit =
-              skipNextFitMapRef.current || skipInitialMapFitRef.current;
-            if (skipNextFitMapRef.current) {
+            const skipDueToNext = skipNextFitMapRef.current;
+            const skipDueToInitial = skipInitialMapFitRef.current;
+            const skipFit = skipDueToNext || skipDueToInitial;
+            if (skipDueToNext) {
               skipNextFitMapRef.current = false;
             }
             clusterRetryCount = 0;
@@ -2579,9 +2580,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               fitMapToStores();
               scheduleApplyClustering();
             } else {
-              // 재검색 등 지도 이동 없이 핀만 바꿀 때 idle이 안 오므로 즉시 클러스터링
+              // 재검색·검색 지우기 등: 핀만 갱신, 지도 위치는 유지
               applyClustering();
-              applyInitialMapView();
+              if (skipDueToInitial && !skipDueToNext) {
+                applyInitialMapView();
+              }
             }
           }, 100);
         };
@@ -2737,20 +2740,41 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     naver.maps.Event.once(map, "idle", syncMyLocationMarker);
   }, [isMapView, currentCoords, locale]);
 
-  // 검색어 변경 시 칩·검색 필터 결과가 지도 안에 보이도록 bounds 맞춤
+  // 검색어·지도뷰 전환 시 bounds 맞춤 (검색 지우기는 지도 위치 유지)
   useEffect(() => {
     if (!isMapView) {
       prevSearchForMapFitRef.current = null;
       return;
     }
+
     const prev = prevSearchForMapFitRef.current;
+    const trimmed = searchQuery.trim();
+
+    // 카드뷰에서 검색 후 지도뷰 진입 등
+    if (prev === null) {
+      prevSearchForMapFitRef.current = searchQuery;
+      if (trimmed) {
+        setMapFilteredStores(null);
+        setSelectedMapStoreId(null);
+        setHighlightMapSheetCard(false);
+        skipInitialMapFitRef.current = false;
+        skipNextFitMapRef.current = false;
+      }
+      return;
+    }
+
     if (prev === searchQuery) return;
     prevSearchForMapFitRef.current = searchQuery;
-    if (prev === null) return;
 
     setMapFilteredStores(null);
     setSelectedMapStoreId(null);
     setHighlightMapSheetCard(false);
+
+    if (!trimmed) {
+      skipNextFitMapRef.current = true;
+      return;
+    }
+
     skipInitialMapFitRef.current = false;
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
@@ -2947,6 +2971,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               <button
                 type="button"
                 onClick={() => {
+                  skipNextFitMapRef.current = true;
                   setSearchInput("");
                   setSearchQuery("");
                 }}
