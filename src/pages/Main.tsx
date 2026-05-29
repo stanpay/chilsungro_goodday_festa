@@ -702,6 +702,8 @@ interface StoreData {
   const skipNextFitMapRef = useRef(false);
   /** 첫 지도 세팅: fitMapToStores 생략, applyInitialMapView로 center+zoom만 적용 */
   const skipInitialMapFitRef = useRef(true);
+  /** 현재 위치로 지도 center/fitBounds — 첫 접속·위치 새로고침 때만 true */
+  const alignMapToCurrentLocationRef = useRef(true);
   /** 지도뷰 진입 직후 검색 fit 오동작 방지 — null이면 아직 동기화 전 */
   const prevSearchForMapFitRef = useRef<string | null>(null);
   const applyInitialMapViewRef = useRef<(() => void) | null>(null);
@@ -1049,6 +1051,7 @@ interface StoreData {
       localStorage.removeItem("isManualLocation");
       setIsManualLocation(false);
       setCurrentLocation(displayAddress);
+      alignMapToCurrentLocationRef.current = true;
       setCurrentCoords({ latitude, longitude });
       setIsLoadingLocation(false);
 
@@ -1114,6 +1117,9 @@ interface StoreData {
     setIsManualLocation(false);
     setCurrentLocation(displayAddress);
     skipNextFitMapRef.current = options?.skipMapFit === true;
+    if (options?.skipMapFit !== true) {
+      alignMapToCurrentLocationRef.current = true;
+    }
     setCurrentCoords({ latitude, longitude });
     setMapFilteredStores(null);
 
@@ -1196,6 +1202,7 @@ interface StoreData {
       localStorage.removeItem("isManualLocation");
       setIsManualLocation(false);
       setCurrentLocation(displayAddress);
+      alignMapToCurrentLocationRef.current = true;
       setCurrentCoords({ latitude, longitude });
       setIsLoadingLocation(false);
       await fetchNearbyStores(latitude, longitude);
@@ -1968,9 +1975,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           JEJU_DOWNTOWN_COORDS.longitude
         );
         const coords = currentCoordsRef.current;
-        const initialCenter = coords
-          ? new naver.maps.LatLng(coords.latitude, coords.longitude)
-          : jejuDowntownCenter;
+        const initialCenter =
+          alignMapToCurrentLocationRef.current && coords
+            ? new naver.maps.LatLng(coords.latitude, coords.longitude)
+            : jejuDowntownCenter;
 
         const map = new naver.maps.Map(mapContainerRef.current, {
           center: initialCenter,
@@ -1984,16 +1992,18 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
         const applyInitialMapView = () => {
           if (isCancelled || !isMapViewRef.current || !skipInitialMapFitRef.current) return;
-          const center = currentCoordsRef.current
-            ? new naver.maps.LatLng(
-                currentCoordsRef.current.latitude,
-                currentCoordsRef.current.longitude
-              )
+          const coords = currentCoordsRef.current;
+          const alignToCurrent = alignMapToCurrentLocationRef.current && coords;
+          const center = alignToCurrent
+            ? new naver.maps.LatLng(coords.latitude, coords.longitude)
             : jejuDowntownCenter;
           try {
             map.setCenter(center);
             map.setZoom(MAP_INITIAL_ZOOM);
           } catch {}
+          if (alignToCurrent) {
+            alignMapToCurrentLocationRef.current = false;
+          }
         };
         applyInitialMapViewRef.current = applyInitialMapView;
 
@@ -2005,9 +2015,13 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           const latLngs: any[] = list.map(
             (s: StoreData) => new naver.maps.LatLng(s.lat!, s.lon!)
           );
-          // 검색 중에는 결과 매장만 맞춤 — 현재 위치를 넣으면 줌이 멀어져 결과가 안 보임
+          // 검색·칩 필터 등: 현재 위치는 첫 접속·위치 새로고침 때만 bounds에 포함
           const fitSearchResultsOnly = searchQueryRef.current.trim().length > 0;
-          if (currentCoordsRef.current && !fitSearchResultsOnly) {
+          const includeCurrentInFit =
+            alignMapToCurrentLocationRef.current &&
+            !fitSearchResultsOnly &&
+            currentCoordsRef.current;
+          if (includeCurrentInFit) {
             latLngs.push(
               new naver.maps.LatLng(
                 currentCoordsRef.current.latitude,
@@ -2023,6 +2037,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           if (latLngs.length === 1) {
             map.setCenter(latLngs[0]);
             map.setZoom(MAP_INITIAL_ZOOM);
+            if (includeCurrentInFit) {
+              alignMapToCurrentLocationRef.current = false;
+            }
             return;
           }
           const bounds = new naver.maps.LatLngBounds(latLngs[0], latLngs[0]);
@@ -2033,6 +2050,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             bottom: 220,
             left: 48,
           });
+          if (includeCurrentInFit) {
+            alignMapToCurrentLocationRef.current = false;
+          }
         };
         fitMapToStoresRef.current = fitMapToStores;
 
@@ -2659,9 +2679,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     currentCoordsRef.current = currentCoords;
   }, [currentCoords]);
 
-  // 위치 확보 후: 첫 세팅은 center+zoom만, 이후에는 fit 가능
+  // 위치 확보 후: 첫 접속·위치 새로고침 때만 현재 위치로 지도 정렬
   useEffect(() => {
     if (!currentCoords || !isMapView || !mapInstanceRef.current) return;
+    if (!alignMapToCurrentLocationRef.current) return;
     if (skipInitialMapFitRef.current) {
       applyInitialMapViewRef.current?.();
       return;
