@@ -602,6 +602,8 @@ interface StoreData {
   };
 
   const [searchQuery, setSearchQuery] = useState("");
+  const searchQueryRef = useRef(searchQuery);
+  searchQueryRef.current = searchQuery;
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingSearchSubmitRef = useRef(false);
@@ -2003,7 +2005,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           const latLngs: any[] = list.map(
             (s: StoreData) => new naver.maps.LatLng(s.lat!, s.lon!)
           );
-          if (currentCoordsRef.current) {
+          // 검색 중에는 결과 매장만 맞춤 — 현재 위치를 넣으면 줌이 멀어져 결과가 안 보임
+          const fitSearchResultsOnly = searchQueryRef.current.trim().length > 0;
+          if (currentCoordsRef.current && !fitSearchResultsOnly) {
             latLngs.push(
               new naver.maps.LatLng(
                 currentCoordsRef.current.latitude,
