@@ -264,5 +264,12 @@ All colors MUST be HSL.
   html.chatwoot-keyboard-open #cw-widget-holder.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
     border-radius: 0 0 16px 16px !important;
   }
+
+  /* iOS: layout viewport 축소 시 fixed bottom 네비가 키보드 위로 밀리는 현상 보정 (fallback) */
+  @supports (-webkit-touch-callout: none) {
+    html.chatwoot-ios-layout-compensate nav.fixed.bottom-0 {
+      transform: translate3d(0, var(--chatwoot-ios-layout-shift, 0px), 0);
+    }
+  }
 }
 

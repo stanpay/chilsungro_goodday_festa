@@ -21,6 +21,87 @@ const CHATWOOT_OVERRIDES_STYLE_ID = "stan-chatwoot-overrides";
 const CHATWOOT_BACKDROP_ID = "stan-chatwoot-backdrop";
 const CHATWOOT_FOCUS_SENTINEL_ID = "stan-chatwoot-focus-sentinel";
 const CHATWOOT_HISTORY_STATE_KEY = "stanChatwoot";
+const CHATWOOT_VIEWPORT_RESIZES =
+  "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content";
+const CHATWOOT_VIEWPORT_OVERLAYS =
+  "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=overlays-content";
+
+let savedIOSViewportContent: string | null = null;
+
+const getViewportMeta = () =>
+  document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+
+/** iOS: resizes-content면 키보드 시 layout viewport가 줄어 fixed bottom 네비가 같이 올라감 */
+const setIOSChatwootViewportMode = (panelOpen: boolean) => {
+  if (!isIOSMobileChatwoot()) return;
+  const meta = getViewportMeta();
+  if (!meta) return;
+
+  if (panelOpen) {
+    if (!savedIOSViewportContent) {
+      savedIOSViewportContent = meta.content;
+    }
+    if (meta.content.includes("interactive-widget=resizes-content")) {
+      meta.content = meta.content.replace(
+        "interactive-widget=resizes-content",
+        "interactive-widget=overlays-content"
+      );
+      return;
+    }
+    if (!meta.content.includes("interactive-widget=")) {
+      meta.content = `${meta.content}, interactive-widget=overlays-content`;
+    }
+    return;
+  }
+
+  if (savedIOSViewportContent) {
+    meta.content = savedIOSViewportContent;
+    savedIOSViewportContent = null;
+    return;
+  }
+  meta.content = CHATWOOT_VIEWPORT_RESIZES;
+};
+
+const setIOSLayoutShiftCompensation = (inset: number) => {
+  if (!isIOSMobileChatwoot()) return;
+  const html = document.documentElement;
+  if (inset > 0) {
+    html.style.setProperty("--chatwoot-ios-layout-shift", `${inset}px`);
+    html.classList.add("chatwoot-ios-layout-compensate");
+    return;
+  }
+  html.style.removeProperty("--chatwoot-ios-layout-shift");
+  html.classList.remove("chatwoot-ios-layout-compensate");
+};
+
+const getIOSPinnedViewportHeight = () =>
+  baselineViewportHeight > 0
+    ? baselineViewportHeight
+    : Math.round(window.visualViewport?.height ?? window.innerHeight);
+
+const applyIOSPinnedDocumentHeight = (pinnedHeight: number) => {
+  const html = document.documentElement;
+  const body = document.body;
+  const root = getRootElement();
+  html.style.setProperty("height", `${pinnedHeight}px`);
+  body.style.setProperty("height", `${pinnedHeight}px`);
+  if (root) {
+    root.style.setProperty("height", `${pinnedHeight}px`);
+    root.style.setProperty("min-height", `${pinnedHeight}px`);
+  }
+};
+
+const clearIOSPinnedDocumentHeight = () => {
+  const html = document.documentElement;
+  const body = document.body;
+  const root = getRootElement();
+  html.style.removeProperty("height");
+  body.style.removeProperty("height");
+  if (root) {
+    root.style.removeProperty("height");
+    root.style.removeProperty("min-height");
+  }
+};
 
 declare global {
   interface Window {
@@ -332,7 +413,11 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
     bodyScrollLockY = window.scrollY;
     html.classList.add("chatwoot-panel-open");
     html.style.setProperty("overflow", "hidden");
-    html.style.setProperty("height", "100%");
+    if (isIOSMobileChatwoot()) {
+      applyIOSPinnedDocumentHeight(getIOSPinnedViewportHeight());
+    } else {
+      html.style.setProperty("height", "100%");
+    }
     body.style.setProperty("overflow", "hidden");
     body.style.setProperty("overscroll-behavior", "none");
     if (root) {
@@ -348,7 +433,11 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
 
   html.classList.remove("chatwoot-panel-open");
   html.style.removeProperty("overflow");
-  html.style.removeProperty("height");
+  if (isIOSMobileChatwoot()) {
+    clearIOSPinnedDocumentHeight();
+  } else {
+    html.style.removeProperty("height");
+  }
   body.style.removeProperty("overflow");
   body.style.removeProperty("overscroll-behavior");
   if (root) {
@@ -583,6 +672,10 @@ const applyInterpolatedPanelLayout = (
     window.setTimeout(notifyChatwootScrollToBottom, 100);
   }
   lastScrollNotifyProgress = t;
+
+  if (isIOSMobileChatwoot()) {
+    setIOSLayoutShiftCompensation(t > 0.02 ? getKeyboardInset() : 0);
+  }
 };
 
 const setChatwootKeyboardOpenClass = (open: boolean) => {
@@ -803,6 +896,7 @@ const openChatwootPanel = () => {
   resetBasePanelMetrics();
   resetBaselineViewportHeight();
   captureBaselineViewportHeight();
+  setIOSChatwootViewportMode(true);
   setChatwootOpenScrollLock(true);
   ensureChatwootBackdrop();
   setBackgroundTouchBlocker(true);
@@ -827,8 +921,10 @@ const closeChatwootPanel = (fromPopState = false) => {
   resetBasePanelMetrics();
   resetBaselineViewportHeight();
   lastScrollNotifyProgress = 0;
+  setIOSLayoutShiftCompensation(0);
   setChatwootKeyboardOpenClass(false);
   setChatwootOpenScrollLock(false);
+  setIOSChatwootViewportMode(false);
   hideChatwootBackdrop();
   setBackgroundTouchBlocker(false);
   syncChatwootHistoryOnClose(fromPopState);
