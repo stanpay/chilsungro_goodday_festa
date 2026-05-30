@@ -89,6 +89,17 @@ let panelLayoutRaf = 0;
 let panelViewportListenersAttached = false;
 let panelFocusListenersAttached = false;
 let keyboardLayoutPollRaf = 0;
+let lastScrollNotifyProgress = 0;
+
+type PanelRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+const lerpPanelValue = (from: number, to: number, progress: number) =>
+  Math.round(from + (to - from) * progress);
 
 const resetPanelLayoutSignature = () => {
   lastPanelLayoutSignature = "";
@@ -133,11 +144,6 @@ const getKeyboardInset = () => {
       ? Math.max(0, baselineViewportHeight - Math.round(vv.height))
       : 0;
   return Math.max(vvInset, vkInset, innerHeightDelta, vvHeightDelta);
-};
-
-const isKeyboardVisible = () => {
-  if (!isMobileChatwootLayout()) return false;
-  return getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
 };
 
 const captureBaselineViewportHeight = () => {
@@ -256,19 +262,13 @@ export const injectChatwootMobileOverrides = () => {
   style.textContent = `
 @media only screen and (max-width: ${CHATWOOT_MOBILE_BREAKPOINT_PX}px) {
   #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
-    top: 50% !important;
-    left: 50% !important;
     right: auto !important;
     bottom: auto !important;
-    transform: translate(-50%, -50%) !important;
-    width: min(calc(100vw - 2rem), ${CHATWOOT_PANEL_MAX_WIDTH_PX}px) !important;
-    height: min(72dvh, ${CHATWOOT_PANEL_MAX_HEIGHT_PX}px) !important;
-    max-height: min(72dvh, ${CHATWOOT_PANEL_MAX_HEIGHT_PX}px) !important;
-    min-height: ${CHATWOOT_PANEL_MIN_HEIGHT_PX}px !important;
     border-radius: 16px !important;
     overscroll-behavior: contain !important;
     touch-action: pan-y !important;
     transition: ${CHATWOOT_PANEL_LAYOUT_TRANSITION} !important;
+    will-change: top, left, width, height, transform;
   }
 
   #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) iframe {
@@ -278,12 +278,6 @@ export const injectChatwootMobileOverrides = () => {
   }
 
   html.chatwoot-keyboard-open #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
-    top: 0 !important;
-    left: 50% !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: translateX(-50%) !important;
-    min-height: 0 !important;
     border-radius: 0 0 16px 16px !important;
   }
 }
@@ -427,56 +421,121 @@ const notifyChatwootScrollToBottom = () => {
   );
 };
 
-const applyRestPanelLayout = (
-  holder: HTMLElement,
-  panelWidth: number,
-  panelHeight: number
-) => {
-  enablePanelLayoutTransition(holder);
-  holder.style.setProperty("top", "50%", "important");
-  holder.style.setProperty("left", "50%", "important");
-  holder.style.setProperty("right", "auto", "important");
-  holder.style.setProperty("bottom", "auto", "important");
-  holder.style.setProperty("transform", "translate(-50%, -50%)", "important");
-  holder.style.setProperty("width", `${panelWidth}px`, "important");
-  holder.style.setProperty("height", `${panelHeight}px`, "important");
-  holder.style.setProperty("max-height", `${panelHeight}px`, "important");
-  holder.style.setProperty("min-height", `${CHATWOOT_PANEL_MIN_HEIGHT_PX}px`, "important");
+const getRestPanelRect = (panelWidth: number, panelHeight: number): PanelRect => {
+  const layoutWidth = window.innerWidth;
+  const layoutHeight = baselineViewportHeight || window.innerHeight;
+  return {
+    top: Math.round((layoutHeight - panelHeight) / 2),
+    left: Math.round((layoutWidth - panelWidth) / 2),
+    width: panelWidth,
+    height: panelHeight,
+  };
 };
 
-const applyKeyboardPanelLayout = (holder: HTMLElement, panelWidth: number) => {
+const getKeyboardPanelRect = (panelWidth: number): PanelRect => {
   const vv = window.visualViewport;
   const offsetTop = Math.round(vv?.offsetTop ?? 0);
   const visibleWidth = Math.round(vv?.width ?? window.innerWidth);
   const offsetLeft = Math.round(vv?.offsetLeft ?? 0);
   const fittedWidth = Math.min(panelWidth, Math.max(280, visibleWidth - 32));
-  const panelLeft = offsetLeft + Math.max(0, (visibleWidth - fittedWidth) / 2);
   const fittedHeight = Math.max(
     200,
     Math.round(vv?.height ?? window.innerHeight)
   );
 
-  enablePanelLayoutTransition(holder);
-  // #root 고정 + visualViewport offsetTop — iOS에서 배경·네비가 밀리지 않음
-  holder.style.setProperty("top", `${offsetTop}px`, "important");
-  holder.style.setProperty("left", `${Math.round(panelLeft)}px`, "important");
+  return {
+    top: offsetTop,
+    left: Math.round(offsetLeft + Math.max(0, (visibleWidth - fittedWidth) / 2)),
+    width: Math.round(fittedWidth),
+    height: fittedHeight,
+  };
+};
+
+const getKeyboardLayoutProgress = () => {
+  const inset = getKeyboardInset();
+  if (inset <= 0) return 0;
+
+  const referenceInset = Math.max(
+    CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX * 2,
+    Math.round((baselineViewportHeight || window.innerHeight) * 0.35)
+  );
+  return Math.min(1, inset / referenceInset);
+};
+
+const applyPanelRect = (
+  holder: HTMLElement,
+  rect: PanelRect,
+  options: { minHeight?: number; animate?: boolean } = {}
+) => {
+  const { minHeight, animate = true } = options;
+  if (animate) {
+    enablePanelLayoutTransition(holder);
+  } else {
+    holder.style.setProperty("transition", "none", "important");
+  }
+
+  holder.style.setProperty("top", `${rect.top}px`, "important");
+  holder.style.setProperty("left", `${rect.left}px`, "important");
   holder.style.setProperty("right", "auto", "important");
   holder.style.setProperty("bottom", "auto", "important");
   holder.style.setProperty("transform", "none", "important");
-  holder.style.setProperty("width", `${Math.round(fittedWidth)}px`, "important");
-  holder.style.setProperty("height", `${fittedHeight}px`, "important");
-  holder.style.setProperty("max-height", `${fittedHeight}px`, "important");
-  holder.style.removeProperty("min-height");
+  holder.style.setProperty("width", `${rect.width}px`, "important");
+  holder.style.setProperty("height", `${rect.height}px`, "important");
+  holder.style.setProperty("max-height", `${rect.height}px`, "important");
+
+  if (minHeight !== undefined) {
+    holder.style.setProperty("min-height", `${minHeight}px`, "important");
+  } else {
+    holder.style.removeProperty("min-height");
+  }
+
+  if (!animate) {
+    requestAnimationFrame(() => {
+      enablePanelLayoutTransition(holder);
+    });
+  }
+};
+
+const applyInterpolatedPanelLayout = (
+  holder: HTMLElement,
+  panelWidth: number,
+  panelHeight: number,
+  progress: number,
+  options: { animate?: boolean } = {}
+) => {
+  const rest = getRestPanelRect(panelWidth, panelHeight);
+  const keyboard = getKeyboardPanelRect(panelWidth);
+  const t = Math.min(1, Math.max(0, progress));
+  const rect: PanelRect = {
+    top: lerpPanelValue(rest.top, keyboard.top, t),
+    left: lerpPanelValue(rest.left, keyboard.left, t),
+    width: lerpPanelValue(rest.width, keyboard.width, t),
+    height: lerpPanelValue(rest.height, keyboard.height, t),
+  };
+
+  applyPanelRect(holder, rect, {
+    animate:
+      options.animate !== false && (t < 0.05 || t > 0.95),
+    minHeight: t < 0.05 ? CHATWOOT_PANEL_MIN_HEIGHT_PX : undefined,
+  });
+  setChatwootKeyboardOpenClass(t > 0.85);
+
+  if (t > 0.45 && lastScrollNotifyProgress <= 0.45) {
+    notifyChatwootScrollToBottom();
+    window.setTimeout(notifyChatwootScrollToBottom, 100);
+  }
+  lastScrollNotifyProgress = t;
 };
 
 const setChatwootKeyboardOpenClass = (open: boolean) => {
   document.documentElement.classList.toggle("chatwoot-keyboard-open", open);
 };
 
-/** 모바일: 기본은 중앙 팝업, 키보드 시 visualViewport 최상단 + 높이 축소 */
-export const applyChatwootPanelLayout = () => {
+/** 모바일: rest↔keyboard 사이를 inset 비율로 보간 — 축소·확대 모두 px 좌표계 */
+export const applyChatwootPanelLayout = (options: { animate?: boolean } = {}) => {
   if (!isMobileChatwootLayout()) {
     setChatwootKeyboardOpenClass(false);
+    lastScrollNotifyProgress = 0;
     const holder = getChatwootWidgetHolder();
     if (holder) resetChatwootPanelInlineLayout(holder);
     return;
@@ -488,23 +547,13 @@ export const applyChatwootPanelLayout = () => {
   }
 
   const { panelWidth, panelHeight } = ensureBasePanelMetrics();
-  const keyboardOpen = isKeyboardVisible();
-  const signature = keyboardOpen
-    ? `kb|${getKeyboardInset()}|${panelWidth}|${Math.round(window.visualViewport?.height ?? 0)}|${Math.round(window.visualViewport?.offsetTop ?? 0)}`
-    : `rest|${panelWidth}|${panelHeight}`;
+  const progress = getKeyboardLayoutProgress();
+  const signature = `p|${progress.toFixed(3)}|${panelWidth}|${panelHeight}|${Math.round(window.visualViewport?.height ?? 0)}|${Math.round(window.visualViewport?.offsetTop ?? 0)}`;
 
   if (signature === lastPanelLayoutSignature) return;
   lastPanelLayoutSignature = signature;
 
-  setChatwootKeyboardOpenClass(keyboardOpen);
-
-  if (keyboardOpen) {
-    applyKeyboardPanelLayout(holder, panelWidth);
-    window.setTimeout(notifyChatwootScrollToBottom, 0);
-    window.setTimeout(notifyChatwootScrollToBottom, 100);
-  } else {
-    applyRestPanelLayout(holder, panelWidth, panelHeight);
-  }
+  applyInterpolatedPanelLayout(holder, panelWidth, panelHeight, progress, options);
 };
 
 const onChatwootViewportChange = () => {
@@ -534,7 +583,7 @@ const startKeyboardLayoutPoll = () => {
     resetPanelLayoutSignature();
     applyChatwootPanelLayout();
     frames += 1;
-    if (frames < 12) {
+    if (frames < 18) {
       keyboardLayoutPollRaf = requestAnimationFrame(poll);
     } else {
       keyboardLayoutPollRaf = 0;
@@ -700,7 +749,13 @@ const openChatwootPanel = () => {
   pushChatwootHistory();
   attachPanelViewportListeners();
   attachPanelFocusListeners();
-  applyChatwootPanelLayout();
+  lastScrollNotifyProgress = 0;
+  resetPanelLayoutSignature();
+  const holder = getChatwootWidgetHolder();
+  if (holder) {
+    const { panelWidth, panelHeight } = ensureBasePanelMetrics();
+    applyInterpolatedPanelLayout(holder, panelWidth, panelHeight, 0, { animate: false });
+  }
   scheduleDismissChatwootKeyboard();
 };
 
@@ -711,6 +766,7 @@ const closeChatwootPanel = (fromPopState = false) => {
   resetPanelLayoutSignature();
   resetBasePanelMetrics();
   resetBaselineViewportHeight();
+  lastScrollNotifyProgress = 0;
   setChatwootKeyboardOpenClass(false);
   setChatwootOpenScrollLock(false);
   hideChatwootBackdrop();
