@@ -1,4 +1,7 @@
-export const CHATWOOT_BASE_URL = "http://mac.kurl.kr:3000";
+// 3001 = Chatwoot HTTPS 포트(유효한 Let's Encrypt 인증서). 3000은 HTTP 전용이라
+// HTTPS 페이지에서 Mixed Content로 차단되므로 기본값은 HTTPS를 사용한다.
+export const CHATWOOT_BASE_URL =
+  import.meta.env.VITE_CHATWOOT_BASE_URL ?? "https://mac.kurl.kr:3001";
 export const CHATWOOT_WEBSITE_TOKEN = "ZsvpfT9oQbiuhpDwoM6qnBYk";
 
 /** 기존 ChatSupport 버튼과 동일: bottom-[calc(4rem+30px-1.75rem)] */
@@ -166,6 +169,16 @@ export const bootChatwoot = () => {
     performance.mark("chatwoot:boot-start");
   } catch {
     /* ignore */
+  }
+
+  if (
+    window.location.protocol === "https:" &&
+    CHATWOOT_BASE_URL.startsWith("http://")
+  ) {
+    console.error(
+      `[Chatwoot] Mixed Content — HTTPS 페이지에서 HTTP 위젯(${CHATWOOT_BASE_URL})은 브라우저가 차단합니다. ` +
+        `VITE_CHATWOOT_BASE_URL을 HTTPS 주소로 설정하세요.`
+    );
   }
 
   window.chatwootSettings = { position: "right", type: "standard", launcherTitle: "" };
