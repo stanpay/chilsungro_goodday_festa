@@ -100,10 +100,17 @@ const syncIOSBackgroundCompensation = () => {
     setIOSLayoutShiftCompensation(0);
     return;
   }
-  const shift = getIOSBackgroundLayoutShift();
-  setIOSLayoutShiftCompensation(
-    getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX ? shift : 0
-  );
+  // 키보드 애니메이션 중 transform 토글은 배경 번쩍임 유발 → 거의 다 열린 뒤에만 보정
+  const inset = getKeyboardInset();
+  if (inset <= CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX) {
+    setIOSLayoutShiftCompensation(0);
+    return;
+  }
+  const progress = getKeyboardLayoutProgress();
+  if (progress < 0.92) {
+    return;
+  }
+  setIOSLayoutShiftCompensation(getIOSBackgroundLayoutShift());
 };
 
 const getIOSPinnedViewportHeight = () =>
@@ -408,6 +415,8 @@ export const injectChatwootMobileOverrides = () => {
     touch-action: pan-y !important;
     transition: ${CHATWOOT_PANEL_LAYOUT_TRANSITION} !important;
     will-change: top, left, width, height, transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
 
   #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) iframe {
@@ -676,63 +685,26 @@ const applyInterpolatedPanelLayout = (
   const rest = getRestPanelRect(panelWidth, panelHeight);
   const keyboard = getKeyboardPanelRect(panelWidth, panelHeight);
   const t = Math.min(1, Math.max(0, progress));
-  const keyboardActive = getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
-
-  if (isIOSMobileChatwoot()) {
-    syncIOSBackgroundCompensation();
-
-    if (!keyboardActive && t < 0.05) {
-      applyPanelRect(holder, rest, {
-        animate: false,
-        minHeight: CHATWOOT_PANEL_MIN_HEIGHT_PX,
-      });
-      setChatwootKeyboardOpenClass(false);
-      lastScrollNotifyProgress = t;
-      return;
-    }
-
-    const vv = window.visualViewport;
-    const iosTop = getIOSKeyboardPanelTop();
-    const fittedWidth = keyboard.width;
-    const fittedHeight = keyboard.height;
-    const openBlend = Math.min(1, t / 0.12);
-    const closeBlend = t > 0.88 ? Math.min(1, (1 - t) / 0.12) : 0;
-    const blend = closeBlend > 0 ? closeBlend : openBlend;
-
-    const rect: PanelRect = {
-      top: blend < 1 ? lerpPanelValue(rest.top, iosTop, blend) : iosTop,
-      left: blend < 1 ? lerpPanelValue(rest.left, keyboard.left, blend) : keyboard.left,
-      width: blend < 1 ? lerpPanelValue(rest.width, fittedWidth, blend) : fittedWidth,
-      height: blend < 1 ? lerpPanelValue(rest.height, fittedHeight, blend) : fittedHeight,
-    };
-
-    applyPanelRect(holder, rect, { animate: false });
-    setChatwootKeyboardOpenClass(keyboardActive || t > 0.85);
-
-    if (t > 0.45 && lastScrollNotifyProgress <= 0.45) {
-      notifyChatwootScrollToBottom();
-      window.setTimeout(notifyChatwootScrollToBottom, 100);
-    }
-    lastScrollNotifyProgress = t;
-    return;
-  }
-
-  let top = lerpPanelValue(rest.top, keyboard.top, t);
 
   const rect: PanelRect = {
-    top,
+    top: lerpPanelValue(rest.top, keyboard.top, t),
     left: lerpPanelValue(rest.left, keyboard.left, t),
     width: lerpPanelValue(rest.width, keyboard.width, t),
     height: lerpPanelValue(rest.height, keyboard.height, t),
   };
 
+  const shouldAnimate =
+    options.animate !== false && (t < 0.05 || t > 0.95);
+
   applyPanelRect(holder, rect, {
-    animate:
-      options.animate !== false &&
-      (t < 0.05 || t > 0.95),
+    animate: shouldAnimate,
     minHeight: t < 0.05 ? CHATWOOT_PANEL_MIN_HEIGHT_PX : undefined,
   });
   setChatwootKeyboardOpenClass(t > 0.85);
+
+  if (isIOSMobileChatwoot()) {
+    syncIOSBackgroundCompensation();
+  }
 
   if (t > 0.45 && lastScrollNotifyProgress <= 0.45) {
     notifyChatwootScrollToBottom();
@@ -772,9 +744,6 @@ export const applyChatwootPanelLayout = (options: { animate?: boolean } = {}) =>
 
 const onChatwootViewportChange = () => {
   if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
-  if (isIOSMobileChatwoot()) {
-    syncIOSBackgroundCompensation();
-  }
   const keyboardActive = getKeyboardLayoutProgress() > 0.02;
   if (isBodyScrollLocked && !(isIOSMobileChatwoot() && keyboardActive)) {
     window.scrollTo(0, bodyScrollLockY);

@@ -247,6 +247,8 @@ All colors MUST be HSL.
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
 
   #stan-chatwoot-backdrop.is-visible {
@@ -270,13 +272,14 @@ All colors MUST be HSL.
   }
 
   @supports (-webkit-touch-callout: none) {
-    html.chatwoot-ios-layout-compensate nav.fixed.bottom-0 {
-      transform: translate3d(0, var(--chatwoot-ios-layout-shift, 0px), 0) !important;
+    html.chatwoot-ios-panel-open nav.fixed.bottom-0 {
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transition: opacity 0.18s ease !important;
     }
 
-    html.chatwoot-keyboard-open nav.fixed.bottom-0 {
-      visibility: hidden !important;
-      pointer-events: none !important;
+    html.chatwoot-ios-layout-compensate nav.fixed.bottom-0 {
+      transform: translate3d(0, var(--chatwoot-ios-layout-shift, 0px), 0) !important;
     }
   }
 }
