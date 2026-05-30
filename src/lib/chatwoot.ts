@@ -8,6 +8,15 @@ export const CHATWOOT_WEBSITE_TOKEN = "ZsvpfT9oQbiuhpDwoM6qnBYk";
 export const CHATWOOT_DEFAULT_BOTTOM = "calc(4rem + 30px - 1.75rem)";
 export const CHATWOOT_LAUNCHER_RIGHT = "1.5rem";
 const BUBBLE_HOLDER_ID = "cw-bubble-holder";
+const WIDGET_HOLDER_ID = "cw-widget-holder";
+const CHATWOOT_MOBILE_BREAKPOINT_PX = 667;
+const CHATWOOT_BOTTOM_NAV_PX = 64;
+const CHATWOOT_PANEL_GAP_PX = 12;
+const CHATWOOT_PANEL_TOP_MIN_PX = 48;
+const CHATWOOT_PANEL_MAX_HEIGHT_PX = 560;
+const CHATWOOT_PANEL_MIN_HEIGHT_PX = 280;
+const CHATWOOT_PANEL_MAX_WIDTH_PX = 400;
+const CHATWOOT_OVERRIDES_STYLE_ID = "stan-chatwoot-overrides";
 
 declare global {
   interface Window {
@@ -56,6 +65,147 @@ export const applyChatwootHolderLayout = () => {
   document
     .querySelectorAll<HTMLElement>(".woot-widget-bubble")
     .forEach(positionElement);
+
+  applyChatwootPanelLayout();
+};
+
+const isMobileChatwootLayout = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia(`(max-width: ${CHATWOOT_MOBILE_BREAKPOINT_PX}px)`).matches;
+
+const getChatwootWidgetHolder = () =>
+  document.getElementById(WIDGET_HOLDER_ID) as HTMLElement | null;
+
+const isChatwootPanelOpen = () => {
+  const holder = getChatwootWidgetHolder();
+  return Boolean(holder && !holder.classList.contains("woot--hide"));
+};
+
+/** SDK가 주입하는 모바일 전체화면 CSS보다 뒤에 덮어쓰기 */
+export const injectChatwootMobileOverrides = () => {
+  document.getElementById(CHATWOOT_OVERRIDES_STYLE_ID)?.remove();
+
+  const style = document.createElement("style");
+  style.id = CHATWOOT_OVERRIDES_STYLE_ID;
+  style.textContent = `
+@media only screen and (max-width: ${CHATWOOT_MOBILE_BREAKPOINT_PX}px) {
+  #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
+    top: auto !important;
+    left: auto !important;
+    right: ${CHATWOOT_LAUNCHER_RIGHT} !important;
+    width: min(calc(100vw - 2rem), ${CHATWOOT_PANEL_MAX_WIDTH_PX}px) !important;
+    height: var(--chatwoot-panel-height, min(72dvh, ${CHATWOOT_PANEL_MAX_HEIGHT_PX}px)) !important;
+    max-height: var(--chatwoot-panel-height, min(72dvh, ${CHATWOOT_PANEL_MAX_HEIGHT_PX}px)) !important;
+    min-height: ${CHATWOOT_PANEL_MIN_HEIGHT_PX}px !important;
+    border-radius: 16px !important;
+  }
+
+  #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) iframe {
+    min-height: 0 !important;
+    max-height: 100% !important;
+    height: 100% !important;
+  }
+}
+`;
+
+  const sdkStyles = document.getElementById("cw-widget-styles");
+  if (sdkStyles?.parentNode) {
+    sdkStyles.parentNode.insertBefore(style, sdkStyles.nextSibling);
+  } else {
+    document.head.appendChild(style);
+  }
+};
+
+let bodyScrollLockY = 0;
+
+const setChatwootOpenScrollLock = (locked: boolean) => {
+  const html = document.documentElement;
+  const body = document.body;
+
+  if (locked) {
+    bodyScrollLockY = window.scrollY;
+    html.classList.add("chatwoot-panel-open");
+    body.style.setProperty("position", "fixed");
+    body.style.setProperty("top", `-${bodyScrollLockY}px`);
+    body.style.setProperty("left", "0");
+    body.style.setProperty("right", "0");
+    body.style.setProperty("width", "100%");
+    return;
+  }
+
+  html.classList.remove("chatwoot-panel-open");
+  body.style.removeProperty("position");
+  body.style.removeProperty("top");
+  body.style.removeProperty("left");
+  body.style.removeProperty("right");
+  body.style.removeProperty("width");
+  window.scrollTo(0, bodyScrollLockY);
+};
+
+const resetChatwootPanelInlineLayout = (holder: HTMLElement) => {
+  holder.style.removeProperty("top");
+  holder.style.removeProperty("right");
+  holder.style.removeProperty("bottom");
+  holder.style.removeProperty("left");
+  holder.style.removeProperty("width");
+  holder.style.removeProperty("height");
+  holder.style.removeProperty("max-height");
+  holder.style.removeProperty("transform");
+};
+
+/** 모바일: visualViewport 기준 팝업 위치·높이 — 키보드 시 페이지가 아닌 패널 내부만 줄어듦 */
+export const applyChatwootPanelLayout = () => {
+  const holder = getChatwootWidgetHolder();
+
+  if (!isMobileChatwootLayout()) {
+    if (holder) resetChatwootPanelInlineLayout(holder);
+    document.documentElement.style.removeProperty("--chatwoot-panel-height");
+    return;
+  }
+
+  if (!holder || holder.classList.contains("woot--hide") || holder.classList.contains("has-unread-view")) {
+    if (!isChatwootPanelOpen()) setChatwootOpenScrollLock(false);
+    return;
+  }
+
+  setChatwootOpenScrollLock(true);
+
+  const vv = window.visualViewport;
+  const viewportHeight = vv?.height ?? window.innerHeight;
+  const offsetTop = vv?.offsetTop ?? 0;
+  const offsetLeft = vv?.offsetLeft ?? 0;
+  const viewportWidth = vv?.width ?? window.innerWidth;
+  const bottomReserve = CHATWOOT_BOTTOM_NAV_PX + CHATWOOT_PANEL_GAP_PX;
+  const availableHeight = viewportHeight - CHATWOOT_PANEL_TOP_MIN_PX - bottomReserve;
+  const panelHeight = Math.min(
+    CHATWOOT_PANEL_MAX_HEIGHT_PX,
+    Math.max(
+      CHATWOOT_PANEL_MIN_HEIGHT_PX,
+      Math.round(Math.min(availableHeight, viewportHeight * 0.72))
+    )
+  );
+  const panelWidth = Math.min(
+    CHATWOOT_PANEL_MAX_WIDTH_PX,
+    Math.max(280, Math.round(viewportWidth - 32))
+  );
+  const panelTop = Math.max(
+    offsetTop + CHATWOOT_PANEL_TOP_MIN_PX,
+    offsetTop + viewportHeight - panelHeight - bottomReserve
+  );
+  const panelRight = Math.max(
+    16,
+    window.innerWidth - (offsetLeft + viewportWidth) + 16
+  );
+
+  document.documentElement.style.setProperty("--chatwoot-panel-height", `${panelHeight}px`);
+  holder.style.setProperty("top", `${Math.round(panelTop)}px`, "important");
+  holder.style.setProperty("right", `${Math.round(panelRight)}px`, "important");
+  holder.style.setProperty("bottom", "auto", "important");
+  holder.style.setProperty("left", "auto", "important");
+  holder.style.setProperty("width", `${panelWidth}px`, "important");
+  holder.style.setProperty("height", `${panelHeight}px`, "important");
+  holder.style.setProperty("max-height", `${panelHeight}px`, "important");
+  holder.style.setProperty("transform", "none", "important");
 };
 
 const logChatwootTrace = (phase: string, extra?: Record<string, unknown>) => {
@@ -140,6 +290,53 @@ export const attachChatwootDomTracer = () => {
 };
 
 let mountObserverStarted = false;
+let panelStateWatcherStarted = false;
+
+const onChatwootViewportChange = () => {
+  applyChatwootHolderLayout();
+};
+
+export const watchChatwootPanelState = () => {
+  if (panelStateWatcherStarted) return;
+  panelStateWatcherStarted = true;
+
+  const syncPanelState = () => {
+    injectChatwootMobileOverrides();
+    applyChatwootPanelLayout();
+  };
+
+  window.addEventListener("chatwoot:opened", syncPanelState);
+  window.addEventListener("chatwoot:closed", () => {
+    setChatwootOpenScrollLock(false);
+    const holder = getChatwootWidgetHolder();
+    if (holder) resetChatwootPanelInlineLayout(holder);
+    document.documentElement.style.removeProperty("--chatwoot-panel-height");
+  });
+
+  window.visualViewport?.addEventListener("resize", onChatwootViewportChange);
+  window.visualViewport?.addEventListener("scroll", onChatwootViewportChange);
+  window.addEventListener("resize", onChatwootViewportChange);
+
+  let holderObserver: MutationObserver | null = null;
+
+  const watchWidgetHolderClasses = () => {
+    const holder = getChatwootWidgetHolder();
+    if (!holder || holderObserver) return;
+
+    holderObserver = new MutationObserver(() => syncPanelState());
+    holderObserver.observe(holder, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  };
+
+  const mountObserver = new MutationObserver(() => {
+    watchWidgetHolderClasses();
+    if (getChatwootWidgetHolder()) syncPanelState();
+  });
+  mountObserver.observe(document.body, { childList: true, subtree: true });
+  watchWidgetHolderClasses();
+};
 
 export const watchChatwootBubbleMount = () => {
   if (mountObserverStarted) return;
@@ -158,7 +355,8 @@ export const watchChatwootBubbleMount = () => {
   observer.observe(document.body, { childList: true, subtree: true });
 
   window.addEventListener("resize", onMount);
-  window.visualViewport?.addEventListener("resize", onMount);
+  window.visualViewport?.addEventListener("resize", onChatwootViewportChange);
+  window.visualViewport?.addEventListener("scroll", onChatwootViewportChange);
 };
 
 export const bootChatwoot = () => {
@@ -183,7 +381,9 @@ export const bootChatwoot = () => {
 
   window.chatwootSettings = { position: "right", type: "standard", launcherTitle: "" };
   attachChatwootDomTracer();
+  injectChatwootMobileOverrides();
   watchChatwootBubbleMount();
+  watchChatwootPanelState();
 
   const script = document.createElement("script");
   script.src = `${CHATWOOT_BASE_URL}/packs/js/sdk.js`;
@@ -209,6 +409,7 @@ export const bootChatwoot = () => {
     }
     logChatwootTrace("chatwootSDK.run-called");
 
+    injectChatwootMobileOverrides();
     // run() 직후엔 아직 DOM에 없을 수 있음 — 짧게 재시도
     window.setTimeout(() => applyChatwootHolderLayout(), 0);
     window.setTimeout(() => applyChatwootHolderLayout(), 500);

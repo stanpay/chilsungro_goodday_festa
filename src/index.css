@@ -222,9 +222,24 @@ All colors MUST be HSL.
     bottom: var(--chatwoot-widget-bottom, calc(4rem + 30px - 1.75rem)) !important;
   }
 
-  #woot-widget-holder {
+  /* Chatwoot SDK id는 cw-widget-holder — 모바일 팝업 크기·위치는 chatwoot.ts에서 visualViewport 기준으로 조정 */
+  #cw-widget-holder.woot-widget-holder {
     z-index: 60 !important;
-    right: 1.5rem !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16) !important;
+    overflow: hidden !important;
+  }
+
+  #cw-widget-holder.woot-widget-holder iframe {
+    min-height: 0 !important;
+    max-height: 100% !important;
+    height: 100% !important;
+  }
+
+  html.chatwoot-panel-open,
+  html.chatwoot-panel-open body {
+    overflow: hidden !important;
+    overscroll-behavior: none;
   }
 }
 
