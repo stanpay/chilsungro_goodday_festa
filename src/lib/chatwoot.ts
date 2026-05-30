@@ -213,6 +213,20 @@ let panelFocusListenersAttached = false;
 let keyboardLayoutPollRaf = 0;
 let lastScrollNotifyProgress = 0;
 
+// iOS: 키보드 높이가 안정될 때까지 패널을 움직이지 않고, 확정 후 한 번만 축소
+const IOS_KEYBOARD_STABLE_FRAMES = 3;
+let iosKeyboardStableSig: string | null = null;
+let iosKeyboardStableCount = 0;
+let iosKeyboardApplied = false;
+let iosKeyboardAppliedHeight = 0;
+
+const resetIOSKeyboardSettleState = () => {
+  iosKeyboardStableSig = null;
+  iosKeyboardStableCount = 0;
+  iosKeyboardApplied = false;
+  iosKeyboardAppliedHeight = 0;
+};
+
 type PanelRect = {
   top: number;
   left: number;
@@ -699,25 +713,64 @@ const applyInterpolatedPanelLayout = (
   const keyboard = getKeyboardPanelRect(panelWidth, panelHeight);
   const t = Math.min(1, Math.max(0, progress));
 
-  // iOS: offsetTop 스파이크 추적이 출렁임을 만드므로 보간하지 않고
-  // rest ↔ keyboard 목표 둘 중 하나로 CSS transition을 통해 "한 번에" 이동한다.
+  // iOS: 키보드 높이는 예측 불가 + 올라오는 중 offsetTop이 출렁임 →
+  // 키보드가 멈춰 크기가 확정될 때까지 패널을 중앙에 둔 채 기다렸다가 한 번만 축소한다.
   if (isIOSMobileChatwoot()) {
+    const vv = window.visualViewport;
     const keyboardActive =
       getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
-    const target = keyboardActive ? getIOSKeyboardTargetRect(keyboard) : rest;
 
-    applyPanelRect(holder, target, {
-      animate: options.animate !== false,
-      minHeight: keyboardActive ? undefined : CHATWOOT_PANEL_MIN_HEIGHT_PX,
-    });
-    setChatwootKeyboardOpenClass(keyboardActive);
+    if (!keyboardActive) {
+      applyPanelRect(holder, rest, {
+        animate: options.animate !== false,
+        minHeight: CHATWOOT_PANEL_MIN_HEIGHT_PX,
+      });
+      setChatwootKeyboardOpenClass(false);
+      syncIOSBackgroundCompensation();
+      resetIOSKeyboardSettleState();
+      lastScrollNotifyProgress = 0;
+      return;
+    }
+
+    const vvHeight = Math.round(vv?.height ?? window.innerHeight);
+    const offsetTop = getIOSKeyboardPanelTop();
+    const sig = `${vvHeight}|${offsetTop}`;
+
+    // 이미 축소 적용됨 — 키보드 종류 변경 등 큰 변화가 아니면 고정 유지
+    if (iosKeyboardApplied) {
+      if (Math.abs(vvHeight - iosKeyboardAppliedHeight) <= 40) {
+        return;
+      }
+      iosKeyboardApplied = false;
+      iosKeyboardStableSig = null;
+      iosKeyboardStableCount = 0;
+    }
+
+    if (sig === iosKeyboardStableSig) {
+      iosKeyboardStableCount += 1;
+    } else {
+      iosKeyboardStableSig = sig;
+      iosKeyboardStableCount = 1;
+    }
+
+    // 아직 키보드가 움직이는 중 → 패널은 중앙(rest) 유지, 축소하지 않음
+    if (iosKeyboardStableCount < IOS_KEYBOARD_STABLE_FRAMES) {
+      return;
+    }
+
+    // 키보드 높이 확정 → 그 크기만큼 한 번에 축소
+    const target = getIOSKeyboardTargetRect(keyboard);
+    applyPanelRect(holder, target, { animate: true });
+    setChatwootKeyboardOpenClass(true);
     syncIOSBackgroundCompensation();
+    iosKeyboardApplied = true;
+    iosKeyboardAppliedHeight = vvHeight;
 
-    if (keyboardActive && lastScrollNotifyProgress <= 0.45) {
+    if (lastScrollNotifyProgress <= 0.45) {
       notifyChatwootScrollToBottom();
       window.setTimeout(notifyChatwootScrollToBottom, 100);
     }
-    lastScrollNotifyProgress = keyboardActive ? 1 : 0;
+    lastScrollNotifyProgress = 1;
     return;
   }
 
@@ -797,11 +850,14 @@ const stopKeyboardLayoutPoll = () => {
 const startKeyboardLayoutPoll = () => {
   stopKeyboardLayoutPoll();
   let frames = 0;
+  // iOS는 키보드 안정 후 축소까지 폴링이 살아 있어야 하므로 안전 상한을 길게 둔다.
+  const maxFrames = isIOSMobileChatwoot() ? 90 : 18;
   const poll = () => {
     resetPanelLayoutSignature();
     applyChatwootPanelLayout();
     frames += 1;
-    if (frames < (isIOSMobileChatwoot() ? 30 : 18)) {
+    const iosDone = isIOSMobileChatwoot() && iosKeyboardApplied;
+    if (!iosDone && frames < maxFrames) {
       keyboardLayoutPollRaf = requestAnimationFrame(poll);
     } else {
       keyboardLayoutPollRaf = 0;
@@ -972,6 +1028,7 @@ const openChatwootPanel = () => {
   attachPanelViewportListeners();
   attachPanelFocusListeners();
   lastScrollNotifyProgress = 0;
+  resetIOSKeyboardSettleState();
   resetPanelLayoutSignature();
   const holder = getChatwootWidgetHolder();
   if (holder) {
@@ -988,6 +1045,7 @@ const closeChatwootPanel = (fromPopState = false) => {
   resetPanelLayoutSignature();
   resetBasePanelMetrics();
   resetBaselineViewportHeight();
+  resetIOSKeyboardSettleState();
   iosLockedLayoutHeight = 0;
   lastScrollNotifyProgress = 0;
   setIOSLayoutShiftCompensation(0);
