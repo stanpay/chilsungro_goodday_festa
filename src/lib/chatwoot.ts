@@ -31,9 +31,9 @@ let savedIOSViewportContent: string | null = null;
 const getViewportMeta = () =>
   document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
 
-/** iOS: resizes-content면 키보드 시 layout viewport가 줄어 fixed bottom 네비가 같이 올라감 */
+/** iOS: PWA는 viewport meta 전환이 무시되는 경우가 많아 body 고정 + shift 보정에 의존 */
 const setIOSChatwootViewportMode = (panelOpen: boolean) => {
-  if (!isIOSMobileChatwoot()) return;
+  if (!isIOSMobileChatwoot() || isIOSStandalonePWA()) return;
   const meta = getViewportMeta();
   if (!meta) return;
 
@@ -62,11 +62,19 @@ const setIOSChatwootViewportMode = (panelOpen: boolean) => {
   meta.content = CHATWOOT_VIEWPORT_RESIZES;
 };
 
+let iosLockedLayoutHeight = 0;
+
+const isIOSStandalonePWA = () =>
+  isIOSMobileChatwoot() &&
+  ((window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches);
+
 const setIOSLayoutShiftCompensation = (inset: number) => {
   if (!isIOSMobileChatwoot()) return;
   const html = document.documentElement;
-  if (inset > 0) {
-    html.style.setProperty("--chatwoot-ios-layout-shift", `${inset}px`);
+  const shift = Math.max(0, Math.round(inset));
+  if (shift > 0) {
+    html.style.setProperty("--chatwoot-ios-layout-shift", `${shift}px`);
     html.classList.add("chatwoot-ios-layout-compensate");
     return;
   }
@@ -74,10 +82,36 @@ const setIOSLayoutShiftCompensation = (inset: number) => {
   html.classList.remove("chatwoot-ios-layout-compensate");
 };
 
+const getIOSBackgroundLayoutShift = () => {
+  const vv = window.visualViewport;
+  const vvDelta =
+    baselineViewportHeight > 0 && vv
+      ? Math.max(0, baselineViewportHeight - Math.round(vv.height))
+      : 0;
+  const innerDelta =
+    iosLockedLayoutHeight > 0
+      ? Math.max(0, iosLockedLayoutHeight - window.innerHeight)
+      : 0;
+  return Math.max(vvDelta, innerDelta);
+};
+
+const syncIOSBackgroundCompensation = () => {
+  if (!isIOSMobileChatwoot() || !isChatwootPanelOpen()) {
+    setIOSLayoutShiftCompensation(0);
+    return;
+  }
+  const shift = getIOSBackgroundLayoutShift();
+  setIOSLayoutShiftCompensation(
+    getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX ? shift : 0
+  );
+};
+
 const getIOSPinnedViewportHeight = () =>
-  baselineViewportHeight > 0
-    ? baselineViewportHeight
-    : Math.round(window.visualViewport?.height ?? window.innerHeight);
+  iosLockedLayoutHeight > 0
+    ? iosLockedLayoutHeight
+    : baselineViewportHeight > 0
+      ? baselineViewportHeight
+      : Math.round(window.visualViewport?.height ?? window.innerHeight);
 
 const applyIOSPinnedDocumentHeight = (pinnedHeight: number) => {
   const html = document.documentElement;
@@ -221,9 +255,13 @@ const getKeyboardInset = () => {
       ? Math.max(0, baselineViewportHeight - Math.round(vv.height))
       : 0;
 
-  // iOS: offsetTop 스파이크만으로 inset이 커지면 패널이 화면 밖으로 튀어 오름
+  // iOS: layout shrink + visual viewport height 모두 반영 (PWA는 innerHeight 변화가 큼)
   if (isIOSMobileChatwoot()) {
-    return vvHeightDelta;
+    const innerDelta =
+      iosLockedLayoutHeight > 0
+        ? Math.max(0, iosLockedLayoutHeight - window.innerHeight)
+        : 0;
+    return Math.max(vvHeightDelta, innerDelta);
   }
 
   const vvInset = vv
@@ -237,18 +275,14 @@ const getKeyboardInset = () => {
   return Math.max(vvInset, vkInset, innerHeightDelta, vvHeightDelta);
 };
 
-/** iOS fixed 요소는 layout viewport 기준 — visual top에 맞추려면 offsetTop 필요 (스파이크는 clamp) */
-const getIOSKeyboardPanelTop = (restTop: number) => {
+/** iOS: fixed 요소 top은 visualViewport.offsetTop과 일치해야 함 (restTop으로 cap하면 화면 밖으로 밀림) */
+const getIOSKeyboardPanelTop = () => {
   const vv = window.visualViewport;
   const rawOffsetTop = Math.max(0, Math.round(vv?.offsetTop ?? 0));
-  const inset = getKeyboardInset();
+  if (rawOffsetTop <= 0) return 0;
 
-  if (inset <= 0 && rawOffsetTop <= 0) {
-    return 0;
-  }
-
-  const maxPan = inset > 0 ? inset + 32 : restTop;
-  return Math.min(rawOffsetTop, maxPan, restTop);
+  const baseline = baselineViewportHeight || window.innerHeight;
+  return Math.min(rawOffsetTop, Math.round(baseline * 0.65));
 };
 
 const captureBaselineViewportHeight = () => {
@@ -414,7 +448,13 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
     html.classList.add("chatwoot-panel-open");
     html.style.setProperty("overflow", "hidden");
     if (isIOSMobileChatwoot()) {
+      html.classList.add("chatwoot-ios-panel-open");
       applyIOSPinnedDocumentHeight(getIOSPinnedViewportHeight());
+      body.style.setProperty("position", "fixed");
+      body.style.setProperty("top", `-${bodyScrollLockY}px`);
+      body.style.setProperty("left", "0");
+      body.style.setProperty("right", "0");
+      body.style.setProperty("width", "100%");
     } else {
       html.style.setProperty("height", "100%");
     }
@@ -432,9 +472,15 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
   }
 
   html.classList.remove("chatwoot-panel-open");
+  html.classList.remove("chatwoot-ios-panel-open");
   html.style.removeProperty("overflow");
   if (isIOSMobileChatwoot()) {
     clearIOSPinnedDocumentHeight();
+    body.style.removeProperty("position");
+    body.style.removeProperty("top");
+    body.style.removeProperty("left");
+    body.style.removeProperty("right");
+    body.style.removeProperty("width");
   } else {
     html.style.removeProperty("height");
   }
@@ -556,11 +602,8 @@ const getKeyboardPanelRect = (panelWidth: number, panelHeight: number): PanelRec
 
   if (isIOSMobileChatwoot()) {
     const layoutWidth = window.innerWidth;
-    const restTop = Math.round(
-      ((baselineViewportHeight || window.innerHeight) - panelHeight) / 2
-    );
     return {
-      top: getIOSKeyboardPanelTop(restTop),
+      top: getIOSKeyboardPanelTop(),
       left: Math.round((layoutWidth - fittedWidth) / 2),
       width: Math.round(fittedWidth),
       height: fittedHeight,
@@ -633,23 +676,48 @@ const applyInterpolatedPanelLayout = (
   const rest = getRestPanelRect(panelWidth, panelHeight);
   const keyboard = getKeyboardPanelRect(panelWidth, panelHeight);
   const t = Math.min(1, Math.max(0, progress));
+  const keyboardActive = getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
 
-  let top: number;
   if (isIOSMobileChatwoot()) {
-    const iosTop = keyboard.top;
-    if (t <= 0) {
-      top = rest.top;
-    } else if (t < 0.08) {
-      top = lerpPanelValue(rest.top, iosTop, t / 0.08);
-    } else if (t > 0.92) {
-      top = lerpPanelValue(rest.top, iosTop, (1 - t) / 0.08);
-    } else {
-      // 키보드 구간: 매 프레임 visual viewport top에 직접 붙임 (lerp 스파이크 방지)
-      top = iosTop;
+    syncIOSBackgroundCompensation();
+
+    if (!keyboardActive && t < 0.05) {
+      applyPanelRect(holder, rest, {
+        animate: false,
+        minHeight: CHATWOOT_PANEL_MIN_HEIGHT_PX,
+      });
+      setChatwootKeyboardOpenClass(false);
+      lastScrollNotifyProgress = t;
+      return;
     }
-  } else {
-    top = lerpPanelValue(rest.top, keyboard.top, t);
+
+    const vv = window.visualViewport;
+    const iosTop = getIOSKeyboardPanelTop();
+    const fittedWidth = keyboard.width;
+    const fittedHeight = keyboard.height;
+    const openBlend = Math.min(1, t / 0.12);
+    const closeBlend = t > 0.88 ? Math.min(1, (1 - t) / 0.12) : 0;
+    const blend = closeBlend > 0 ? closeBlend : openBlend;
+
+    const rect: PanelRect = {
+      top: blend < 1 ? lerpPanelValue(rest.top, iosTop, blend) : iosTop,
+      left: blend < 1 ? lerpPanelValue(rest.left, keyboard.left, blend) : keyboard.left,
+      width: blend < 1 ? lerpPanelValue(rest.width, fittedWidth, blend) : fittedWidth,
+      height: blend < 1 ? lerpPanelValue(rest.height, fittedHeight, blend) : fittedHeight,
+    };
+
+    applyPanelRect(holder, rect, { animate: false });
+    setChatwootKeyboardOpenClass(keyboardActive || t > 0.85);
+
+    if (t > 0.45 && lastScrollNotifyProgress <= 0.45) {
+      notifyChatwootScrollToBottom();
+      window.setTimeout(notifyChatwootScrollToBottom, 100);
+    }
+    lastScrollNotifyProgress = t;
+    return;
   }
+
+  let top = lerpPanelValue(rest.top, keyboard.top, t);
 
   const rect: PanelRect = {
     top,
@@ -661,7 +729,6 @@ const applyInterpolatedPanelLayout = (
   applyPanelRect(holder, rect, {
     animate:
       options.animate !== false &&
-      !isIOSMobileChatwoot() &&
       (t < 0.05 || t > 0.95),
     minHeight: t < 0.05 ? CHATWOOT_PANEL_MIN_HEIGHT_PX : undefined,
   });
@@ -672,10 +739,6 @@ const applyInterpolatedPanelLayout = (
     window.setTimeout(notifyChatwootScrollToBottom, 100);
   }
   lastScrollNotifyProgress = t;
-
-  if (isIOSMobileChatwoot()) {
-    setIOSLayoutShiftCompensation(t > 0.02 ? getKeyboardInset() : 0);
-  }
 };
 
 const setChatwootKeyboardOpenClass = (open: boolean) => {
@@ -709,8 +772,10 @@ export const applyChatwootPanelLayout = (options: { animate?: boolean } = {}) =>
 
 const onChatwootViewportChange = () => {
   if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
+  if (isIOSMobileChatwoot()) {
+    syncIOSBackgroundCompensation();
+  }
   const keyboardActive = getKeyboardLayoutProgress() > 0.02;
-  // iOS: 키보드 열릴 때 scrollTo ↔ offsetTop 충돌로 패널이 위로 튀는 현상 방지
   if (isBodyScrollLocked && !(isIOSMobileChatwoot() && keyboardActive)) {
     window.scrollTo(0, bodyScrollLockY);
   }
@@ -895,6 +960,9 @@ const openChatwootPanel = () => {
   injectChatwootMobileOverrides();
   resetBasePanelMetrics();
   resetBaselineViewportHeight();
+  iosLockedLayoutHeight = Math.round(
+    window.visualViewport?.height ?? window.innerHeight
+  );
   captureBaselineViewportHeight();
   setIOSChatwootViewportMode(true);
   setChatwootOpenScrollLock(true);
@@ -920,6 +988,7 @@ const closeChatwootPanel = (fromPopState = false) => {
   resetPanelLayoutSignature();
   resetBasePanelMetrics();
   resetBaselineViewportHeight();
+  iosLockedLayoutHeight = 0;
   lastScrollNotifyProgress = 0;
   setIOSLayoutShiftCompensation(0);
   setChatwootKeyboardOpenClass(false);
