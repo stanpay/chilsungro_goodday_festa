@@ -27,6 +27,14 @@ declare global {
     __chatwootStanBooted?: boolean;
     __chatwootStanTracerStarted?: boolean;
   }
+  interface Navigator {
+    virtualKeyboard?: {
+      overlaysContent: boolean;
+      boundingRect: DOMRect;
+      addEventListener(type: "geometrychange", listener: () => void): void;
+      removeEventListener(type: "geometrychange", listener: () => void): void;
+    };
+  }
 }
 
 export type ChatwootBubblePositionOptions = {
@@ -72,8 +80,12 @@ export const applyChatwootHolderLayout = () => {
 let lastPanelLayoutSignature = "";
 let basePanelWidth = 0;
 let basePanelHeight = 0;
+let baselineViewportHeight = 0;
+let chatIframeFocused = false;
 let panelLayoutRaf = 0;
 let panelViewportListenersAttached = false;
+let panelFocusListenersAttached = false;
+let keyboardLayoutPollRaf = 0;
 
 const resetPanelLayoutSignature = () => {
   lastPanelLayoutSignature = "";
@@ -82,16 +94,52 @@ const resetPanelLayoutSignature = () => {
 const resetBasePanelMetrics = () => {
   basePanelWidth = 0;
   basePanelHeight = 0;
+  baselineViewportHeight = 0;
+  chatIframeFocused = false;
+};
+
+const getChatwootIframe = () =>
+  document.getElementById("chatwoot_live_chat_widget");
+
+const isChatIframeFocused = () => {
+  const iframe = getChatwootIframe();
+  return iframe instanceof HTMLElement && document.activeElement === iframe;
+};
+
+const getVirtualKeyboardInset = () => {
+  const rect = navigator.virtualKeyboard?.boundingRect;
+  if (!rect || rect.height <= 0) return 0;
+  return Math.round(rect.height);
 };
 
 const getKeyboardInset = () => {
   const vv = window.visualViewport;
-  if (!vv) return 0;
-  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  const vvInset = vv
+    ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+    : 0;
+  const vkInset = getVirtualKeyboardInset();
+  const innerHeightDelta =
+    baselineViewportHeight > 0
+      ? Math.max(0, baselineViewportHeight - window.innerHeight)
+      : 0;
+  const vvHeightDelta =
+    vv && baselineViewportHeight > 0
+      ? Math.max(0, baselineViewportHeight - Math.round(vv.height))
+      : 0;
+  return Math.max(vvInset, vkInset, innerHeightDelta, vvHeightDelta);
 };
 
-const isKeyboardVisible = () =>
-  isMobileChatwootLayout() && getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
+const isKeyboardVisible = () => {
+  if (!isMobileChatwootLayout()) return false;
+  if (getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX) return true;
+  return chatIframeFocused || isChatIframeFocused();
+};
+
+const captureBaselineViewportHeight = () => {
+  baselineViewportHeight = Math.round(
+    window.visualViewport?.height ?? window.innerHeight
+  );
+};
 
 const ensureBasePanelMetrics = () => {
   if (basePanelWidth > 0 && basePanelHeight > 0) {
@@ -216,6 +264,16 @@ export const injectChatwootMobileOverrides = () => {
     max-height: 100% !important;
     height: 100% !important;
   }
+
+  html.chatwoot-keyboard-open #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
+    top: 0 !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translateX(-50%) !important;
+    min-height: 0 !important;
+    border-radius: 0 0 16px 16px !important;
+  }
 }
 `;
 
@@ -242,26 +300,18 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
   if (locked) {
     bodyScrollLockY = window.scrollY;
     html.classList.add("chatwoot-panel-open");
-    body.style.setProperty("position", "fixed");
-    body.style.setProperty("top", `-${bodyScrollLockY}px`);
-    body.style.setProperty("left", "0");
-    body.style.setProperty("right", "0");
-    body.style.setProperty("width", "100%");
+    html.style.setProperty("overflow", "hidden");
+    html.style.setProperty("height", "100%");
     body.style.setProperty("overflow", "hidden");
     body.style.setProperty("overscroll-behavior", "none");
-    body.style.setProperty("touch-action", "none");
     return;
   }
 
   html.classList.remove("chatwoot-panel-open");
-  body.style.removeProperty("position");
-  body.style.removeProperty("top");
-  body.style.removeProperty("left");
-  body.style.removeProperty("right");
-  body.style.removeProperty("width");
+  html.style.removeProperty("overflow");
+  html.style.removeProperty("height");
   body.style.removeProperty("overflow");
   body.style.removeProperty("overscroll-behavior");
-  body.style.removeProperty("touch-action");
   window.scrollTo(0, bodyScrollLockY);
 };
 
@@ -365,15 +415,17 @@ const applyRestPanelLayout = (
 
 const applyKeyboardPanelLayout = (holder: HTMLElement, panelWidth: number) => {
   const vv = window.visualViewport;
-  const offsetTop = Math.round(vv?.offsetTop ?? 0);
-  const offsetLeft = Math.round(vv?.offsetLeft ?? 0);
-  const visibleHeight = Math.round(vv?.height ?? window.innerHeight);
   const visibleWidth = Math.round(vv?.width ?? window.innerWidth);
+  const offsetLeft = Math.round(vv?.offsetLeft ?? 0);
   const fittedWidth = Math.min(panelWidth, Math.max(280, visibleWidth - 32));
-  const fittedHeight = visibleHeight;
   const panelLeft = offsetLeft + Math.max(0, (visibleWidth - fittedWidth) / 2);
+  const fittedHeight = Math.max(
+    200,
+    Math.round(vv?.height ?? window.innerHeight)
+  );
 
-  holder.style.setProperty("top", `${offsetTop}px`, "important");
+  // offsetTop 사용 금지 — iOS에서 body fixed + 키보드 시 패널이 화면 위로 사라짐
+  holder.style.setProperty("top", "0px", "important");
   holder.style.setProperty("left", `${Math.round(panelLeft)}px`, "important");
   holder.style.setProperty("right", "auto", "important");
   holder.style.setProperty("bottom", "auto", "important");
@@ -405,7 +457,7 @@ export const applyChatwootPanelLayout = () => {
   const { panelWidth, panelHeight } = ensureBasePanelMetrics();
   const keyboardOpen = isKeyboardVisible();
   const signature = keyboardOpen
-    ? `kb|${getKeyboardInset()}|${panelWidth}|${Math.round(window.visualViewport?.height ?? 0)}|${Math.round(window.visualViewport?.offsetTop ?? 0)}`
+    ? `kb|${getKeyboardInset()}|${panelWidth}|${Math.round(window.visualViewport?.height ?? 0)}|${window.innerHeight}|${chatIframeFocused ? 1 : 0}`
     : `rest|${panelWidth}|${panelHeight}|${window.innerHeight}`;
 
   if (signature === lastPanelLayoutSignature) return;
@@ -432,6 +484,62 @@ const onChatwootViewportChange = () => {
   });
 };
 
+const stopKeyboardLayoutPoll = () => {
+  if (keyboardLayoutPollRaf) {
+    cancelAnimationFrame(keyboardLayoutPollRaf);
+    keyboardLayoutPollRaf = 0;
+  }
+};
+
+const startKeyboardLayoutPoll = () => {
+  stopKeyboardLayoutPoll();
+  let frames = 0;
+  const poll = () => {
+    resetPanelLayoutSignature();
+    applyChatwootPanelLayout();
+    frames += 1;
+    if (frames < 12) {
+      keyboardLayoutPollRaf = requestAnimationFrame(poll);
+    } else {
+      keyboardLayoutPollRaf = 0;
+    }
+  };
+  poll();
+};
+
+const onChatwootIframeFocusIn = (event: FocusEvent) => {
+  if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
+  if (event.target !== getChatwootIframe()) return;
+  chatIframeFocused = true;
+  startKeyboardLayoutPoll();
+};
+
+const onChatwootIframeFocusOut = (event: FocusEvent) => {
+  if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
+  if (event.target !== getChatwootIframe()) return;
+  window.setTimeout(() => {
+    if (isChatIframeFocused()) return;
+    chatIframeFocused = false;
+    resetPanelLayoutSignature();
+    applyChatwootPanelLayout();
+  }, 120);
+};
+
+const attachPanelFocusListeners = () => {
+  if (panelFocusListenersAttached) return;
+  panelFocusListenersAttached = true;
+  window.addEventListener("focusin", onChatwootIframeFocusIn);
+  window.addEventListener("focusout", onChatwootIframeFocusOut);
+};
+
+const detachPanelFocusListeners = () => {
+  if (!panelFocusListenersAttached) return;
+  panelFocusListenersAttached = false;
+  window.removeEventListener("focusin", onChatwootIframeFocusIn);
+  window.removeEventListener("focusout", onChatwootIframeFocusOut);
+  stopKeyboardLayoutPoll();
+};
+
 const attachPanelViewportListeners = () => {
   if (panelViewportListenersAttached) return;
   panelViewportListenersAttached = true;
@@ -441,6 +549,8 @@ const attachPanelViewportListeners = () => {
   window.visualViewport?.addEventListener("scroll", onChatwootViewportChange, {
     passive: true,
   });
+  window.addEventListener("resize", onChatwootViewportChange, { passive: true });
+  navigator.virtualKeyboard?.addEventListener("geometrychange", onChatwootViewportChange);
 };
 
 const detachPanelViewportListeners = () => {
@@ -448,6 +558,8 @@ const detachPanelViewportListeners = () => {
   panelViewportListenersAttached = false;
   window.visualViewport?.removeEventListener("resize", onChatwootViewportChange);
   window.visualViewport?.removeEventListener("scroll", onChatwootViewportChange);
+  window.removeEventListener("resize", onChatwootViewportChange);
+  navigator.virtualKeyboard?.removeEventListener("geometrychange", onChatwootViewportChange);
   if (panelLayoutRaf) {
     cancelAnimationFrame(panelLayoutRaf);
     panelLayoutRaf = 0;
@@ -548,7 +660,9 @@ const openChatwootPanel = () => {
   setBackgroundTouchBlocker(true);
   pushChatwootHistory();
   resetBasePanelMetrics();
+  captureBaselineViewportHeight();
   attachPanelViewportListeners();
+  attachPanelFocusListeners();
   applyChatwootPanelLayout();
   scheduleDismissChatwootKeyboard();
 };
@@ -556,6 +670,7 @@ const openChatwootPanel = () => {
 const closeChatwootPanel = (fromPopState = false) => {
   clearDismissChatwootKeyboardTimers();
   detachPanelViewportListeners();
+  detachPanelFocusListeners();
   resetPanelLayoutSignature();
   resetBasePanelMetrics();
   setChatwootKeyboardOpenClass(false);

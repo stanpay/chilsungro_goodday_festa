@@ -255,6 +255,7 @@ All colors MUST be HSL.
   html.chatwoot-panel-open body {
     overflow: hidden !important;
     overscroll-behavior: none;
+    height: 100%;
   }
 
   html.chatwoot-keyboard-open #cw-widget-holder.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
