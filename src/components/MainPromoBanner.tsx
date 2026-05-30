@@ -48,10 +48,12 @@ type MainPromoBannerProps = {
 function BannerSlide({
   banner,
   locale,
+  isFirst,
   onOpen,
 }: {
   banner: MainBanner;
   locale: AppLocale;
+  isFirst: boolean;
   onOpen: () => void;
 }) {
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -87,7 +89,9 @@ function BannerSlide({
         src={banner.imageUrl}
         alt={imageAlt}
         className="h-full w-full object-cover"
-        loading="lazy"
+        loading={isFirst ? "eager" : "lazy"}
+        fetchPriority={isFirst ? "high" : "auto"}
+        decoding="async"
       />
     </div>
   ) : (
@@ -147,9 +151,24 @@ export default function MainPromoBanner({
   const [popupImageReady, setPopupImageReady] = useState(false);
 
   useEffect(() => {
-    MAIN_BANNER_POPUP_IMAGE_URLS.forEach(preloadImage);
-    Object.values(NAVER_MAP_DIRECTIONS_IMAGE).forEach(preloadImage);
-  }, []);
+    const firstUrl = banners[0]?.imageUrl;
+    if (firstUrl) preloadImage(firstUrl);
+
+    const deferSecondaryAssets = () => {
+      MAIN_BANNER_POPUP_IMAGE_URLS.forEach(preloadImage);
+      preloadImage(NAVER_MAP_DIRECTIONS_IMAGE[locale]);
+    };
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(deferSecondaryAssets, {
+        timeout: 4000,
+      });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timer = window.setTimeout(deferSecondaryAssets, 2000);
+    return () => window.clearTimeout(timer);
+  }, [banners, locale]);
 
   const selectedBannerAlt = selectedBanner
     ? getBannerText(selectedBanner.imageAlt, locale) ||
@@ -228,12 +247,13 @@ export default function MainPromoBanner({
         className="w-full"
       >
         <CarouselContent className="-ml-0">
-          {banners.map((banner) => (
+          {banners.map((banner, index) => (
             <CarouselItem key={banner.id} className="basis-full pl-0">
               <div className="aspect-[2.39/1] w-full overflow-hidden">
                 <BannerSlide
                   banner={banner}
                   locale={locale}
+                  isFirst={index === 0}
                   onOpen={() => setSelectedBanner(banner)}
                 />
               </div>

@@ -67,11 +67,12 @@ export const MAIN_BANNER_POPUP_IMAGE_URLS = [
   EVENT_VENUE_MAP_POPUP,
 ] as const;
 
+/** 캐러셀 배너 — 1600×670 WebP (원본 PNG 대비 ~95% 용량 절감) */
 const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
-  ko: "/banners/travel-center-ko.png",
-  en: "/banners/travel-center-en.png",
-  zh: "/banners/travel-center-zh.png",
-  ja: "/banners/travel-center-ja.png",
+  ko: "/banners/travel-center-ko.webp",
+  en: "/banners/travel-center-en.webp",
+  zh: "/banners/travel-center-zh.webp",
+  ja: "/banners/travel-center-ja.webp",
 };
 
 /** 팝업 길안내 CTA — 모바일 다이얼로그 폭에 맞게 리사이즈·WebP */
@@ -111,7 +112,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
     },
     {
       id: "coupon-ko",
-      imageUrl: "/banners/coupon-ko.png",
+      imageUrl: "/banners/coupon-ko.webp",
       popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
       naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
       naverMapLat: TRAVEL_CENTER_LAT,
@@ -127,7 +128,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
     },
     {
       id: "chilseongro-good-day-festa-1",
-      imageUrl: "/banners/chilseongro-good-day-festa-1.png",
+      imageUrl: "/banners/chilseongro-good-day-festa-1.webp",
       popupImageUrl: CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
       naverMapLat: CHILSEONGRO_FESTA_LAT,
       naverMapLon: CHILSEONGRO_FESTA_LON,
@@ -142,7 +143,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
     },
     {
       id: "chilseongro-good-day-festa-2",
-      imageUrl: "/banners/chilseongro-good-day-festa-2.png",
+      imageUrl: "/banners/chilseongro-good-day-festa-2.webp",
       popupImageUrl: CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
       naverMapLat: CHILSEONGRO_FESTA_LAT,
       naverMapLon: CHILSEONGRO_FESTA_LON,
@@ -157,7 +158,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
     },
     {
       id: "event-venue-map",
-      imageUrl: "/banners/event-venue-map-banner.png",
+      imageUrl: "/banners/event-venue-map-banner.webp",
       popupImageUrl: EVENT_VENUE_MAP_POPUP,
       imageAlt: {
         ko: "행사장 배치도",
