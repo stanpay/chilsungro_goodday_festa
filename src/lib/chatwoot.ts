@@ -13,8 +13,11 @@ const CHATWOOT_MOBILE_BREAKPOINT_PX = 667;
 const CHATWOOT_PANEL_MAX_HEIGHT_PX = 560;
 const CHATWOOT_PANEL_MIN_HEIGHT_PX = 280;
 const CHATWOOT_PANEL_MAX_WIDTH_PX = 400;
+const CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX = 80;
+const CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX = 12;
 const CHATWOOT_OVERRIDES_STYLE_ID = "stan-chatwoot-overrides";
 const CHATWOOT_BACKDROP_ID = "stan-chatwoot-backdrop";
+const CHATWOOT_FOCUS_SENTINEL_ID = "stan-chatwoot-focus-sentinel";
 const CHATWOOT_HISTORY_STATE_KEY = "stanChatwoot";
 
 declare global {
@@ -68,9 +71,37 @@ export const applyChatwootHolderLayout = () => {
 };
 
 let lastPanelLayoutSignature = "";
+let basePanelWidth = 0;
+let basePanelHeight = 0;
+let panelLayoutRaf = 0;
+let panelViewportListenersAttached = false;
 
 const resetPanelLayoutSignature = () => {
   lastPanelLayoutSignature = "";
+};
+
+const resetBasePanelMetrics = () => {
+  basePanelWidth = 0;
+  basePanelHeight = 0;
+};
+
+const getKeyboardInset = () => {
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+};
+
+const isKeyboardVisible = () =>
+  isMobileChatwootLayout() && getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
+
+const ensureBasePanelMetrics = () => {
+  if (basePanelWidth > 0 && basePanelHeight > 0) {
+    return { panelWidth: basePanelWidth, panelHeight: basePanelHeight };
+  }
+  const metrics = getFixedPanelMetrics();
+  basePanelWidth = metrics.panelWidth;
+  basePanelHeight = metrics.panelHeight;
+  return metrics;
 };
 
 const getFixedPanelMetrics = () => {
@@ -100,6 +131,62 @@ const getChatwootWidgetHolder = () =>
 const isChatwootPanelOpen = () => {
   const holder = getChatwootWidgetHolder();
   return Boolean(holder && !holder.classList.contains("woot--hide"));
+};
+
+/** Chatwoot iframe 입력 autofocus 후 키보드를 내리기 위한 숨김 포커스 대상 */
+const ensureChatwootFocusSentinel = () => {
+  let sentinel = document.getElementById(CHATWOOT_FOCUS_SENTINEL_ID);
+  if (!sentinel) {
+    sentinel = document.createElement("button");
+    sentinel.id = CHATWOOT_FOCUS_SENTINEL_ID;
+    sentinel.type = "button";
+    sentinel.tabIndex = -1;
+    sentinel.setAttribute("aria-hidden", "true");
+    sentinel.textContent = "";
+    sentinel.style.cssText =
+      "position:fixed;left:-9999px;width:1px;height:1px;opacity:0;overflow:hidden;border:0;padding:0;";
+    document.body.appendChild(sentinel);
+  }
+  return sentinel;
+};
+
+/** 모바일: iframe 자동 포커스로 올라온 키보드 숨김 */
+export const dismissChatwootKeyboard = () => {
+  if (!isMobileChatwootLayout()) return;
+
+  const iframe = document.getElementById("chatwoot_live_chat_widget");
+  if (iframe instanceof HTMLElement) {
+    iframe.blur();
+  }
+
+  const sentinel = ensureChatwootFocusSentinel();
+  sentinel.focus({ preventScroll: true });
+  sentinel.blur();
+};
+
+let dismissKeyboardTimers: number[] = [];
+
+const scheduleDismissChatwootKeyboard = () => {
+  if (!isMobileChatwootLayout() || !isChatwootPanelOpen()) return;
+
+  dismissKeyboardTimers.forEach((timer) => window.clearTimeout(timer));
+  dismissKeyboardTimers = [];
+
+  dismissChatwootKeyboard();
+  dismissKeyboardTimers.push(window.setTimeout(dismissChatwootKeyboard, 0));
+  dismissKeyboardTimers.push(window.setTimeout(dismissChatwootKeyboard, 50));
+  dismissKeyboardTimers.push(window.setTimeout(dismissChatwootKeyboard, 150));
+};
+
+const clearDismissChatwootKeyboardTimers = () => {
+  dismissKeyboardTimers.forEach((timer) => window.clearTimeout(timer));
+  dismissKeyboardTimers = [];
+};
+
+const isContactChatwootMessage = (detail: unknown) => {
+  if (!detail || typeof detail !== "object") return false;
+  const message = detail as { sender_type?: string; sender?: { type?: string } };
+  return message.sender_type === "Contact" || message.sender?.type === "contact";
 };
 
 /** SDK 모바일 전체화면 CSS를 덮어쓰기 — SDK style 뒤에 항상 재삽입 */
@@ -248,10 +335,72 @@ const resetChatwootPanelInlineLayout = (holder: HTMLElement) => {
   holder.style.removeProperty("width");
   holder.style.removeProperty("height");
   holder.style.removeProperty("max-height");
+  holder.style.removeProperty("min-height");
   holder.style.removeProperty("transform");
 };
 
-/** 모바일: 화면 중앙 고정 팝업 — 키보드 시 크기·위치 변경 없음(iframe 내부 스크롤) */
+const notifyChatwootScrollToBottom = () => {
+  const iframe = document.getElementById("chatwoot_live_chat_widget");
+  if (!(iframe instanceof HTMLIFrameElement) || !iframe.contentWindow) return;
+  iframe.contentWindow.postMessage(
+    `chatwoot-widget:${JSON.stringify({ event: "widget-visible" })}`,
+    "*"
+  );
+};
+
+const applyRestPanelLayout = (
+  holder: HTMLElement,
+  panelWidth: number,
+  panelHeight: number
+) => {
+  holder.style.setProperty("top", "50%", "important");
+  holder.style.setProperty("left", "50%", "important");
+  holder.style.setProperty("right", "auto", "important");
+  holder.style.setProperty("bottom", "auto", "important");
+  holder.style.setProperty("transform", "translate(-50%, -50%)", "important");
+  holder.style.setProperty("width", `${panelWidth}px`, "important");
+  holder.style.setProperty("height", `${panelHeight}px`, "important");
+  holder.style.setProperty("max-height", `${panelHeight}px`, "important");
+  holder.style.setProperty("min-height", `${CHATWOOT_PANEL_MIN_HEIGHT_PX}px`, "important");
+};
+
+const applyKeyboardPanelLayout = (
+  holder: HTMLElement,
+  panelWidth: number,
+  panelHeight: number
+) => {
+  const vv = window.visualViewport;
+  const offsetTop = Math.round(vv?.offsetTop ?? 0);
+  const offsetLeft = Math.round(vv?.offsetLeft ?? 0);
+  const visibleHeight = Math.round(vv?.height ?? window.innerHeight);
+  const visibleWidth = Math.round(vv?.width ?? window.innerWidth);
+  const fittedWidth = Math.min(panelWidth, Math.max(280, visibleWidth - 32));
+  const fittedHeight = Math.min(
+    panelHeight,
+    Math.max(
+      CHATWOOT_PANEL_MIN_HEIGHT_PX,
+      visibleHeight - CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX
+    )
+  );
+  const visualBottom = offsetTop + visibleHeight;
+  const panelTop = Math.max(
+    offsetTop + CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX,
+    visualBottom - fittedHeight
+  );
+  const panelLeft = offsetLeft + Math.max(0, (visibleWidth - fittedWidth) / 2);
+
+  holder.style.setProperty("top", `${Math.round(panelTop)}px`, "important");
+  holder.style.setProperty("left", `${Math.round(panelLeft)}px`, "important");
+  holder.style.setProperty("right", "auto", "important");
+  holder.style.setProperty("bottom", "auto", "important");
+  holder.style.setProperty("transform", "none", "important");
+  holder.style.setProperty("width", `${Math.round(fittedWidth)}px`, "important");
+  holder.style.setProperty("height", `${Math.round(fittedHeight)}px`, "important");
+  holder.style.setProperty("max-height", `${Math.round(fittedHeight)}px`, "important");
+  holder.style.setProperty("min-height", `${CHATWOOT_PANEL_MIN_HEIGHT_PX}px`, "important");
+};
+
+/** 모바일: 기본은 중앙 팝업, 키보드 시 visualViewport 하단에 입력창 맞춤 */
 export const applyChatwootPanelLayout = () => {
   if (!isMobileChatwootLayout()) {
     const holder = getChatwootWidgetHolder();
@@ -264,20 +413,50 @@ export const applyChatwootPanelLayout = () => {
     return;
   }
 
-  const { panelWidth, panelHeight } = getFixedPanelMetrics();
-  const signature = `${panelWidth}|${panelHeight}|${window.innerHeight}`;
+  const { panelWidth, panelHeight } = ensureBasePanelMetrics();
+  const keyboardOpen = isKeyboardVisible();
+  const signature = keyboardOpen
+    ? `kb|${getKeyboardInset()}|${panelWidth}|${panelHeight}|${Math.round(window.visualViewport?.height ?? 0)}|${Math.round(window.visualViewport?.offsetTop ?? 0)}`
+    : `rest|${panelWidth}|${panelHeight}|${window.innerHeight}`;
+
   if (signature === lastPanelLayoutSignature) return;
   lastPanelLayoutSignature = signature;
 
-  holder.style.setProperty("top", "50%", "important");
-  holder.style.setProperty("left", "50%", "important");
-  holder.style.setProperty("right", "auto", "important");
-  holder.style.setProperty("bottom", "auto", "important");
-  holder.style.setProperty("transform", "translate(-50%, -50%)", "important");
-  holder.style.setProperty("width", `${panelWidth}px`, "important");
-  holder.style.setProperty("height", `${panelHeight}px`, "important");
-  holder.style.setProperty("max-height", `${panelHeight}px`, "important");
-  holder.style.setProperty("min-height", `${CHATWOOT_PANEL_MIN_HEIGHT_PX}px`, "important");
+  if (keyboardOpen) {
+    applyKeyboardPanelLayout(holder, panelWidth, panelHeight);
+    window.setTimeout(notifyChatwootScrollToBottom, 0);
+    window.setTimeout(notifyChatwootScrollToBottom, 100);
+  } else {
+    applyRestPanelLayout(holder, panelWidth, panelHeight);
+  }
+};
+
+const onChatwootViewportResize = () => {
+  if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
+  if (panelLayoutRaf) return;
+  panelLayoutRaf = requestAnimationFrame(() => {
+    panelLayoutRaf = 0;
+    resetPanelLayoutSignature();
+    applyChatwootPanelLayout();
+  });
+};
+
+const attachPanelViewportListeners = () => {
+  if (panelViewportListenersAttached) return;
+  panelViewportListenersAttached = true;
+  window.visualViewport?.addEventListener("resize", onChatwootViewportResize, {
+    passive: true,
+  });
+};
+
+const detachPanelViewportListeners = () => {
+  if (!panelViewportListenersAttached) return;
+  panelViewportListenersAttached = false;
+  window.visualViewport?.removeEventListener("resize", onChatwootViewportResize);
+  if (panelLayoutRaf) {
+    cancelAnimationFrame(panelLayoutRaf);
+    panelLayoutRaf = 0;
+  }
 };
 
 const logChatwootTrace = (phase: string, extra?: Record<string, unknown>) => {
@@ -373,17 +552,24 @@ const openChatwootPanel = () => {
   ensureChatwootBackdrop();
   setBackgroundTouchBlocker(true);
   pushChatwootHistory();
+  resetBasePanelMetrics();
+  attachPanelViewportListeners();
   applyChatwootPanelLayout();
+  scheduleDismissChatwootKeyboard();
 };
 
 const closeChatwootPanel = (fromPopState = false) => {
+  clearDismissChatwootKeyboardTimers();
+  detachPanelViewportListeners();
   resetPanelLayoutSignature();
+  resetBasePanelMetrics();
   setChatwootOpenScrollLock(false);
   hideChatwootBackdrop();
   setBackgroundTouchBlocker(false);
   syncChatwootHistoryOnClose(fromPopState);
   const holder = getChatwootWidgetHolder();
   if (holder) resetChatwootPanelInlineLayout(holder);
+  dismissChatwootKeyboard();
 };
 
 const onChatwootPopState = () => {
@@ -406,6 +592,12 @@ export const watchChatwootPanelState = () => {
     closingChatwootFromPopState = false;
   });
   window.addEventListener("popstate", onChatwootPopState);
+  window.addEventListener("chatwoot:on-start-conversation", scheduleDismissChatwootKeyboard);
+  window.addEventListener("chatwoot:on-message", (event) => {
+    if (isContactChatwootMessage(event.detail)) {
+      scheduleDismissChatwootKeyboard();
+    }
+  });
 };
 
 export const watchChatwootBubbleMount = () => {
@@ -449,6 +641,7 @@ export const watchChatwootBubbleMount = () => {
       applyChatwootHolderLayout();
       if (isChatwootPanelOpen() && isMobileChatwootLayout()) {
         resetPanelLayoutSignature();
+        resetBasePanelMetrics();
         applyChatwootPanelLayout();
       }
     },
