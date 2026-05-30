@@ -214,14 +214,17 @@ let keyboardLayoutPollRaf = 0;
 let lastScrollNotifyProgress = 0;
 
 // iOS: 키보드 높이가 안정될 때까지 패널을 움직이지 않고, 확정 후 한 번만 축소
-const IOS_KEYBOARD_STABLE_FRAMES = 3;
-let iosKeyboardStableSig: string | null = null;
+const IOS_KEYBOARD_STABLE_FRAMES = 2;
+const IOS_KEYBOARD_STABLE_TOLERANCE_PX = 6;
+let iosKeyboardStablePrevHeight: number | null = null;
+let iosKeyboardStablePrevTop: number | null = null;
 let iosKeyboardStableCount = 0;
 let iosKeyboardApplied = false;
 let iosKeyboardAppliedHeight = 0;
 
 const resetIOSKeyboardSettleState = () => {
-  iosKeyboardStableSig = null;
+  iosKeyboardStablePrevHeight = null;
+  iosKeyboardStablePrevTop = null;
   iosKeyboardStableCount = 0;
   iosKeyboardApplied = false;
   iosKeyboardAppliedHeight = 0;
@@ -734,7 +737,6 @@ const applyInterpolatedPanelLayout = (
 
     const vvHeight = Math.round(vv?.height ?? window.innerHeight);
     const offsetTop = getIOSKeyboardPanelTop();
-    const sig = `${vvHeight}|${offsetTop}`;
 
     // 이미 축소 적용됨 — 키보드 종류 변경 등 큰 변화가 아니면 고정 유지
     if (iosKeyboardApplied) {
@@ -742,16 +744,21 @@ const applyInterpolatedPanelLayout = (
         return;
       }
       iosKeyboardApplied = false;
-      iosKeyboardStableSig = null;
+      iosKeyboardStablePrevHeight = null;
+      iosKeyboardStablePrevTop = null;
       iosKeyboardStableCount = 0;
     }
 
-    if (sig === iosKeyboardStableSig) {
-      iosKeyboardStableCount += 1;
-    } else {
-      iosKeyboardStableSig = sig;
-      iosKeyboardStableCount = 1;
-    }
+    // 이전 프레임과 ±오차 이내면 "안정"으로 간주 (미세 흔들림 허용)
+    const stableVsPrev =
+      iosKeyboardStablePrevHeight !== null &&
+      iosKeyboardStablePrevTop !== null &&
+      Math.abs(vvHeight - iosKeyboardStablePrevHeight) <= IOS_KEYBOARD_STABLE_TOLERANCE_PX &&
+      Math.abs(offsetTop - iosKeyboardStablePrevTop) <= IOS_KEYBOARD_STABLE_TOLERANCE_PX;
+
+    iosKeyboardStableCount = stableVsPrev ? iosKeyboardStableCount + 1 : 1;
+    iosKeyboardStablePrevHeight = vvHeight;
+    iosKeyboardStablePrevTop = offsetTop;
 
     // 아직 키보드가 움직이는 중 → 패널은 중앙(rest) 유지, 축소하지 않음
     if (iosKeyboardStableCount < IOS_KEYBOARD_STABLE_FRAMES) {
@@ -828,9 +835,9 @@ export const applyChatwootPanelLayout = (options: { animate?: boolean } = {}) =>
 
 const onChatwootViewportChange = () => {
   if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
-  const keyboardActive = getKeyboardLayoutProgress() > 0.02;
-  if (isBodyScrollLocked && !(isIOSMobileChatwoot() && keyboardActive)) {
-    window.scrollTo(0, bodyScrollLockY);
+  // iOS: 키보드가 입력창을 보이려고 페이지를 강제 스크롤하면 팝업이 잘림 → 항상 되돌려 잠금
+  if (isBodyScrollLocked) {
+    window.scrollTo(0, isIOSMobileChatwoot() ? 0 : bodyScrollLockY);
   }
   if (panelLayoutRaf) return;
   panelLayoutRaf = requestAnimationFrame(() => {
