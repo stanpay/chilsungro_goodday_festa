@@ -236,6 +236,10 @@ All colors MUST be HSL.
     height: 100% !important;
   }
 
+  #cw-widget-holder.woot-widget-holder.chatwoot-keyboard-open {
+    overflow: hidden !important;
+  }
+
   #stan-chatwoot-backdrop {
     position: fixed;
     inset: 0;

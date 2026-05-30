@@ -15,6 +15,8 @@ const CHATWOOT_PANEL_MIN_HEIGHT_PX = 280;
 const CHATWOOT_PANEL_MAX_WIDTH_PX = 400;
 const CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX = 80;
 const CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX = 12;
+const CHATWOOT_PANEL_KEYBOARD_BOTTOM_GAP_PX = 4;
+const CHATWOOT_KEYBOARD_OPEN_CLASS = "chatwoot-keyboard-open";
 const CHATWOOT_OVERRIDES_STYLE_ID = "stan-chatwoot-overrides";
 const CHATWOOT_BACKDROP_ID = "stan-chatwoot-backdrop";
 const CHATWOOT_FOCUS_SENTINEL_ID = "stan-chatwoot-focus-sentinel";
@@ -197,7 +199,7 @@ export const injectChatwootMobileOverrides = () => {
   style.id = CHATWOOT_OVERRIDES_STYLE_ID;
   style.textContent = `
 @media only screen and (max-width: ${CHATWOOT_MOBILE_BREAKPOINT_PX}px) {
-  #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
+  #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view):not(.${CHATWOOT_KEYBOARD_OPEN_CLASS}) {
     top: 50% !important;
     left: 50% !important;
     right: auto !important;
@@ -207,6 +209,15 @@ export const injectChatwootMobileOverrides = () => {
     height: min(72dvh, ${CHATWOOT_PANEL_MAX_HEIGHT_PX}px) !important;
     max-height: min(72dvh, ${CHATWOOT_PANEL_MAX_HEIGHT_PX}px) !important;
     min-height: ${CHATWOOT_PANEL_MIN_HEIGHT_PX}px !important;
+    border-radius: 16px !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+  }
+
+  #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view).${CHATWOOT_KEYBOARD_OPEN_CLASS} {
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
     border-radius: 16px !important;
     overscroll-behavior: contain !important;
     touch-action: pan-y !important;
@@ -328,6 +339,7 @@ const closeChatwootWidget = () => {
 };
 
 const resetChatwootPanelInlineLayout = (holder: HTMLElement) => {
+  holder.classList.remove(CHATWOOT_KEYBOARD_OPEN_CLASS);
   holder.style.removeProperty("top");
   holder.style.removeProperty("right");
   holder.style.removeProperty("bottom");
@@ -348,11 +360,31 @@ const notifyChatwootScrollToBottom = () => {
   );
 };
 
+let scrollSyncTimers: number[] = [];
+
+const scheduleChatwootScrollSync = () => {
+  scrollSyncTimers.forEach((timer) => window.clearTimeout(timer));
+  scrollSyncTimers = [];
+  [0, 100, 300].forEach((delay) => {
+    scrollSyncTimers.push(window.setTimeout(notifyChatwootScrollToBottom, delay));
+  });
+};
+
+const clearChatwootScrollSyncTimers = () => {
+  scrollSyncTimers.forEach((timer) => window.clearTimeout(timer));
+  scrollSyncTimers = [];
+};
+
+const setChatwootKeyboardOpenState = (holder: HTMLElement, open: boolean) => {
+  holder.classList.toggle(CHATWOOT_KEYBOARD_OPEN_CLASS, open);
+};
+
 const applyRestPanelLayout = (
   holder: HTMLElement,
   panelWidth: number,
   panelHeight: number
 ) => {
+  setChatwootKeyboardOpenState(holder, false);
   holder.style.setProperty("top", "50%", "important");
   holder.style.setProperty("left", "50%", "important");
   holder.style.setProperty("right", "auto", "important");
@@ -364,32 +396,22 @@ const applyRestPanelLayout = (
   holder.style.setProperty("min-height", `${CHATWOOT_PANEL_MIN_HEIGHT_PX}px`, "important");
 };
 
-const applyKeyboardPanelLayout = (
-  holder: HTMLElement,
-  panelWidth: number,
-  panelHeight: number
-) => {
+const applyKeyboardPanelLayout = (holder: HTMLElement, panelWidth: number) => {
   const vv = window.visualViewport;
   const offsetTop = Math.round(vv?.offsetTop ?? 0);
   const offsetLeft = Math.round(vv?.offsetLeft ?? 0);
   const visibleHeight = Math.round(vv?.height ?? window.innerHeight);
   const visibleWidth = Math.round(vv?.width ?? window.innerWidth);
   const fittedWidth = Math.min(panelWidth, Math.max(280, visibleWidth - 32));
-  const fittedHeight = Math.min(
-    panelHeight,
-    Math.max(
-      CHATWOOT_PANEL_MIN_HEIGHT_PX,
-      visibleHeight - CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX
-    )
+  const fittedHeight = Math.max(
+    200,
+    visibleHeight - CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX - CHATWOOT_PANEL_KEYBOARD_BOTTOM_GAP_PX
   );
-  const visualBottom = offsetTop + visibleHeight;
-  const panelTop = Math.max(
-    offsetTop + CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX,
-    visualBottom - fittedHeight
-  );
+  const panelTop = offsetTop + CHATWOOT_PANEL_KEYBOARD_TOP_GAP_PX;
   const panelLeft = offsetLeft + Math.max(0, (visibleWidth - fittedWidth) / 2);
 
-  holder.style.setProperty("top", `${Math.round(panelTop)}px`, "important");
+  setChatwootKeyboardOpenState(holder, true);
+  holder.style.setProperty("top", `${panelTop}px`, "important");
   holder.style.setProperty("left", `${Math.round(panelLeft)}px`, "important");
   holder.style.setProperty("right", "auto", "important");
   holder.style.setProperty("bottom", "auto", "important");
@@ -397,7 +419,7 @@ const applyKeyboardPanelLayout = (
   holder.style.setProperty("width", `${Math.round(fittedWidth)}px`, "important");
   holder.style.setProperty("height", `${Math.round(fittedHeight)}px`, "important");
   holder.style.setProperty("max-height", `${Math.round(fittedHeight)}px`, "important");
-  holder.style.setProperty("min-height", `${CHATWOOT_PANEL_MIN_HEIGHT_PX}px`, "important");
+  holder.style.removeProperty("min-height");
 };
 
 /** 모바일: 기본은 중앙 팝업, 키보드 시 visualViewport 하단에 입력창 맞춤 */
@@ -423,15 +445,14 @@ export const applyChatwootPanelLayout = () => {
   lastPanelLayoutSignature = signature;
 
   if (keyboardOpen) {
-    applyKeyboardPanelLayout(holder, panelWidth, panelHeight);
-    window.setTimeout(notifyChatwootScrollToBottom, 0);
-    window.setTimeout(notifyChatwootScrollToBottom, 100);
+    applyKeyboardPanelLayout(holder, panelWidth);
+    scheduleChatwootScrollSync();
   } else {
     applyRestPanelLayout(holder, panelWidth, panelHeight);
   }
 };
 
-const onChatwootViewportResize = () => {
+const onChatwootViewportChange = () => {
   if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
   if (panelLayoutRaf) return;
   panelLayoutRaf = requestAnimationFrame(() => {
@@ -444,7 +465,10 @@ const onChatwootViewportResize = () => {
 const attachPanelViewportListeners = () => {
   if (panelViewportListenersAttached) return;
   panelViewportListenersAttached = true;
-  window.visualViewport?.addEventListener("resize", onChatwootViewportResize, {
+  window.visualViewport?.addEventListener("resize", onChatwootViewportChange, {
+    passive: true,
+  });
+  window.visualViewport?.addEventListener("scroll", onChatwootViewportChange, {
     passive: true,
   });
 };
@@ -452,7 +476,8 @@ const attachPanelViewportListeners = () => {
 const detachPanelViewportListeners = () => {
   if (!panelViewportListenersAttached) return;
   panelViewportListenersAttached = false;
-  window.visualViewport?.removeEventListener("resize", onChatwootViewportResize);
+  window.visualViewport?.removeEventListener("resize", onChatwootViewportChange);
+  window.visualViewport?.removeEventListener("scroll", onChatwootViewportChange);
   if (panelLayoutRaf) {
     cancelAnimationFrame(panelLayoutRaf);
     panelLayoutRaf = 0;
@@ -560,6 +585,7 @@ const openChatwootPanel = () => {
 
 const closeChatwootPanel = (fromPopState = false) => {
   clearDismissChatwootKeyboardTimers();
+  clearChatwootScrollSyncTimers();
   detachPanelViewportListeners();
   resetPanelLayoutSignature();
   resetBasePanelMetrics();
