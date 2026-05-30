@@ -14,6 +14,9 @@ const CHATWOOT_PANEL_MAX_HEIGHT_PX = 560;
 const CHATWOOT_PANEL_MIN_HEIGHT_PX = 280;
 const CHATWOOT_PANEL_MAX_WIDTH_PX = 400;
 const CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX = 80;
+const CHATWOOT_PANEL_LAYOUT_TRANSITION =
+  "top 0.28s ease, left 0.28s ease, width 0.28s ease, height 0.28s ease, max-height 0.28s ease, min-height 0.28s ease, transform 0.28s ease, border-radius 0.28s ease";
+const ROOT_ELEMENT_ID = "root";
 const CHATWOOT_OVERRIDES_STYLE_ID = "stan-chatwoot-overrides";
 const CHATWOOT_BACKDROP_ID = "stan-chatwoot-backdrop";
 const CHATWOOT_FOCUS_SENTINEL_ID = "stan-chatwoot-focus-sentinel";
@@ -94,8 +97,11 @@ const resetPanelLayoutSignature = () => {
 const resetBasePanelMetrics = () => {
   basePanelWidth = 0;
   basePanelHeight = 0;
-  baselineViewportHeight = 0;
   chatIframeFocused = false;
+};
+
+const resetBaselineViewportHeight = () => {
+  baselineViewportHeight = 0;
 };
 
 const getChatwootIframe = () =>
@@ -131,8 +137,7 @@ const getKeyboardInset = () => {
 
 const isKeyboardVisible = () => {
   if (!isMobileChatwootLayout()) return false;
-  if (getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX) return true;
-  return chatIframeFocused || isChatIframeFocused();
+  return getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
 };
 
 const captureBaselineViewportHeight = () => {
@@ -153,7 +158,7 @@ const ensureBasePanelMetrics = () => {
 
 const getFixedPanelMetrics = () => {
   const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
+  const viewportHeight = baselineViewportHeight || window.innerHeight;
   const panelWidth = Math.min(
     CHATWOOT_PANEL_MAX_WIDTH_PX,
     Math.max(280, viewportWidth - 32)
@@ -167,6 +172,12 @@ const getFixedPanelMetrics = () => {
   );
   return { panelWidth, panelHeight };
 };
+
+const enablePanelLayoutTransition = (holder: HTMLElement) => {
+  holder.style.setProperty("transition", CHATWOOT_PANEL_LAYOUT_TRANSITION, "important");
+};
+
+const getRootElement = () => document.getElementById(ROOT_ELEMENT_ID);
 
 const isMobileChatwootLayout = () =>
   typeof window !== "undefined" &&
@@ -257,6 +268,7 @@ export const injectChatwootMobileOverrides = () => {
     border-radius: 16px !important;
     overscroll-behavior: contain !important;
     touch-action: pan-y !important;
+    transition: ${CHATWOOT_PANEL_LAYOUT_TRANSITION} !important;
   }
 
   #${WIDGET_HOLDER_ID}.woot-widget-holder:not(.woot--hide):not(.has-unread-view) iframe {
@@ -295,6 +307,7 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
 
   const html = document.documentElement;
   const body = document.body;
+  const root = getRootElement();
   isBodyScrollLocked = locked;
 
   if (locked) {
@@ -304,6 +317,14 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
     html.style.setProperty("height", "100%");
     body.style.setProperty("overflow", "hidden");
     body.style.setProperty("overscroll-behavior", "none");
+    if (root) {
+      root.style.setProperty("position", "fixed");
+      root.style.setProperty("top", `-${bodyScrollLockY}px`);
+      root.style.setProperty("left", "0");
+      root.style.setProperty("right", "0");
+      root.style.setProperty("width", "100%");
+      root.style.setProperty("overflow", "hidden");
+    }
     return;
   }
 
@@ -312,6 +333,14 @@ const setChatwootOpenScrollLock = (locked: boolean) => {
   html.style.removeProperty("height");
   body.style.removeProperty("overflow");
   body.style.removeProperty("overscroll-behavior");
+  if (root) {
+    root.style.removeProperty("position");
+    root.style.removeProperty("top");
+    root.style.removeProperty("left");
+    root.style.removeProperty("right");
+    root.style.removeProperty("width");
+    root.style.removeProperty("overflow");
+  }
   window.scrollTo(0, bodyScrollLockY);
 };
 
@@ -386,6 +415,7 @@ const resetChatwootPanelInlineLayout = (holder: HTMLElement) => {
   holder.style.removeProperty("max-height");
   holder.style.removeProperty("min-height");
   holder.style.removeProperty("transform");
+  holder.style.removeProperty("transition");
 };
 
 const notifyChatwootScrollToBottom = () => {
@@ -402,6 +432,7 @@ const applyRestPanelLayout = (
   panelWidth: number,
   panelHeight: number
 ) => {
+  enablePanelLayoutTransition(holder);
   holder.style.setProperty("top", "50%", "important");
   holder.style.setProperty("left", "50%", "important");
   holder.style.setProperty("right", "auto", "important");
@@ -415,6 +446,7 @@ const applyRestPanelLayout = (
 
 const applyKeyboardPanelLayout = (holder: HTMLElement, panelWidth: number) => {
   const vv = window.visualViewport;
+  const offsetTop = Math.round(vv?.offsetTop ?? 0);
   const visibleWidth = Math.round(vv?.width ?? window.innerWidth);
   const offsetLeft = Math.round(vv?.offsetLeft ?? 0);
   const fittedWidth = Math.min(panelWidth, Math.max(280, visibleWidth - 32));
@@ -424,8 +456,9 @@ const applyKeyboardPanelLayout = (holder: HTMLElement, panelWidth: number) => {
     Math.round(vv?.height ?? window.innerHeight)
   );
 
-  // offsetTop 사용 금지 — iOS에서 body fixed + 키보드 시 패널이 화면 위로 사라짐
-  holder.style.setProperty("top", "0px", "important");
+  enablePanelLayoutTransition(holder);
+  // #root 고정 + visualViewport offsetTop — iOS에서 배경·네비가 밀리지 않음
+  holder.style.setProperty("top", `${offsetTop}px`, "important");
   holder.style.setProperty("left", `${Math.round(panelLeft)}px`, "important");
   holder.style.setProperty("right", "auto", "important");
   holder.style.setProperty("bottom", "auto", "important");
@@ -457,8 +490,8 @@ export const applyChatwootPanelLayout = () => {
   const { panelWidth, panelHeight } = ensureBasePanelMetrics();
   const keyboardOpen = isKeyboardVisible();
   const signature = keyboardOpen
-    ? `kb|${getKeyboardInset()}|${panelWidth}|${Math.round(window.visualViewport?.height ?? 0)}|${window.innerHeight}|${chatIframeFocused ? 1 : 0}`
-    : `rest|${panelWidth}|${panelHeight}|${window.innerHeight}`;
+    ? `kb|${getKeyboardInset()}|${panelWidth}|${Math.round(window.visualViewport?.height ?? 0)}|${Math.round(window.visualViewport?.offsetTop ?? 0)}`
+    : `rest|${panelWidth}|${panelHeight}`;
 
   if (signature === lastPanelLayoutSignature) return;
   lastPanelLayoutSignature = signature;
@@ -476,6 +509,9 @@ export const applyChatwootPanelLayout = () => {
 
 const onChatwootViewportChange = () => {
   if (!isChatwootPanelOpen() || !isMobileChatwootLayout()) return;
+  if (isBodyScrollLocked) {
+    window.scrollTo(0, bodyScrollLockY);
+  }
   if (panelLayoutRaf) return;
   panelLayoutRaf = requestAnimationFrame(() => {
     panelLayoutRaf = 0;
@@ -522,7 +558,7 @@ const onChatwootIframeFocusOut = (event: FocusEvent) => {
     chatIframeFocused = false;
     resetPanelLayoutSignature();
     applyChatwootPanelLayout();
-  }, 120);
+  }, 200);
 };
 
 const attachPanelFocusListeners = () => {
@@ -655,12 +691,13 @@ let closingChatwootFromPopState = false;
 
 const openChatwootPanel = () => {
   injectChatwootMobileOverrides();
+  resetBasePanelMetrics();
+  resetBaselineViewportHeight();
+  captureBaselineViewportHeight();
   setChatwootOpenScrollLock(true);
   ensureChatwootBackdrop();
   setBackgroundTouchBlocker(true);
   pushChatwootHistory();
-  resetBasePanelMetrics();
-  captureBaselineViewportHeight();
   attachPanelViewportListeners();
   attachPanelFocusListeners();
   applyChatwootPanelLayout();
@@ -673,6 +710,7 @@ const closeChatwootPanel = (fromPopState = false) => {
   detachPanelFocusListeners();
   resetPanelLayoutSignature();
   resetBasePanelMetrics();
+  resetBaselineViewportHeight();
   setChatwootKeyboardOpenClass(false);
   setChatwootOpenScrollLock(false);
   hideChatwootBackdrop();
@@ -752,7 +790,6 @@ export const watchChatwootBubbleMount = () => {
       applyChatwootHolderLayout();
       if (isChatwootPanelOpen() && isMobileChatwootLayout()) {
         resetPanelLayoutSignature();
-        resetBasePanelMetrics();
         applyChatwootPanelLayout();
       }
     },
