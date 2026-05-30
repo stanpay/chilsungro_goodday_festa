@@ -156,6 +156,20 @@ const getKeyboardInset = () => {
   return Math.max(vvInset, vkInset, innerHeightDelta, vvHeightDelta);
 };
 
+/** iOS fixed 요소는 layout viewport 기준 — visual top에 맞추려면 offsetTop 필요 (스파이크는 clamp) */
+const getIOSKeyboardPanelTop = (restTop: number) => {
+  const vv = window.visualViewport;
+  const rawOffsetTop = Math.max(0, Math.round(vv?.offsetTop ?? 0));
+  const inset = getKeyboardInset();
+
+  if (inset <= 0 && rawOffsetTop <= 0) {
+    return 0;
+  }
+
+  const maxPan = inset > 0 ? inset + 32 : restTop;
+  return Math.min(rawOffsetTop, maxPan, restTop);
+};
+
 const captureBaselineViewportHeight = () => {
   baselineViewportHeight = Math.round(
     window.visualViewport?.height ?? window.innerHeight
@@ -442,7 +456,7 @@ const getRestPanelRect = (panelWidth: number, panelHeight: number): PanelRect =>
   };
 };
 
-const getKeyboardPanelRect = (panelWidth: number): PanelRect => {
+const getKeyboardPanelRect = (panelWidth: number, panelHeight: number): PanelRect => {
   const vv = window.visualViewport;
   const visibleWidth = Math.round(vv?.width ?? window.innerWidth);
   const fittedWidth = Math.min(panelWidth, Math.max(280, visibleWidth - 32));
@@ -451,11 +465,13 @@ const getKeyboardPanelRect = (panelWidth: number): PanelRect => {
     Math.round(vv?.height ?? window.innerHeight)
   );
 
-  // iOS: offsetTop 보정은 키보드 애니메이션 중 역방향 점프를 유발 → 상단 0 고정
   if (isIOSMobileChatwoot()) {
     const layoutWidth = window.innerWidth;
+    const restTop = Math.round(
+      ((baselineViewportHeight || window.innerHeight) - panelHeight) / 2
+    );
     return {
-      top: 0,
+      top: getIOSKeyboardPanelTop(restTop),
       left: Math.round((layoutWidth - fittedWidth) / 2),
       width: Math.round(fittedWidth),
       height: fittedHeight,
@@ -526,10 +542,28 @@ const applyInterpolatedPanelLayout = (
   options: { animate?: boolean } = {}
 ) => {
   const rest = getRestPanelRect(panelWidth, panelHeight);
-  const keyboard = getKeyboardPanelRect(panelWidth);
+  const keyboard = getKeyboardPanelRect(panelWidth, panelHeight);
   const t = Math.min(1, Math.max(0, progress));
+
+  let top: number;
+  if (isIOSMobileChatwoot()) {
+    const iosTop = keyboard.top;
+    if (t <= 0) {
+      top = rest.top;
+    } else if (t < 0.08) {
+      top = lerpPanelValue(rest.top, iosTop, t / 0.08);
+    } else if (t > 0.92) {
+      top = lerpPanelValue(rest.top, iosTop, (1 - t) / 0.08);
+    } else {
+      // 키보드 구간: 매 프레임 visual viewport top에 직접 붙임 (lerp 스파이크 방지)
+      top = iosTop;
+    }
+  } else {
+    top = lerpPanelValue(rest.top, keyboard.top, t);
+  }
+
   const rect: PanelRect = {
-    top: lerpPanelValue(rest.top, keyboard.top, t),
+    top,
     left: lerpPanelValue(rest.left, keyboard.left, t),
     width: lerpPanelValue(rest.width, keyboard.width, t),
     height: lerpPanelValue(rest.height, keyboard.height, t),
