@@ -282,7 +282,7 @@ const getKeyboardInset = () => {
   return Math.max(vvInset, vkInset, innerHeightDelta, vvHeightDelta);
 };
 
-/** iOS: fixed 요소 top은 visualViewport.offsetTop과 일치해야 함 (restTop으로 cap하면 화면 밖으로 밀림) */
+/** iOS: 키보드 완전히 열린 뒤 visual viewport top (layout 좌표) */
 const getIOSKeyboardPanelTop = () => {
   const vv = window.visualViewport;
   const rawOffsetTop = Math.max(0, Math.round(vv?.offsetTop ?? 0));
@@ -290,6 +290,17 @@ const getIOSKeyboardPanelTop = () => {
 
   const baseline = baselineViewportHeight || window.innerHeight;
   return Math.min(rawOffsetTop, Math.round(baseline * 0.65));
+};
+
+/** iOS: offsetTop 스파이크를 inset progress로 게이트 — 축소 중 위로 튀었다 내려오는 현상 방지 */
+const getIOSInterpolatedPanelTop = (restTop: number, progress: number) => {
+  const t = Math.min(1, Math.max(0, progress));
+  if (t <= 0) return restTop;
+  if (t >= 1) return getIOSKeyboardPanelTop();
+
+  const settledTop = getIOSKeyboardPanelTop();
+  const progressSettledTop = Math.round(settledTop * t);
+  return lerpPanelValue(restTop, progressSettledTop, t);
 };
 
 const captureBaselineViewportHeight = () => {
@@ -687,14 +698,18 @@ const applyInterpolatedPanelLayout = (
   const t = Math.min(1, Math.max(0, progress));
 
   const rect: PanelRect = {
-    top: lerpPanelValue(rest.top, keyboard.top, t),
+    top: isIOSMobileChatwoot()
+      ? getIOSInterpolatedPanelTop(rest.top, t)
+      : lerpPanelValue(rest.top, keyboard.top, t),
     left: lerpPanelValue(rest.left, keyboard.left, t),
     width: lerpPanelValue(rest.width, keyboard.width, t),
     height: lerpPanelValue(rest.height, keyboard.height, t),
   };
 
   const shouldAnimate =
-    options.animate !== false && (t < 0.05 || t > 0.95);
+    !isIOSMobileChatwoot() &&
+    options.animate !== false &&
+    (t < 0.05 || t > 0.95);
 
   applyPanelRect(holder, rect, {
     animate: shouldAnimate,
