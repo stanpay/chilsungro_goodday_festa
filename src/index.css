@@ -228,6 +228,12 @@ All colors MUST be HSL.
     border-radius: 16px !important;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16) !important;
     overflow: hidden !important;
+  }
+
+  /* 레이아웃 transition은 열려 있을 때만 적용한다. 닫을 때(woot--hide)까지
+     transition이 살아 있으면 inline 좌표 제거가 0.28s 동안 애니메이션되어
+     패널이 즉시 사라지지 않고 원위치로 미끄러지며 남는다. */
+  #cw-widget-holder.woot-widget-holder:not(.woot--hide) {
     transition: top 0.28s ease, left 0.28s ease, width 0.28s ease, height 0.28s ease,
       max-height 0.28s ease, min-height 0.28s ease, transform 0.28s ease,
       border-radius 0.28s ease !important;
