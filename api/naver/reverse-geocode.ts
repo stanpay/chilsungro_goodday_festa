@@ -1,5 +1,5 @@
-import { fetchNaverUpstream } from "./_upstream";
-import { getNaverServerCredentials } from "./_credentials";
+import { fetchNaverUpstream } from "./_upstream.js";
+import { getNaverServerCredentials } from "./_credentials.js";
 
 type Req = { method?: string; query: Record<string, string | string[] | undefined> };
 type Res = {

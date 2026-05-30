@@ -1,6 +1,6 @@
-import { fetchNaverUpstream } from "./_upstream";
-import { getNaverServerCredentials } from "./_credentials";
-import { normalizeGeocodeRestLanguage } from "./_language";
+import { fetchNaverUpstream } from "./_upstream.js";
+import { getNaverServerCredentials } from "./_credentials.js";
+import { normalizeGeocodeRestLanguage } from "./_language.js";
 
 type Req = { method?: string; query: Record<string, string | string[] | undefined> };
 type Res = {

@@ -236,10 +236,6 @@ All colors MUST be HSL.
     height: 100% !important;
   }
 
-  #cw-widget-holder.woot-widget-holder.chatwoot-keyboard-open {
-    overflow: hidden !important;
-  }
-
   #stan-chatwoot-backdrop {
     position: fixed;
     inset: 0;
@@ -259,6 +255,10 @@ All colors MUST be HSL.
   html.chatwoot-panel-open body {
     overflow: hidden !important;
     overscroll-behavior: none;
+  }
+
+  html.chatwoot-keyboard-open #cw-widget-holder.woot-widget-holder:not(.woot--hide):not(.has-unread-view) {
+    border-radius: 0 0 16px 16px !important;
   }
 }
 
