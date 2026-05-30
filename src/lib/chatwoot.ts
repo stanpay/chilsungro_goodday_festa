@@ -292,36 +292,16 @@ const getIOSKeyboardPanelTop = () => {
   return Math.min(rawOffsetTop, Math.round(baseline * 0.65));
 };
 
-const getIOSInterpolatedPanelRect = (
-  rest: PanelRect,
-  keyboard: PanelRect,
-  progress: number
-): PanelRect => {
-  const t = Math.min(1, Math.max(0, progress));
-  if (t <= 0) return rest;
-
+/** iOS: 키보드가 열렸을 때 도달할 최종 패널 위치 (중간 추적 없이 한 번에 이동할 목표) */
+const getIOSKeyboardTargetRect = (keyboard: PanelRect): PanelRect => {
   const vv = window.visualViewport;
   const offsetTop = getIOSKeyboardPanelTop();
   const vvHeight = Math.max(200, Math.round(vv?.height ?? window.innerHeight));
-  const height = Math.min(
-    lerpPanelValue(rest.height, keyboard.height, t),
-    vvHeight
-  );
-  const width = lerpPanelValue(rest.width, keyboard.width, t);
-  const left = lerpPanelValue(rest.left, keyboard.left, t);
-  const visualBottom = offsetTop + vvHeight;
-  const topFromBottom = visualBottom - height;
-  const topFromCenter = lerpPanelValue(rest.top, keyboard.top, t);
-  const anchorWeight = Math.min(1, Math.max(0, (t - 0.06) / 0.94));
-  const blendedTop = Math.round(
-    lerpPanelValue(topFromCenter, topFromBottom, anchorWeight)
-  );
-
   return {
-    top: Math.max(blendedTop, offsetTop),
-    left,
-    width,
-    height,
+    top: offsetTop,
+    left: keyboard.left,
+    width: keyboard.width,
+    height: Math.min(keyboard.height, vvHeight),
   };
 };
 
@@ -719,29 +699,43 @@ const applyInterpolatedPanelLayout = (
   const keyboard = getKeyboardPanelRect(panelWidth, panelHeight);
   const t = Math.min(1, Math.max(0, progress));
 
-  const rect: PanelRect = isIOSMobileChatwoot()
-    ? getIOSInterpolatedPanelRect(rest, keyboard, t)
-    : {
-        top: lerpPanelValue(rest.top, keyboard.top, t),
-        left: lerpPanelValue(rest.left, keyboard.left, t),
-        width: lerpPanelValue(rest.width, keyboard.width, t),
-        height: lerpPanelValue(rest.height, keyboard.height, t),
-      };
+  // iOS: offsetTop 스파이크 추적이 출렁임을 만드므로 보간하지 않고
+  // rest ↔ keyboard 목표 둘 중 하나로 CSS transition을 통해 "한 번에" 이동한다.
+  if (isIOSMobileChatwoot()) {
+    const keyboardActive =
+      getKeyboardInset() > CHATWOOT_KEYBOARD_INSET_THRESHOLD_PX;
+    const target = keyboardActive ? getIOSKeyboardTargetRect(keyboard) : rest;
+
+    applyPanelRect(holder, target, {
+      animate: options.animate !== false,
+      minHeight: keyboardActive ? undefined : CHATWOOT_PANEL_MIN_HEIGHT_PX,
+    });
+    setChatwootKeyboardOpenClass(keyboardActive);
+    syncIOSBackgroundCompensation();
+
+    if (keyboardActive && lastScrollNotifyProgress <= 0.45) {
+      notifyChatwootScrollToBottom();
+      window.setTimeout(notifyChatwootScrollToBottom, 100);
+    }
+    lastScrollNotifyProgress = keyboardActive ? 1 : 0;
+    return;
+  }
+
+  const rect: PanelRect = {
+    top: lerpPanelValue(rest.top, keyboard.top, t),
+    left: lerpPanelValue(rest.left, keyboard.left, t),
+    width: lerpPanelValue(rest.width, keyboard.width, t),
+    height: lerpPanelValue(rest.height, keyboard.height, t),
+  };
 
   const shouldAnimate =
-    !isIOSMobileChatwoot() &&
-    options.animate !== false &&
-    (t < 0.05 || t > 0.95);
+    options.animate !== false && (t < 0.05 || t > 0.95);
 
   applyPanelRect(holder, rect, {
     animate: shouldAnimate,
     minHeight: t < 0.05 ? CHATWOOT_PANEL_MIN_HEIGHT_PX : undefined,
   });
   setChatwootKeyboardOpenClass(t > 0.85);
-
-  if (isIOSMobileChatwoot()) {
-    syncIOSBackgroundCompensation();
-  }
 
   if (t > 0.45 && lastScrollNotifyProgress <= 0.45) {
     notifyChatwootScrollToBottom();
