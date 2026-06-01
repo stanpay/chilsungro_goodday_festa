@@ -3125,8 +3125,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               )}
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center gap-1 py-12 text-center">
               <p className="text-muted-foreground">{t.noStores}</p>
+              <p className="text-sm text-muted-foreground/70">{t.noStoresHint}</p>
             </div>
           )}
         </div>

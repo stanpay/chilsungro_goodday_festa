@@ -180,7 +180,7 @@ const Location = () => {
         <div className="mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"/>
-            <Input placeholder="주소 검색" inputMode="search" enterKeyHint="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} className={`pl-10 h-12 rounded-xl ${searchQuery ? 'pr-10' : ''}`}/>
+            <Input placeholder="주소 검색" inputMode="search" enterKeyHint="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur(); }} className={`pl-10 h-12 rounded-xl ${searchQuery ? 'pr-10' : ''}`}/>
             {searchQuery && (<button type="button" onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" aria-label="검색어 지우기">
                 <X className="w-5 h-5"/>
               </button>)}
