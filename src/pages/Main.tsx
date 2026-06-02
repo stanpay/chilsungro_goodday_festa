@@ -1701,11 +1701,10 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   );
 
   // 혜택 필터 줄의 openNow 칩이 켜진 경우에만 영업중 필터 적용
+  // TODO: 영업중 필터 임시 비활성화 (UI는 유지, 기능만 off)
   const openStores = useMemo(() =>
-    benefitFilterChips.has("openNow")
-      ? categoryFilteredStores.filter((store) => store.isOpen !== false)
-      : categoryFilteredStores,
-    [categoryFilteredStores, benefitFilterChips]
+    categoryFilteredStores,
+    [categoryFilteredStores]
   );
 
   const hasStoreCoords = (store: StoreData) =>

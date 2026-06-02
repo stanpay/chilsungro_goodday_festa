@@ -60,12 +60,13 @@ const CHILSEONGRO_GOOD_DAY_FESTA_POSTER =
   "/banners/chilseongro-good-day-festa-poster.webp";
 const EVENT_VENUE_MAP_POPUP = "/banners/event-venue-map-popup.jpeg";
 
-/** 메인 배너 마운트 시 팝업 이미지 선로딩용 */
-export const MAIN_BANNER_POPUP_IMAGE_URLS = [
-  JEJU_TRAVELER_CENTER_COUPON_POSTER,
-  CHILSEONGRO_GOOD_DAY_FESTA_POSTER,
-  EVENT_VENUE_MAP_POPUP,
-] as const;
+/** 메인 배너 마운트 시 팝업 이미지 선로딩용 — 활성 배너의 팝업 이미지만 대상 */
+export function getActiveBannerPopupImageUrls(locale: AppLocale): string[] {
+  const urls = getMainBanners(locale)
+    .map((banner) => banner.popupImageUrl)
+    .filter((url): url is string => !!url);
+  return Array.from(new Set(urls));
+}
 
 /** 캐러셀 배너 — 1600×670 WebP (원본 PNG 대비 ~95% 용량 절감) */
 const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {

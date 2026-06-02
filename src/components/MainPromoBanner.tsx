@@ -13,9 +13,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  getActiveBannerPopupImageUrls,
   getBannerText,
   getMainBanners,
-  MAIN_BANNER_POPUP_IMAGE_URLS,
   NAVER_MAP_DIRECTIONS_ALT,
   NAVER_MAP_DIRECTIONS_IMAGE,
   type MainBanner,
@@ -155,7 +155,7 @@ export default function MainPromoBanner({
     if (firstUrl) preloadImage(firstUrl);
 
     const deferSecondaryAssets = () => {
-      MAIN_BANNER_POPUP_IMAGE_URLS.forEach(preloadImage);
+      getActiveBannerPopupImageUrls(locale).forEach(preloadImage);
       preloadImage(NAVER_MAP_DIRECTIONS_IMAGE[locale]);
     };
 
