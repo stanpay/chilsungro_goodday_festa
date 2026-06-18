@@ -607,9 +607,34 @@ interface StoreData {
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingSearchSubmitRef = useRef(false);
+  const mapSearchMatchRef = useRef<(query: string) => boolean>(() => false);
+  const isLoadingStoresRef = useRef(true);
+  const mapSearchEmptyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mapSearchEmptyNotice, setMapSearchEmptyNotice] = useState(false);
+  const showMapSearchEmptyNoticeRef = useRef<() => void>(() => {});
 
   const submitSearch = (input: HTMLInputElement) => {
     const value = input.value;
+    const trimmed = value.trim();
+
+    if (
+      isMapViewRef.current &&
+      trimmed &&
+      !isLoadingStoresRef.current &&
+      !mapSearchMatchRef.current(value)
+    ) {
+      input.blur();
+      preserveMapViewportRef.current = true;
+      skipNextFitMapRef.current = true;
+      setSearchInput(value);
+      setSearchQuery("");
+      setMapFilteredStores(null);
+      setSelectedMapStoreId(null);
+      setHighlightMapSheetCard(false);
+      showMapSearchEmptyNoticeRef.current();
+      return;
+    }
+
     setSearchInput(value);
     setSearchQuery(value);
     input.blur();
@@ -1555,10 +1580,26 @@ interface StoreData {
     preloadJejuStores();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (mapSearchEmptyTimerRef.current) clearTimeout(mapSearchEmptyTimerRef.current);
+    };
+  }, []);
+
   mapPinLabelsRef.current = mapPinLabels;
 
   const t = mainStrings(locale);
   const h = headerStrings(locale);
+
+  showMapSearchEmptyNoticeRef.current = () => {
+    setMapSearchEmptyNotice(true);
+    if (mapSearchEmptyTimerRef.current) clearTimeout(mapSearchEmptyTimerRef.current);
+    mapSearchEmptyTimerRef.current = setTimeout(() => {
+      setMapSearchEmptyNotice(false);
+      mapSearchEmptyTimerRef.current = null;
+    }, 2500);
+  };
+
   const headerLocationLine = useTranslatedAddressLine(currentLocation, locale);
   const headerLocationText = isLoadingLocation
     ? h.checkingLocation
@@ -1709,6 +1750,16 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
 
   const hasStoreCoords = (store: StoreData) =>
     Number.isFinite(store.lat) && Number.isFinite(store.lon);
+
+  mapSearchMatchRef.current = (query: string) => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return true;
+    return categoryFilteredStores.some(
+      (store) =>
+        hasStoreCoords(store) && store.name.toLowerCase().includes(trimmed)
+    );
+  };
+  isLoadingStoresRef.current = isLoadingStores;
 
   const handleResearch = () => {
     const map = mapInstanceRef.current;
@@ -3070,6 +3121,18 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
             </div>
           )}
         </div>
+
+        {isMapView && mapSearchEmptyNotice && (
+          <div
+            className="pointer-events-none fixed inset-0 z-[35] flex items-center justify-center px-6"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="rounded-xl border border-border bg-card/95 px-5 py-3 text-sm font-medium text-foreground shadow-lg backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
+              {t.noSearchResults}
+            </div>
+          </div>
+        )}
 
         {isMapView && (
           <div

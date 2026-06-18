@@ -89,6 +89,7 @@ type MainCopy = {
   loadingStores: string;
   noStores: string;
   noStoresHint: string;
+  noSearchResults: string;
   languageMenuAria: string;
   chipHighOilSupport: string,
 };
@@ -121,6 +122,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     loadingStores: "매장 정보를 불러오는 중...",
     noStores: "주변에 매장이 없습니다",
     noStoresHint: "상단 위치 버튼을 눌러 위치를 직접 설정해 보세요",
+    noSearchResults: "검색결과가 없습니다",
     languageMenuAria: "언어 선택",
     chipHighOilSupport: "고유가 지원금",
   },
@@ -151,6 +153,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     loadingStores: "Loading stores...",
     noStores: "No stores nearby",
     noStoresHint: "Tap the location button at the top to set your location manually",
+    noSearchResults: "No search results",
     languageMenuAria: "Choose language",
     chipHighOilSupport: "High Oil Price Support",
   },
@@ -181,6 +184,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     loadingStores: "正在加载门店信息...",
     noStores: "附近没有门店",
     noStoresHint: "点击顶部的位置按钮手动设置位置",
+    noSearchResults: "没有搜索结果",
     languageMenuAria: "选择语言",
     chipHighOilSupport: "高油价补贴",
 
@@ -212,6 +216,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     loadingStores: "店舗情報を読み込み中...",
     noStores: "近くに店舗がありません",
     noStoresHint: "上部の位置ボタンを押して位置を手動で設定してください",
+    noSearchResults: "検索結果がありません",
     languageMenuAria: "言語を選択",
     chipHighOilSupport: "高油価支援金",
 
