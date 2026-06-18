@@ -3004,7 +3004,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               }}
               className={cn(
                 "w-full h-12 pl-10 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all",
-                searchInput || searchQuery ? "pr-10" : "pr-3"
+                searchInput || searchQuery ? "pr-12" : "pr-3"
               )}
             />
             {(searchInput || searchQuery) && (
@@ -3015,8 +3015,9 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                   skipNextFitMapRef.current = true;
                   setSearchInput("");
                   setSearchQuery("");
+                  searchInputRef.current?.focus();
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="검색어 지우기"
               >
                 <X className="w-5 h-5" />
