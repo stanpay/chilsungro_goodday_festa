@@ -1,11 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Coffee, MapPin, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { Coffee, MapPin, ShoppingBag, Store, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { openStoreRedirect } from "@/lib/storeRedirect";
 
@@ -38,17 +38,28 @@ interface StoreCardProps {
   onActivate?: () => void;
 }
 
-const brandLogos: Record<string, string> = {
-  starbucks: "https://search.pstatic.net/common/?src=http%3A%2F%2Fblogfiles.naver.net%2FMjAyNTA4MjlfMjgx%2FMDAxNzU2NDc1MzQ5MDg3.DfBA7igmTBTBDImxB5xYeYo2u0CkoEE7koZ4ftZd88kg.38N8phV00xjgzB4Nxlokk5y-5jQlNguJKmhDGEKH0Tog.PNG%2F4.png&type=sc960_832",
-  baskin: "https://search.pstatic.net/common/?src=http%3A%2F%2Fblogfiles.naver.net%2FMjAyMzAyMjJfODMg%2FMDAxNjc3MDY4NjQ1NTI5.M_v0jLl65iN6AZLntTDRNHLnKpFZo9qV8PLwsOTvC_Ug.t8CrUh9Qz--ZORSdxyWEIwo2ShJTpngAmJ4-1A5ulFkg.PNG.futurara%2F%25BA%25A3%25B6%25F3%25B7%25CE%25B0%25ED.png&type=a340",
-  mega: "https://img.79plus.co.kr/megahp/common/img/new_logo.png",
-  pascucci: "https://www.pascucci.co.kr/lib/images/common/foot_logo2.png",
-  twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
-};
-
 const NAME_MARQUEE_TOLERANCE_PX = 1;
 const NAME_SAFE_RIGHT_PADDING_PX = 6;
 const CHIPS_MARQUEE_TOLERANCE_PX = 1;
+
+const CAFE_IMAGES = new Set([
+  "cafe",
+  "starbucks",
+  "baskin",
+  "mega",
+  "pascucci",
+  "twosome",
+]);
+
+function StoreCardImageIcon({ image }: { image: string }) {
+  const className = "relative z-10 h-20 w-20 text-primary/70";
+  const iconProps = { className, strokeWidth: 1.5, "aria-hidden": true as const };
+
+  if (image === "shopping") return <ShoppingBag {...iconProps} />;
+  if (image === "restaurant") return <UtensilsCrossed {...iconProps} />;
+  if (CAFE_IMAGES.has(image)) return <Coffee {...iconProps} />;
+  return <Store {...iconProps} />;
+}
 
 const StoreCard = ({
   id,
@@ -80,13 +91,20 @@ const StoreCard = ({
   const { locale } = useAppLocale();
   const sc = storeCardStrings(locale);
   const displayName = useTranslatedKoreanText(name, locale);
-  const brandLogoUrl = brandLogos[image as keyof typeof brandLogos];
   const nameContainerRef = useRef<HTMLHeadingElement>(null);
   const chipsContainerRef = useRef<HTMLDivElement>(null);
   const chipsInnerRef = useRef<HTMLSpanElement>(null);
   const [nameFontSizeClass, setNameFontSizeClass] = useState("text-base");
   const [nameMarqueeDistance, setNameMarqueeDistance] = useState(0);
   const [chipsMarqueeDistance, setChipsMarqueeDistance] = useState(0);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const photoUrl = photos?.[0];
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [photoUrl]);
+
+  const showPhoto = Boolean(photoUrl) && !photoFailed;
 
   useLayoutEffect(() => {
     const container = nameContainerRef.current;
@@ -259,36 +277,20 @@ const StoreCard = ({
           <div
             className={cn(
               "relative flex h-28 items-center justify-center overflow-hidden",
-              brandLogoUrl || !(photos && photos.length > 0) ? "bg-primary/10 p-4" : ""
+              !showPhoto ? "bg-primary/10 p-4" : ""
             )}
           >
-            {/* 비브랜드 매장: 더미 사진 배경 */}
-            {!brandLogoUrl && photos && photos.length > 0 && (
+            {showPhoto && (
               <img
-                src={photos[0]}
+                src={photoUrl}
                 alt=""
                 aria-hidden="true"
                 className="absolute inset-0 h-full w-full object-cover"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                onError={() => setPhotoFailed(true)}
               />
             )}
 
-            {/* 로고 / 아이콘 */}
-            {brandLogoUrl ? (
-              <img
-                src={brandLogoUrl}
-                alt={displayName}
-                className="relative z-10 h-20 w-20 object-contain"
-              />
-            ) : !(photos && photos.length > 0) && (
-              image === "shopping" ? (
-                <ShoppingBag className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
-              ) : image === "restaurant" ? (
-                <UtensilsCrossed className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
-              ) : (
-                <Coffee className="relative z-10 h-20 w-20 text-primary/70" strokeWidth={1.5} aria-hidden />
-              )
-            )}
+            {!showPhoto && <StoreCardImageIcon image={image} />}
 
             {discountBadgeText && (
               <div className="absolute top-2 right-2 z-20 flex flex-col items-end gap-1.5">

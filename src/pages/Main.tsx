@@ -1242,7 +1242,7 @@ interface StoreData {
             ? store.distance_m
             : calculateDistance(latitude, longitude, store.latitude, store.longitude) * 1000;
         const image = imageFromStoreCategory(store.category);
-        const { isOpen, todayHours, photos, closedDayNote } = getStoreOpenStatus(image);
+        const { isOpen, todayHours, closedDayNote } = getStoreOpenStatus(image);
         return {
           id: String(store.id),
           name: store.name,
@@ -1262,7 +1262,7 @@ interface StoreData {
           categoryName: store.category || "",
           isOpen: store.business_hours_today ? !store.business_hours_today.includes("정기휴무") : isOpen,
           todayHours,
-          photos: store.image_url ? [store.image_url] : photos,
+          photos: store.image_url ? [store.image_url] : [],
           closedDayNote: store.business_hours_today || closedDayNote,
           local_currency_available: store.localpay,
           local_currency_discount_rate: null,
