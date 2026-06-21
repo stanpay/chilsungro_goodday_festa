@@ -19,6 +19,23 @@ export type StoreRedirectContext = {
   name?: string;
 };
 
+/** PWA·모바일 웹이 아닌 데스크톱 브라우저 */
+function isDesktopWebBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  if (isInStandaloneMode()) return false;
+  return !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+function openDesktopNaverMapFromContext(context: StoreRedirectContext): void {
+  openNaverMapWebFallback(
+    buildNaverMapOpenUrl({
+      name: context.name ?? "",
+      lat: context.lat,
+      lon: context.lon,
+    }),
+  );
+}
+
 function isMapRelatedUrl(url: string): boolean {
   const lower = url.toLowerCase();
   return (
@@ -58,6 +75,7 @@ export async function resolveRedirectTarget(
 }
 
 export function prefetchStoreRedirect(redirectUrl: string): void {
+  if (isDesktopWebBrowser()) return;
   if (!redirectUrl || REDIRECT_CACHE.has(redirectUrl)) return;
 
   void resolveRedirectTarget(redirectUrl)
@@ -235,13 +253,19 @@ async function openStoreRedirectResolved(
 
 /**
  * 스토어 카드 리다이렉트 URL 실행.
- * redirect를 클라이언트에서 해석한 뒤 nmap:// → HTTPS fallback 등 지도 링크 처리.
+ * - 데스크톱: context로 HTTPS 네이버 지도 URL을 바로 연다 (fetch/redirect 미사용)
+ * - PWA·모바일 웹: redirect를 클라이언트에서 해석한 뒤 nmap:// → HTTPS fallback 등 처리
  */
 export function openStoreRedirect(
   redirectUrl: string,
   context?: StoreRedirectContext,
 ): void {
   if (!redirectUrl) return;
+
+  if (isDesktopWebBrowser() && context) {
+    openDesktopNaverMapFromContext(context);
+    return;
+  }
 
   void openStoreRedirectResolved(redirectUrl, context);
 }
