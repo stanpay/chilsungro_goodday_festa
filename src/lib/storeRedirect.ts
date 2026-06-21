@@ -1,5 +1,6 @@
 import {
   buildNaverMapOpenUrl,
+  buildNaverMapWebUrlFromScheme,
   openNativeDeepLink,
   openNaverMapMarker,
   openNaverMapPlace,
@@ -45,6 +46,8 @@ export async function resolveRedirectTarget(
       const location = response.headers.get("Location");
       if (!location) break;
       current = new URL(location, current).href;
+      // nmap/intent 등 fetch로 따라갈 수 없는 스킴은 여기서 종료
+      if (!/^https?:/i.test(current)) break;
       continue;
     }
 
@@ -82,31 +85,72 @@ function buildIntentFromNmap(nmapUrl: string): string {
   );
 }
 
+function toNmapUrl(url: string): string | null {
+  if (url.startsWith("nmap://")) return url;
+  if (url.startsWith("intent://")) {
+    const path = url.match(/^intent:\/\/([^#]+)/)?.[1];
+    return path ? `nmap://${path}` : null;
+  }
+  return null;
+}
+
+function isNativeMapScheme(url: string): boolean {
+  return url.startsWith("nmap://") || url.startsWith("intent://");
+}
+
+function resolveWebFallbackUrl(
+  targetUrl: string,
+  context?: StoreRedirectContext,
+): string {
+  if (isMapRelatedUrl(targetUrl) && targetUrl.startsWith("http")) {
+    return targetUrl;
+  }
+
+  if (isNativeMapScheme(targetUrl)) {
+    const httpsUrl = buildNaverMapWebUrlFromScheme(targetUrl, context);
+    if (httpsUrl) return httpsUrl;
+  }
+
+  if (context?.name?.trim()) {
+    return buildNaverMapOpenUrl({
+      name: context.name,
+      lat: context.lat,
+      lon: context.lon,
+    });
+  }
+
+  return targetUrl;
+}
+
+function openNmapOnWeb(
+  schemeUrl: string,
+  context?: StoreRedirectContext,
+): boolean {
+  if (isInStandaloneMode()) return false;
+
+  const httpsUrl = resolveWebFallbackUrl(schemeUrl, context);
+  if (!httpsUrl.startsWith("http")) return false;
+
+  openNaverMapWebFallback(httpsUrl);
+  return true;
+}
+
 function launchMapTarget(
   targetUrl: string,
   context?: StoreRedirectContext,
 ): void {
-  const webFallback =
-    isMapRelatedUrl(targetUrl) && targetUrl.startsWith("http")
-      ? targetUrl
-      : context?.name
-        ? buildNaverMapOpenUrl({
-            name: context.name,
-            lat: context.lat,
-            lon: context.lon,
-          })
-        : targetUrl;
+  const webFallback = resolveWebFallbackUrl(targetUrl, context);
 
-  if (targetUrl.startsWith("nmap://")) {
-    openNativeDeepLink(targetUrl, {
+  if (isNativeMapScheme(targetUrl)) {
+    // 일반 웹: redirect 1차 응답이 nmap이면 앱 시도 없이 HTTPS로 바로 연다
+    if (openNmapOnWeb(targetUrl, context)) return;
+
+    const nmapUrl = toNmapUrl(targetUrl) ?? targetUrl;
+
+    openNativeDeepLink(nmapUrl, {
       webFallback,
-      intentUrl: buildIntentFromNmap(targetUrl),
+      intentUrl: buildIntentFromNmap(nmapUrl),
     });
-    return;
-  }
-
-  if (targetUrl.startsWith("intent://")) {
-    openNativeDeepLink(targetUrl, { webFallback });
     return;
   }
 
@@ -156,7 +200,7 @@ function launchResolvedTarget(
   window.open(targetUrl, "_blank", "noopener,noreferrer");
 }
 
-async function openStoreRedirectInPwa(
+async function openStoreRedirectResolved(
   redirectUrl: string,
   context?: StoreRedirectContext,
 ): Promise<void> {
@@ -171,14 +215,27 @@ async function openStoreRedirectInPwa(
     REDIRECT_CACHE.set(redirectUrl, resolved);
     launchResolvedTarget(resolved, context);
   } catch {
-    openExternalUrl(redirectUrl, { targetBlank: true });
+    const httpsUrl = context?.name?.trim()
+      ? resolveWebFallbackUrl("nmap://", context)
+      : undefined;
+
+    if (httpsUrl?.startsWith("http")) {
+      openNaverMapWebFallback(httpsUrl);
+      return;
+    }
+
+    if (isInStandaloneMode()) {
+      openExternalUrl(redirectUrl, { targetBlank: true });
+      return;
+    }
+
+    window.open(redirectUrl, "_blank", "noopener,noreferrer");
   }
 }
 
 /**
  * 스토어 카드 리다이렉트 URL 실행.
- * - PWA: redirect를 클라이언트에서 해석 → nmap:// 직접 실행(브라우저 선택 회피)
- * - 일반 브라우저: 기존처럼 redirect URL을 새 탭에서 열기
+ * redirect를 클라이언트에서 해석한 뒤 nmap:// → HTTPS fallback 등 지도 링크 처리.
  */
 export function openStoreRedirect(
   redirectUrl: string,
@@ -186,10 +243,5 @@ export function openStoreRedirect(
 ): void {
   if (!redirectUrl) return;
 
-  if (!isInStandaloneMode()) {
-    window.open(redirectUrl, "_blank", "noopener,noreferrer");
-    return;
-  }
-
-  void openStoreRedirectInPwa(redirectUrl, context);
+  void openStoreRedirectResolved(redirectUrl, context);
 }

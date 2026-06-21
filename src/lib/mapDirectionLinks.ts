@@ -19,6 +19,30 @@ export type MapDirectionInput = {
 const EARTH_RADIUS_M = 6378137;
 
 const NAVER_MAP_ANDROID_PACKAGE = "com.nhn.android.nmap";
+const NAVER_MAP_WEB_ZOOM = 18;
+
+/**
+ * 좌표 기반 공식 웹 URL (마커 표시).
+ * nmap://place?lat=&lng=&name= 과 동일하게 좌표로 핀을 찍고, name은 라벨로만 사용.
+ * https://map.naver.com/p/entry/address/{x},{y},{label}?c={zoom},0,0,0,dh
+ */
+export function buildNaverMapCoordEntryUrl(
+  lon: number,
+  lat: number,
+  label?: string,
+): string {
+  const { x, y } = wgs84ToWebMercator(lon, lat);
+  const displayLabel = label?.trim() || `${lat},${lon}`;
+  return (
+    `https://map.naver.com/p/entry/address/${x},${y},` +
+    `${encodeURIComponent(displayLabel)}?c=${NAVER_MAP_WEB_ZOOM},0,0,0,dh`
+  );
+}
+
+/** 공식 장소 상세 URL — map.naver.com/p/entry/place/{id} */
+export function buildNaverMapPlaceEntryUrl(placeId: string): string {
+  return `https://map.naver.com/p/entry/place/${placeId}?placePath=%2Fhome`;
+}
 
 function hasValidCoords(lat?: number, lon?: number): boolean {
   return (
@@ -139,18 +163,94 @@ export function openNaverMapWebFallback(url: string): void {
 }
 
 /**
- * 카드 등에서 네이버 지도를 열 때 사용.
- * - lat/lon 있음: 해당 좌표를 지도 중심으로 이동(주소 검색 아님).
- * - 없음: 매장명만으로 통합 검색(정밀 좌표 없을 때 대비).
+ * 카드 등에서 네이버 지도를 열 때 사용 (공식 /p/ 웹 URL).
+ * - lat/lon 있음: entry/address 좌표 핀 (매장명은 라벨만, 검색 아님)
+ * - lat/lon 없음 + name: 장소명 검색
  */
 export function buildNaverMapOpenUrl(input: MapDirectionInput): string {
   const { name, lat, lon } = input;
-  if (hasValidCoords(lat, lon) && lat != null && lon != null) {
-    const { x, y } = wgs84ToWebMercator(lon, lat);
-    return `https://map.naver.com/v5/?c=${x},${y},18,0,0,0,dh`;
-  }
   const q = name.trim();
-  return `https://map.naver.com/v5/search/${encodeURIComponent(q)}`;
+
+  if (hasValidCoords(lat, lon) && lat != null && lon != null) {
+    return buildNaverMapCoordEntryUrl(lon, lat, q || undefined);
+  }
+
+  if (q) {
+    return `https://map.naver.com/p/search/${encodeURIComponent(q)}`;
+  }
+
+  return "https://map.naver.com/";
+}
+
+export type ParsedNmapSchemeUrl = {
+  lat?: number;
+  lon?: number;
+  name?: string;
+  placeId?: string;
+};
+
+function parseNmapCoord(value: string | null): number | undefined {
+  if (value == null || value === "") return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toNmapSchemeUrl(url: string): string | null {
+  if (url.startsWith("nmap://")) return url;
+  if (url.startsWith("intent://")) {
+    const path = url.match(/^intent:\/\/([^#]+)/)?.[1];
+    return path ? `nmap://${path}` : null;
+  }
+  return null;
+}
+
+/** nmap:// / intent:// URL에서 좌표·장소명·place ID 추출 */
+export function parseNmapSchemeUrl(url: string): ParsedNmapSchemeUrl | null {
+  const normalized = toNmapSchemeUrl(url);
+  if (!normalized) return null;
+
+  const queryIndex = normalized.indexOf("?");
+  if (queryIndex === -1) return {};
+
+  const params = new URLSearchParams(normalized.slice(queryIndex + 1));
+  const name = params.get("name");
+
+  return {
+    placeId: params.get("id") ?? undefined,
+    lat: parseNmapCoord(params.get("lat") ?? params.get("latitude")),
+    lon: parseNmapCoord(params.get("lng") ?? params.get("longitude")),
+    name: name ? decodeURIComponent(name) : undefined,
+  };
+}
+
+/** nmap/intent 스킴 → 공식 HTTPS 네이버지도 URL */
+export function buildNaverMapWebUrlFromScheme(
+  schemeUrl: string,
+  context?: MapDirectionInput,
+): string | undefined {
+  const parsed = parseNmapSchemeUrl(schemeUrl);
+  const placeId = parsed?.placeId?.trim();
+  if (placeId) {
+    return buildNaverMapPlaceEntryUrl(placeId);
+  }
+
+  const lat = parsed?.lat ?? context?.lat;
+  const lon = parsed?.lon ?? context?.lon;
+  const name = parsed?.name?.trim() || context?.name?.trim();
+
+  if (hasValidCoords(lat, lon) && lat != null && lon != null) {
+    return buildNaverMapOpenUrl({
+      name: name ?? "",
+      lat,
+      lon,
+    });
+  }
+
+  if (name) {
+    return buildNaverMapOpenUrl({ name });
+  }
+
+  return undefined;
 }
 
 function buildNaverMapMarkerDeepLinks(input: {
@@ -216,11 +316,7 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
   const { isIOS, isAndroid } = getMobileEnv();
 
   if (!hasValidCoords(lat, lon) || lat == null || lon == null) {
-    window.open(
-      `https://map.naver.com/v5/search/${encodeURIComponent(name.trim())}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    openNaverMapWebFallback(buildNaverMapOpenUrl({ name }));
     return;
   }
 
@@ -242,12 +338,7 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
     return;
   }
 
-  const { x, y } = wgs84ToWebMercator(lon, lat);
-  window.open(
-    `https://map.naver.com/v5/?c=${x},${y},18,0,0,0,dh`,
-    "_blank",
-    "noopener,noreferrer",
-  );
+  openNaverMapWebFallback(buildNaverMapOpenUrl({ name, lat, lon }));
 }
 
 /** map.naver.com 장소 URL에서 place ID 추출 */
@@ -272,7 +363,7 @@ function resolveDirectionsWebFallback(input: {
 
   const placeId = input.placeId?.trim();
   if (placeId) {
-    return `https://map.naver.com/p/entry/place/${placeId}?placePath=%2Fhome`;
+    return buildNaverMapPlaceEntryUrl(placeId);
   }
 
   const name = input.name?.trim();
@@ -294,8 +385,7 @@ export function openNaverMapPlace(
   webFallback?: string,
 ): void {
   const webUrl =
-    webFallback ??
-    `https://map.naver.com/p/entry/place/${placeId}?placePath=%2Fhome`;
+    webFallback ?? buildNaverMapPlaceEntryUrl(placeId);
   const appName = getNaverMapAppName();
   const { isAndroid, isIOS } = getMobileEnv();
   const nmapUrl = `nmap://place?id=${placeId}&appname=${appName}`;
