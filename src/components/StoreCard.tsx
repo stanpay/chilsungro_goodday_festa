@@ -285,6 +285,7 @@ const StoreCard = ({
                 src={photoUrl}
                 alt=""
                 aria-hidden="true"
+                decoding="async"
                 className="absolute inset-0 h-full w-full object-cover"
                 onError={() => setPhotoFailed(true)}
               />

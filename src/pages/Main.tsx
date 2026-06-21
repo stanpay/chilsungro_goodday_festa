@@ -98,6 +98,135 @@ function isMapAtMaxZoom(map: { getMaxZoom?: () => number; getZoom: () => number 
   return map.getZoom() >= getMapMaxZoom(map) - 1e-6;
 }
 const MAP_SPIDERFY_RADIUS_PX = 32;
+const INITIAL_STORE_BATCH = 10;
+const LOAD_MORE_STORE_BATCH = 10;
+
+const BRAND_NAME_MAP: Record<string, string> = {
+  starbucks: "스타벅스",
+  baskin: "베스킨라빈스",
+  mega: "메가커피",
+  pascucci: "파스쿠찌",
+  twosome: "투썸플레이스",
+  compose: "컴포즈커피",
+  ediya: "이디야",
+  paik: "빽다방",
+};
+
+interface StoreData {
+  id: string;
+  name: string;
+  distance: string;
+  distanceNum: number;
+  image: string;
+  maxDiscount: string | null;
+  discountNum: number;
+  maxDiscountPercent: number | null;
+  lat?: number;
+  lon?: number;
+  address?: string;
+  local_currency_available?: boolean;
+  local_currency_discount_rate?: number | null;
+  high_oil_support_available?: boolean;
+  parking_available?: boolean;
+  free_parking?: boolean;
+  parking_size?: string | null;
+  categoryGroupCode?: string;
+  categoryName?: string;
+  hasTravelConsumerCoupon?: boolean;
+  isOpen?: boolean;
+  todayHours?: DayHours | null;
+  photos?: string[];
+  closedDayNote?: string;
+  detailUrl?: string;
+  apiStoreData?: {
+    local_currency_available?: boolean;
+    local_currency_discount_rate?: number | null;
+    parking_available?: boolean;
+    free_parking?: boolean;
+    parking_size?: string | null;
+    high_oil_support_available?: boolean;
+  };
+}
+
+async function enrichStoreWithDiscount(
+  store: StoreData,
+  getStoreDataByPlaceId: (store: StoreData) => Promise<StoreData["apiStoreData"] | null>
+): Promise<StoreData> {
+  let preloadedStoreData: StoreData["apiStoreData"] | null = null;
+
+  try {
+    preloadedStoreData = await getStoreDataByPlaceId(store);
+    if (store.image !== "pascucci" && store.image !== "twosome") {
+      return {
+        ...store,
+        maxDiscount: null,
+        discountNum: 0,
+        maxDiscountPercent: null,
+        local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
+        parking_available: preloadedStoreData?.parking_available || false,
+        free_parking: preloadedStoreData?.free_parking || false,
+        parking_size: preloadedStoreData?.parking_size || null,
+      };
+    }
+
+    const brandName = BRAND_NAME_MAP[store.image] || store.image;
+
+    let franchiseData: { id: string } | null = null;
+    try {
+      const franchise = await storesApi.getFranchiseByName(brandName);
+      if (franchise) franchiseData = franchise;
+    } catch {
+      /* ignore */
+    }
+
+    let localCurrencyDiscount = 0;
+    let storeData: StoreData["apiStoreData"] | null = preloadedStoreData;
+
+    try {
+      const isNumeric = /^\d+$/.test(store.id);
+
+      if (!storeData && isNumeric) {
+        const data = await storesApi.getStoreByKakaoPlaceId(store.id);
+        storeData = data || null;
+      }
+
+      if (!storeData && franchiseData) {
+        const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
+        if (data) storeData = data;
+      }
+
+      if (storeData) {
+        localCurrencyDiscount = storeData.local_currency_discount_rate || 0;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const maxDiscountPercent = localCurrencyDiscount;
+
+    return {
+      ...store,
+      maxDiscount: maxDiscountPercent > 0 ? `최대 ${maxDiscountPercent}% 할인` : null,
+      discountNum: maxDiscountPercent,
+      maxDiscountPercent: maxDiscountPercent > 0 ? maxDiscountPercent : null,
+      local_currency_discount_rate: storeData?.local_currency_discount_rate || null,
+      parking_available: storeData?.parking_available || false,
+      free_parking: storeData?.free_parking || false,
+      parking_size: storeData?.parking_size || null,
+    };
+  } catch {
+    return {
+      ...store,
+      maxDiscount: null,
+      discountNum: 0,
+      maxDiscountPercent: null,
+      local_currency_discount_rate: null,
+      parking_available: false,
+      free_parking: false,
+      parking_size: null,
+    };
+  }
+}
 const MAP_SPIDERFY_MAX_RADIUS_PX = 96;
 const MAP_VIEW_PADDING = { top: 100, right: 48, bottom: 220, left: 48 };
 /** 선택 매장 핀 — UI 경계(재검색 버튼·시트 핸들)와의 여백 */
@@ -561,37 +690,10 @@ const Main = () => {
   const { isLoggedIn } = useAuth();
   const [isManualLocation, setIsManualLocation] = useState(false);
 
-interface StoreData {
-  id: string;
-  name: string;
-  distance: string;
-  distanceNum: number;
-  image: string;
-  maxDiscount: string | null;
-  discountNum: number;
-  maxDiscountPercent: number | null;
-  lat?: number;
-  lon?: number;
-  address?: string;
-  local_currency_available?: boolean;
-  local_currency_discount_rate?: number | null;
-  high_oil_support_available?: boolean;
-  parking_available?: boolean;
-  free_parking?: boolean;
-  parking_size?: string | null;
-  categoryGroupCode?: string;
-  categoryName?: string;
-  hasTravelConsumerCoupon?: boolean;
-  isOpen?: boolean;
-  todayHours?: DayHours | null;
-  photos?: string[];
-  closedDayNote?: string;
-  detailUrl?: string;
-}
-
   const [stores, setStores] = useState<StoreData[]>([]);
   const [isLoadingStores, setIsLoadingStores] = useState(true);
   const [isLoadingMoreStores, setIsLoadingMoreStores] = useState(false);
+  const [visibleStoreCount, setVisibleStoreCount] = useState(INITIAL_STORE_BATCH);
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
 
   /** 사용자가 /location에서 직접 고른 위치만 유지. 자동 GPS 캐시는 실패 시 제거 */
@@ -690,7 +792,11 @@ interface StoreData {
   >(null);
   const storesFetchGenerationRef = useRef(0);
   const jejuPreloadStartedRef = useRef(false);
+  const enrichedStoreIdsRef = useRef(new Set<string>());
+  const storesLengthRef = useRef(0);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
+  /** 위치 조회 실패 시에만 제주 시내 기준 가나다순 매장을 로드 */
   const preloadJejuStores = () => {
     if (jejuPreloadStartedRef.current) return;
     jejuPreloadStartedRef.current = true;
@@ -1186,14 +1292,43 @@ interface StoreData {
     const R = 6371; // 지구 반경 (km)
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    return distance;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) *
+        Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   };
+
+  const enrichAndMergeStores = useCallback(async (batch: StoreData[], generation: number) => {
+    const getStoreDataByPlaceId = async (
+      store: StoreData
+    ): Promise<StoreData["apiStoreData"] | null> => {
+      try {
+        if (store.apiStoreData) return store.apiStoreData;
+        const isNumeric = /^\d+$/.test(store.id);
+        if (!isNumeric) return null;
+        return await storesApi.getStoreByKakaoPlaceId(store.id);
+      } catch {
+        return null;
+      }
+    };
+
+    const enriched = await Promise.all(
+      batch.map((store) => enrichStoreWithDiscount(store, getStoreDataByPlaceId))
+    );
+    if (generation !== storesFetchGenerationRef.current) return;
+
+    enriched.forEach((store) => enrichedStoreIdsRef.current.add(store.id));
+    const enrichedById = new Map(enriched.map((store) => [store.id, store]));
+
+    setStores((prev) => prev.map((store) => enrichedById.get(store.id) ?? store));
+    allFetchedStoresRef.current = allFetchedStoresRef.current.map(
+      (store) => enrichedById.get(store.id) ?? store
+    );
+  }, []);
 
   const handleLocationGranted = async ({ latitude, longitude }: { latitude: number; longitude: number }) => {
     setShowLocationPermModal(false);
@@ -1230,8 +1365,12 @@ interface StoreData {
     const isStale = () => generation !== storesFetchGenerationRef.current;
 
     try {
-      setIsLoadingStores(true);
+      if (storesLengthRef.current === 0) {
+        setIsLoadingStores(true);
+      }
       setShowResearchButton(false);
+      setVisibleStoreCount(INITIAL_STORE_BATCH);
+      enrichedStoreIdsRef.current.clear();
 
       // 초기 1회 fetch로 전체 매장 확보 (이후 재검색은 캐시 필터링)
       const radius = 100000; // 100km — 전체 매장 로드
@@ -1303,244 +1442,10 @@ interface StoreData {
       // 지도 재검색용: 할인 정보 조회 전에도 전체 매장 좌표를 즉시 캐시
       allFetchedStoresRef.current = allStores;
 
-      // 거리순으로 정렬하여 초기 8개 선택
-      const initialStores = allStores.slice(0, 8);
-      const remainingStores = allStores.slice(8);
-
-      const getStoreDataByPlaceId = async (store: any): Promise<any | null> => {
-        try {
-          if (store.apiStoreData) return store.apiStoreData;
-          const isNumeric = /^\d+$/.test(store.id);
-          if (!isNumeric) return null;
-          return await storesApi.getStoreByKakaoPlaceId(store.id);
-        } catch (e) {
-          return null;
-        }
-      };
-      
-      
-      // 각 매장의 할인 정보 조회 (초기 8개만 먼저 처리)
-      const initialStoresWithDiscount = await Promise.all(initialStores.map(async (store) => {
-        let preloadedStoreData: any = null;
-
-        try {
-          preloadedStoreData = await getStoreDataByPlaceId(store);
-          // 파스쿠찌와 투썸플레이스가 아니어도 DB 기반 칩(지역화폐/고유가 지원금)은 반영
-          if (store.image !== 'pascucci' && store.image !== 'twosome') {
-            return {
-              ...store,
-              maxDiscount: null,
-              discountNum: 0,
-              maxDiscountPercent: null,
-              local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
-              parking_available: preloadedStoreData?.parking_available || false,
-              free_parking: preloadedStoreData?.free_parking || false,
-              parking_size: preloadedStoreData?.parking_size || null,
-            };
-          }
-
-          // 파스쿠찌와 투썸플레이스 할인 정보 조회
-          // 1. 프랜차이즈 정보 조회
-          const brandNameMap: Record<string, string> = {
-            starbucks: "스타벅스",
-            baskin: "베스킨라빈스",
-            mega: "메가커피",
-            pascucci: "파스쿠찌",
-            twosome: "투썸플레이스",
-            compose: "컴포즈커피",
-            ediya: "이디야",
-            paik: "빽다방",
-          };
-          const brandName = brandNameMap[store.image] || store.image;
-
-          // 프랜차이즈 정보 조회
-          let franchiseData: any = null;
-          try {
-            const franchise = await storesApi.getFranchiseByName(brandName);
-            if (franchise) {
-              franchiseData = franchise;
-            }
-          } catch (e) {
-          }
-
-          // 2. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
-          let localCurrencyDiscount = 0;
-          let storeData: any = preloadedStoreData;
-          
-          try {
-            // storeId가 숫자인지 확인 (카카오 플레이스 ID)
-            const isNumeric = /^\d+$/.test(store.id);
-
-            if (!storeData && isNumeric) {
-              // kakao_place_id로 조회 시도
-              const data = await storesApi.getStoreByKakaoPlaceId(store.id);
-              storeData = data || null;
-            }
-
-            // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
-            if (!storeData && franchiseData) {
-              const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
-              if (data) {
-                storeData = data;
-              }
-            }
-
-            if (storeData) {
-              // 지역화폐 할인율
-              localCurrencyDiscount = (storeData as any).local_currency_discount_rate || 0;
-            }
-          } catch (e) {
-          }
-
-          // 3. 최대 할인율 계산 (지역화폐 할인율)
-          const maxDiscountPercent = localCurrencyDiscount;
-
-          return {
-            ...store,
-            maxDiscount: maxDiscountPercent > 0 ? `최대 ${maxDiscountPercent}% 할인` : null,
-            discountNum: maxDiscountPercent,
-            maxDiscountPercent: maxDiscountPercent > 0 ? maxDiscountPercent : null,
-            local_currency_discount_rate: storeData?.local_currency_discount_rate || null,
-            parking_available: storeData?.parking_available || false,
-            free_parking: storeData?.free_parking || false,
-            parking_size: storeData?.parking_size || null,
-          };
-        } catch (error) {
-          return {
-            ...store,
-            maxDiscount: null,
-            discountNum: 0,
-            maxDiscountPercent: null,
-            local_currency_discount_rate: null,
-            parking_available: false,
-            free_parking: false,
-            parking_size: null,
-          };
-        }
-      }));
-
-      
-      // 초기 8개 먼저 표시 (캐시에는 할인 정보가 반영된 항목만 병합)
+      // API 기본 데이터(사진 포함)를 즉시 표시 — 할인 정보는 스크롤 배치로 지연 로딩
       if (isStale()) return;
-      setStores(initialStoresWithDiscount);
-      const enrichedById = new Map(initialStoresWithDiscount.map((s) => [s.id, s]));
-      allFetchedStoresRef.current = allFetchedStoresRef.current.map(
-        (s) => enrichedById.get(s.id) ?? s
-      );
+      setStores(allStores);
       setIsLoadingStores(false);
-      
-      // 나머지 매장 데이터 백그라운드 로딩
-      if (remainingStores.length > 0) {
-        setIsLoadingMoreStores(true);
-        
-        // 나머지 매장의 할인 정보 조회
-        const remainingStoresWithDiscount = await Promise.all(remainingStores.map(async (store) => {
-          let preloadedStoreData: any = null;
-
-          try {
-            preloadedStoreData = await getStoreDataByPlaceId(store);
-            // 파스쿠찌와 투썸플레이스가 아니어도 DB 기반 칩(지역화폐/고유가 지원금)은 반영
-            if (store.image !== 'pascucci' && store.image !== 'twosome') {
-              return {
-                ...store,
-                maxDiscount: null,
-                discountNum: 0,
-                maxDiscountPercent: null,
-                local_currency_discount_rate: preloadedStoreData?.local_currency_discount_rate || null,
-                parking_available: preloadedStoreData?.parking_available || false,
-                free_parking: preloadedStoreData?.free_parking || false,
-                parking_size: preloadedStoreData?.parking_size || null,
-              };
-            }
-
-            // 파스쿠찌와 투썸플레이스 할인 정보 조회
-            // 1. 프랜차이즈 정보 조회
-            const brandNameMap: Record<string, string> = {
-              starbucks: "스타벅스",
-              baskin: "베스킨라빈스",
-              mega: "메가커피",
-              pascucci: "파스쿠찌",
-              twosome: "투썸플레이스",
-              compose: "컴포즈커피",
-              ediya: "이디야",
-              paik: "빽다방",
-            };
-            const brandName = brandNameMap[store.image] || store.image;
-
-            // 프랜차이즈 정보 조회
-            let franchiseData: any = null;
-            try {
-              const franchise = await storesApi.getFranchiseByName(brandName);
-              if (franchise) {
-                franchiseData = franchise;
-              }
-            } catch (e) {
-            }
-
-            // 2. 매장 정보 조회 (kakao_place_id로, 실패 시 무시)
-            let localCurrencyDiscount = 0;
-            let storeData: any = preloadedStoreData;
-
-            try {
-              // storeId가 숫자인지 확인 (카카오 플레이스 ID)
-              const isNumeric = /^\d+$/.test(store.id);
-
-              if (!storeData && isNumeric) {
-                // kakao_place_id로 조회 시도
-                const data = await storesApi.getStoreByKakaoPlaceId(store.id);
-                storeData = data || null;
-              }
-
-              // kakao_place_id 조회 실패 시 franchise_id로 조회 시도
-              if (!storeData && franchiseData) {
-                const data = await storesApi.getStoreByFranchiseId(franchiseData.id);
-                if (data) {
-                  storeData = data;
-                }
-              }
-
-              if (storeData) {
-                // 지역화폐 할인율
-                localCurrencyDiscount = (storeData as any).local_currency_discount_rate || 0;
-              }
-            } catch (e) {
-            }
-
-            // 3. 최대 할인율 계산 (지역화폐 할인율)
-            const maxDiscountPercent = localCurrencyDiscount;
-
-            return {
-              ...store,
-              maxDiscount: maxDiscountPercent > 0 ? `최대 ${maxDiscountPercent}% 할인` : null,
-              discountNum: maxDiscountPercent,
-              maxDiscountPercent: maxDiscountPercent > 0 ? maxDiscountPercent : null,
-              local_currency_discount_rate: storeData?.local_currency_discount_rate || null,
-              parking_available: storeData?.parking_available || false,
-              free_parking: storeData?.free_parking || false,
-              parking_size: storeData?.parking_size || null,
-            };
-          } catch (error) {
-            return {
-              ...store,
-              maxDiscount: null,
-              discountNum: 0,
-              maxDiscountPercent: null,
-              local_currency_discount_rate: null,
-              parking_available: false,
-              free_parking: false,
-              parking_size: null,
-            };
-          }
-        }));
-
-        // 전체 매장 데이터 합치기
-        const allStoresWithDiscount = [...initialStoresWithDiscount, ...remainingStoresWithDiscount];
-
-        if (isStale()) return;
-        setStores(allStoresWithDiscount);
-        allFetchedStoresRef.current = allStoresWithDiscount;
-        setIsLoadingMoreStores(false);
-      }
     } catch (error) {
       if (options?.bootstrap) {
         jejuPreloadStartedRef.current = false;
@@ -1557,28 +1462,6 @@ interface StoreData {
   };
 
   fetchNearbyStoresRef.current = fetchNearbyStores;
-
-  // /main 진입 즉시 제주 시내 기준 매장·핀 선로딩 (수동 좌표 저장 시는 제외)
-  useEffect(() => {
-    const isManual = localStorage.getItem("isManualLocation") === "true";
-    const savedCoordsRaw = localStorage.getItem("currentCoordinates");
-    if (isManual && savedCoordsRaw) {
-      try {
-        const { latitude, longitude } = JSON.parse(savedCoordsRaw);
-        if (
-          typeof latitude === "number" &&
-          typeof longitude === "number" &&
-          !isNaN(latitude) &&
-          !isNaN(longitude)
-        ) {
-          return;
-        }
-      } catch {
-        /* 주소 검색 등으로 이어짐 — 제주 선로딩 유지 */
-      }
-    }
-    preloadJejuStores();
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -1828,13 +1711,66 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     );
   }, [openStores, sortBy, currentCoords]);
 
+  const visibleStores = useMemo(
+    () => sortedStores.slice(0, visibleStoreCount),
+    [sortedStores, visibleStoreCount]
+  );
+
+  const hasMoreStores = visibleStoreCount < sortedStores.length;
+
+  useEffect(() => {
+    storesLengthRef.current = stores.length;
+  }, [stores.length]);
+
+  useEffect(() => {
+    if (isMapView || isLoadingStores) return;
+
+    const toShow = sortedStores.slice(0, visibleStoreCount);
+    const needsEnrich = toShow.filter((store) => !enrichedStoreIdsRef.current.has(store.id));
+    if (needsEnrich.length === 0) return;
+
+    const generation = storesFetchGenerationRef.current;
+    setIsLoadingMoreStores(true);
+    void enrichAndMergeStores(needsEnrich, generation).finally(() => {
+      if (generation === storesFetchGenerationRef.current) {
+        setIsLoadingMoreStores(false);
+      }
+    });
+  }, [
+    visibleStoreCount,
+    sortedStores,
+    isMapView,
+    isLoadingStores,
+    enrichAndMergeStores,
+  ]);
+
+  useEffect(() => {
+    if (isMapView || isLoadingStores) return;
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        setVisibleStoreCount((prev) => {
+          if (prev >= sortedStores.length) return prev;
+          return Math.min(prev + LOAD_MORE_STORE_BATCH, sortedStores.length);
+        });
+      },
+      { root: null, rootMargin: "240px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isMapView, isLoadingStores, sortedStores.length]);
+
   useEffect(() => {
     prefetchStoreRedirects(
-      sortedStores
+      visibleStores
         .map((store) => store.detailUrl)
         .filter((url): url is string => Boolean(url)),
     );
-  }, [sortedStores]);
+  }, [visibleStores]);
 
   const storesWithCoords = useMemo(() => {
     // 지도뷰: 재검색 결과 또는 불러온 매장 중 좌표 있는 것 (영업중 필터는 시트에서만 적용 가능)
@@ -3165,21 +3101,24 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               aria-busy="true"
               aria-label={t.loadingStores}
             >
-              {Array.from({ length: 8 }, (_, index) => (
+              {Array.from({ length: INITIAL_STORE_BATCH }, (_, index) => (
                 <StoreCardSkeleton key={`store-skeleton-${index}`} />
               ))}
             </div>
           ) : sortedStores.length > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-4 animate-fade-in">
-                {sortedStores.map((store) => (
+                {visibleStores.map((store) => (
                   <StoreCard 
                     key={store.id} 
                     {...store}
                   />
                 ))}
               </div>
-              {isLoadingMoreStores && (
+              {hasMoreStores && (
+                <div ref={loadMoreSentinelRef} className="h-1" aria-hidden />
+              )}
+              {isLoadingMoreStores && hasMoreStores && (
                 <div className="mt-4 grid grid-cols-2 gap-4 animate-fade-in">
                   {Array.from({ length: 4 }, (_, index) => (
                     <StoreCardSkeleton key={`store-skeleton-more-${index}`} />
