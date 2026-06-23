@@ -4,6 +4,21 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+const dropdownMenuItemHighlightClassName =
+  "focus-visible:bg-accent focus-visible:text-accent-foreground [@media(hover:hover)_and_(pointer:fine)]:data-[highlighted]:bg-accent [@media(hover:hover)_and_(pointer:fine)]:data-[highlighted]:text-accent-foreground";
+
+const blurMenuItemOnTouchEnd = {
+  onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
+    event.currentTarget.blur();
+  },
+  onPointerLeave: (event: React.PointerEvent<HTMLElement>) => {
+    event.currentTarget.blur();
+  },
+  onPointerCancel: (event: React.PointerEvent<HTMLElement>) => {
+    event.currentTarget.blur();
+  },
+};
+
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
@@ -75,14 +90,27 @@ const DropdownMenuItem = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean;
   }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, onPointerUp, onPointerLeave, onPointerCancel, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
+      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      dropdownMenuItemHighlightClassName,
       inset && "pl-8",
       className,
     )}
+    onPointerUp={(event) => {
+      onPointerUp?.(event);
+      blurMenuItemOnTouchEnd.onPointerUp(event);
+    }}
+    onPointerLeave={(event) => {
+      onPointerLeave?.(event);
+      blurMenuItemOnTouchEnd.onPointerLeave(event);
+    }}
+    onPointerCancel={(event) => {
+      onPointerCancel?.(event);
+      blurMenuItemOnTouchEnd.onPointerCancel(event);
+    }}
     {...props}
   />
 ));
@@ -91,14 +119,27 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
+>(({ className, children, checked, onPointerUp, onPointerLeave, onPointerCancel, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      dropdownMenuItemHighlightClassName,
       className,
     )}
     checked={checked}
+    onPointerUp={(event) => {
+      onPointerUp?.(event);
+      blurMenuItemOnTouchEnd.onPointerUp(event);
+    }}
+    onPointerLeave={(event) => {
+      onPointerLeave?.(event);
+      blurMenuItemOnTouchEnd.onPointerLeave(event);
+    }}
+    onPointerCancel={(event) => {
+      onPointerCancel?.(event);
+      blurMenuItemOnTouchEnd.onPointerCancel(event);
+    }}
     {...props}
   >
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
@@ -114,13 +155,26 @@ DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displa
 const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerUp, onPointerLeave, onPointerCancel, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      dropdownMenuItemHighlightClassName,
       className,
     )}
+    onPointerUp={(event) => {
+      onPointerUp?.(event);
+      blurMenuItemOnTouchEnd.onPointerUp(event);
+    }}
+    onPointerLeave={(event) => {
+      onPointerLeave?.(event);
+      blurMenuItemOnTouchEnd.onPointerLeave(event);
+    }}
+    onPointerCancel={(event) => {
+      onPointerCancel?.(event);
+      blurMenuItemOnTouchEnd.onPointerCancel(event);
+    }}
     {...props}
   >
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">

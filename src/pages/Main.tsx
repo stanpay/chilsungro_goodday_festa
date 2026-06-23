@@ -710,6 +710,9 @@ const LEGACY_BENEFIT_FILTER_CHIP_ORDER: LegacyBenefitFilterChipId[] = [
   "openNow",
 ];
 
+const FILTER_CHIP_ROW_SCROLL_CLASS =
+  "w-full min-w-0 overflow-x-scroll overscroll-x-contain pl-4 pr-4 touch-pan-x [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_button]:touch-pan-x";
+
 const ChipButton = forwardRef<
   HTMLButtonElement,
   {
@@ -1710,7 +1713,10 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             label={triggerLabel}
             showChevron
             aria-label={ariaLabel}
-            className={cn(isMapView && "pointer-events-auto")}
+            className={cn(
+              "rounded-xl border-primary hover:bg-card",
+              isMapView && "pointer-events-auto"
+            )}
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-52 p-1.5">
@@ -1747,8 +1753,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       />
     ));
 
-    const chipScrollClassName =
-      "gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+    const chipScrollClassName = FILTER_CHIP_ROW_SCROLL_CLASS;
 
     if (isMapView) {
       return (
@@ -1757,12 +1762,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           role="toolbar"
           aria-label={ariaLabel}
         >
-          <div
-            className={cn(
-              "w-full overflow-x-auto pointer-events-auto pl-4 pr-4",
-              chipScrollClassName
-            )}
-          >
+          <div className={cn(chipScrollClassName, "pointer-events-auto")}>
             <div className="flex w-max flex-nowrap gap-2">{chips}</div>
           </div>
         </div>
@@ -1775,7 +1775,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         role="toolbar"
         aria-label={ariaLabel}
       >
-        <div className={cn("w-full overflow-x-auto pl-4 pr-4", chipScrollClassName)}>
+        <div className={chipScrollClassName}>
           <div className="flex w-max flex-nowrap gap-2">{chips}</div>
         </div>
       </div>
@@ -3251,7 +3251,12 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             role="toolbar"
             aria-label={t.storeFilterToolbarAria}
           >
-            <div className="w-full overflow-x-auto pl-4 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              className={cn(
+                FILTER_CHIP_ROW_SCROLL_CLASS,
+                isMapView && "pointer-events-auto"
+              )}
+            >
               <div className="flex w-max flex-nowrap gap-2">
                 {renderFilterDropdown(
                   t.filterAreaLabel,
