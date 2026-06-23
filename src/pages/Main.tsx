@@ -34,7 +34,7 @@ import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes, type MutableRefObject, type PointerEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { storesApi, type NearbyStore } from "@/api/stores";
@@ -713,6 +713,78 @@ const LEGACY_BENEFIT_FILTER_CHIP_ORDER: LegacyBenefitFilterChipId[] = [
 const FILTER_CHIP_ROW_SCROLL_CLASS =
   "w-full min-w-0 overflow-x-scroll overscroll-x-contain pl-4 pr-4 touch-pan-x [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_button]:touch-pan-x";
 
+const FILTER_CHIP_SCROLL_DRAG_THRESHOLD_PX = 8;
+
+type FilterChipScrollDragState = {
+  tracking: boolean;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  dragged: boolean;
+};
+
+const INITIAL_FILTER_CHIP_SCROLL_DRAG_STATE: FilterChipScrollDragState = {
+  tracking: false,
+  pointerId: -1,
+  startX: 0,
+  startY: 0,
+  dragged: false,
+};
+
+function createFilterChipScrollDragHandlers(
+  dragRef: MutableRefObject<FilterChipScrollDragState>
+) {
+  const endPointer = (pointerId: number) => {
+    const state = dragRef.current;
+    if (pointerId !== state.pointerId) return;
+    state.tracking = false;
+    if (state.dragged) {
+      requestAnimationFrame(() => {
+        dragRef.current.dragged = false;
+      });
+    }
+  };
+
+  return {
+    onPointerDownCapture: (event: PointerEvent<HTMLDivElement>) => {
+      dragRef.current = {
+        tracking: true,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        dragged: false,
+      };
+    },
+    onPointerMoveCapture: (event: PointerEvent<HTMLDivElement>) => {
+      const state = dragRef.current;
+      if (!state.tracking || event.pointerId !== state.pointerId) return;
+
+      const deltaX = Math.abs(event.clientX - state.startX);
+      const deltaY = Math.abs(event.clientY - state.startY);
+      if (deltaX > FILTER_CHIP_SCROLL_DRAG_THRESHOLD_PX && deltaX > deltaY) {
+        state.dragged = true;
+      }
+    },
+    onPointerUpCapture: (event: PointerEvent<HTMLDivElement>) => {
+      endPointer(event.pointerId);
+    },
+    onPointerCancelCapture: (event: PointerEvent<HTMLDivElement>) => {
+      endPointer(event.pointerId);
+    },
+  };
+}
+
+type FilterDropdownChipProps<T extends string> = {
+  filterLabel: string;
+  order: readonly T[];
+  activeChips: ReadonlySet<T>;
+  onToggle: (id: T) => void;
+  labelMap: Record<T, string>;
+  ariaLabel: string;
+  scrollDragRef: MutableRefObject<FilterChipScrollDragState>;
+  isMapView: boolean;
+};
+
 const ChipButton = forwardRef<
   HTMLButtonElement,
   {
@@ -758,6 +830,68 @@ const ChipButton = forwardRef<
   );
 });
 
+function FilterDropdownChip<T extends string>({
+  filterLabel,
+  order,
+  activeChips,
+  onToggle,
+  labelMap,
+  ariaLabel,
+  scrollDragRef,
+  isMapView,
+}: FilterDropdownChipProps<T>) {
+  const [open, setOpen] = useState(false);
+  const triggerLabel = getFilterDropdownLabel(filterLabel, order, activeChips, labelMap);
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setOpen(false);
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <ChipButton
+          id={`filter-${filterLabel}`}
+          active={false}
+          label={triggerLabel}
+          showChevron
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          className={cn(
+            "rounded-xl border-primary hover:bg-card",
+            isMapView && "pointer-events-auto"
+          )}
+          onPointerDown={(event) => {
+            event.preventDefault();
+          }}
+          onClick={(event) => {
+            if (scrollDragRef.current.dragged) {
+              event.preventDefault();
+              event.stopPropagation();
+              return;
+            }
+            setOpen((prev) => !prev);
+          }}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52 p-1.5">
+        {order.map((id) => (
+          <DropdownMenuCheckboxItem
+            key={id}
+            checked={activeChips.has(id)}
+            onCheckedChange={() => onToggle(id)}
+            onSelect={(event) => event.preventDefault()}
+            className="rounded-lg py-2.5 pl-10 pr-3 text-sm font-medium [&>span]:left-3 [&>span]:h-4 [&>span]:w-4 [&>span_svg]:h-2.5 [&>span_svg]:w-2.5"
+          >
+            {labelMap[id]}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 type MainProps = {
   legacyFilterUI?: boolean;
 };
@@ -788,6 +922,13 @@ const Main = ({ legacyFilterUI = false }: MainProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
+  const filterChipScrollDragRef = useRef<FilterChipScrollDragState>(
+    INITIAL_FILTER_CHIP_SCROLL_DRAG_STATE
+  );
+  const filterChipScrollDragHandlers = useMemo(
+    () => createFilterChipScrollDragHandlers(filterChipScrollDragRef),
+    []
+  );
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingSearchSubmitRef = useRef(false);
@@ -1701,40 +1842,18 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     onToggle: (id: T) => void,
     labelMap: Record<T, string>,
     ariaLabel: string
-  ) => {
-    const triggerLabel = getFilterDropdownLabel(filterLabel, order, activeChips, labelMap);
-
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <ChipButton
-            id={`filter-${filterLabel}`}
-            active={false}
-            label={triggerLabel}
-            showChevron
-            aria-label={ariaLabel}
-            className={cn(
-              "rounded-xl border-primary hover:bg-card",
-              isMapView && "pointer-events-auto"
-            )}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-52 p-1.5">
-          {order.map((id) => (
-            <DropdownMenuCheckboxItem
-              key={id}
-              checked={activeChips.has(id)}
-              onCheckedChange={() => onToggle(id)}
-              onSelect={(event) => event.preventDefault()}
-              className="rounded-lg py-2.5 pl-10 pr-3 text-sm font-medium [&>span]:left-3 [&>span]:h-4 [&>span]:w-4 [&>span_svg]:h-2.5 [&>span_svg]:w-2.5"
-            >
-              {labelMap[id]}
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
+  ) => (
+    <FilterDropdownChip
+      filterLabel={filterLabel}
+      order={order}
+      activeChips={activeChips}
+      onToggle={onToggle}
+      labelMap={labelMap}
+      ariaLabel={ariaLabel}
+      scrollDragRef={filterChipScrollDragRef}
+      isMapView={isMapView}
+    />
+  );
 
   const renderFilterChipRow = <T extends string>(
     order: readonly T[],
@@ -3256,6 +3375,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                 FILTER_CHIP_ROW_SCROLL_CLASS,
                 isMapView && "pointer-events-auto"
               )}
+              {...filterChipScrollDragHandlers}
             >
               <div className="flex w-max flex-nowrap gap-2">
                 {renderFilterDropdown(
