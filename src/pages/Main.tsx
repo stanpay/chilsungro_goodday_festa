@@ -80,6 +80,19 @@ const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
   "other",
 ];
 
+type StoreAreaFilterChipId =
+  | "all"
+  | "areaChilsungro"
+  | "areaJungangro"
+  | "areaUndergroundMall";
+
+const STORE_AREA_FILTER_CHIP_ORDER: StoreAreaFilterChipId[] = [
+  "all",
+  "areaChilsungro",
+  "areaJungangro",
+  "areaUndergroundMall",
+];
+
 const MAP_MAX_ZOOM = 21;
 /** 지도뷰 첫 화면 기본 줌 */
 const MAP_INITIAL_ZOOM = 16;
@@ -132,6 +145,7 @@ interface StoreData {
   parking_size?: string | null;
   categoryGroupCode?: string;
   categoryName?: string;
+  area?: string | null;
   hasTravelConsumerCoupon?: boolean;
   isOpen?: boolean;
   todayHours?: DayHours | null;
@@ -553,6 +567,7 @@ type StoreLikeForChip = {
   image: string;
   categoryGroupCode?: string;
   categoryName?: string;
+  area?: string | null;
   local_currency_available?: boolean;
   high_oil_support_available?: boolean;
   hasTravelConsumerCoupon?: boolean;
@@ -625,6 +640,20 @@ function storeMatchesBenefitChipFilters(
   if (locale === "ko" && chips.has("highOilSupport")) {
     parts.push(storeHasHighOilSupport(store));
   }
+
+  return parts.length > 0 && parts.some(Boolean);
+}
+
+function storeMatchesAreaChipFilters(
+  store: StoreLikeForChip,
+  chips: ReadonlySet<StoreAreaFilterChipId>
+): boolean {
+  if (chips.has("all")) return true;
+
+  const parts: boolean[] = [];
+  if (chips.has("areaChilsungro")) parts.push(store.area === "칠성로");
+  if (chips.has("areaJungangro")) parts.push(store.area === "중앙로");
+  if (chips.has("areaUndergroundMall")) parts.push(store.area === "지하상가");
 
   return parts.length > 0 && parts.some(Boolean);
 }
@@ -744,6 +773,9 @@ const Main = () => {
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [benefitFilterChips, setBenefitFilterChips] = useState<Set<StoreFilterChipId>>(
     () => new Set<StoreFilterChipId>(["all", "openNow"])
+  );
+  const [areaFilterChips, setAreaFilterChips] = useState<Set<StoreAreaFilterChipId>>(
+    () => new Set<StoreAreaFilterChipId>(["all"])
   );
   const [categoryFilterChips, setCategoryFilterChips] = useState<Set<StoreFilterChipId>>(
     () => new Set<StoreFilterChipId>(["all"])
@@ -1399,6 +1431,7 @@ const Main = () => {
           address: "",
           categoryGroupCode: categoryGroupCodeFromStoreCategory(store.category),
           categoryName: store.category || "",
+          area: store.area,
           isOpen: store.business_hours_today ? !store.business_hours_today.includes("정기휴무") : isOpen,
           todayHours,
           photos: store.image_url ? [store.image_url] : [],
@@ -1501,6 +1534,27 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   openNow: t.chipOpenNow,
 };
 
+const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
+  all: t.chipAll,
+  areaChilsungro: t.chipAreaChilsungro,
+  areaJungangro: t.chipAreaJungangro,
+  areaUndergroundMall: t.chipAreaUndergroundMall,
+};
+
+  const toggleAreaFilterChip = (id: StoreAreaFilterChipId) => {
+    setAreaFilterChips((prev) => {
+      if (id === "all") return new Set<StoreAreaFilterChipId>(["all"]);
+
+      const next = new Set(prev);
+      next.delete("all");
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+
+      if (next.size === 0) next.add("all");
+      return next;
+    });
+  };
+
   const toggleBenefitFilterChip = (id: StoreFilterChipId) => {
     setBenefitFilterChips((prev) => {
       const next = new Set(prev);
@@ -1546,10 +1600,11 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     });
   };
 
-  const renderFilterChipRow = (
-    order: StoreFilterChipId[],
-    activeChips: ReadonlySet<StoreFilterChipId>,
-    onToggle: (id: StoreFilterChipId) => void,
+  const renderFilterChipRow = <T extends string>(
+    order: T[],
+    activeChips: ReadonlySet<T>,
+    onToggle: (id: T) => void,
+    labelMap: Record<T, string>,
     ariaLabel: string
   ) => {
     const chips = order.map((id) => (
@@ -1557,7 +1612,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
         key={id}
         id={id}
         active={activeChips.has(id)}
-        label={chipLabelMap[id]}
+        label={labelMap[id]}
         onToggle={() => onToggle(id)}
       />
     ));
@@ -1612,11 +1667,16 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
     [stores, searchQuery]
   );
 
+  const areaFilteredStores = useMemo(() =>
+    filteredStores.filter((store) => storeMatchesAreaChipFilters(store, areaFilterChips)),
+    [filteredStores, areaFilterChips]
+  );
+
   const benefitFilteredStores = useMemo(() =>
-    filteredStores.filter((store) =>
+    areaFilteredStores.filter((store) =>
       storeMatchesBenefitChipFilters(store, benefitFilterChips, locale)
     ),
-    [filteredStores, benefitFilterChips, locale]
+    [areaFilteredStores, benefitFilterChips, locale]
   );
 
   const categoryFilteredStores = useMemo(() =>
@@ -1677,6 +1737,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
       : cachedStores;
     const chipFiltered = searchFiltered.filter(
       (store) =>
+        storeMatchesAreaChipFilters(store, areaFilterChips) &&
         storeMatchesBenefitChipFilters(store, benefitFilterChips, locale) &&
         storeMatchesCategoryChipFilters(store, categoryFilterChips)
     );
@@ -3031,15 +3092,24 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
           </div>
           <div className="space-y-2">
             {renderFilterChipRow(
+              STORE_AREA_FILTER_CHIP_ORDER,
+              areaFilterChips,
+              toggleAreaFilterChip,
+              areaChipLabelMap,
+              t.areaFilterToolbarAria
+            )}
+            {renderFilterChipRow(
               benefitFilterChipOrder,
               benefitFilterChips,
               toggleBenefitFilterChip,
+              chipLabelMap,
               (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria
             )}
             {renderFilterChipRow(
               STORE_CATEGORY_CHIP_ORDER,
               categoryFilterChips,
               toggleCategoryFilterChip,
+              chipLabelMap,
               (t as any).categoryFilterToolbarAria ?? t.storeFilterToolbarAria
             )}
           </div>

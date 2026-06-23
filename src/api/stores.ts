@@ -14,6 +14,7 @@ export interface Store {
 }
 
 export interface NearbyStore {
+  area: string | null;
   business_hours_today: string | null;
   category: string | null;
   distance: string;
