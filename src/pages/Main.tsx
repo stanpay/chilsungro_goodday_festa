@@ -6,12 +6,14 @@ import {
   RefreshCw,
   Languages,
   ChevronDown,
+  ChevronUp,
   LocateFixed,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -23,12 +25,16 @@ import MapViewBottomSheet, {
   MAP_VIEW_SHEET_BOTTOM_NAV_PX,
   MAP_VIEW_SHEET_PEEK_HEIGHT,
 } from "@/components/MapViewBottomSheet";
-import { updateChatwootBubblePosition } from "@/lib/chatwoot";
+import {
+  updateChatwootBubblePosition,
+  CHATWOOT_LAUNCHER_RIGHT,
+  SCROLL_TO_TOP_BOTTOM,
+} from "@/lib/chatwoot";
 import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { storesApi, type NearbyStore } from "@/api/stores";
@@ -61,15 +67,13 @@ type StoreFilterChipId =
   | "restaurant"
   | "cafe"
   | "shopping"
-  | "other"
-  | "openNow";
+  | "other";
 
 const BENEFIT_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
   "all",
   "chilsungro",
   "localCurrency",
   "highOilSupport",
-  "openNow",
 ];
 
 const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
@@ -631,7 +635,7 @@ function storeMatchesBenefitChipFilters(
   chips: ReadonlySet<StoreFilterChipId>,
   locale: AppLocale
 ): boolean {
-  // openNow는 영업 여부 필터에서 따로 처리하므로 여기서는 제외
+  // openNow는 제거됨 — 혜택 칩만 매칭
   if (chips.has("all")) return true;
 
   const parts: boolean[] = [];
@@ -673,43 +677,89 @@ function storeMatchesCategoryChipFilters(
   return parts.length > 0 && parts.some(Boolean);
 }
 
-function ChipButton({
-  id,
-  active,
-  label,
-  onToggle,
-}: {
-  id: string;
-  active: boolean;
-  label: string;
-  onToggle: () => void;
-}) {
+function getFilterDropdownLabel<T extends string>(
+  filterLabel: string,
+  order: readonly T[],
+  activeChips: ReadonlySet<T>,
+  labelMap: Record<T, string>
+): string {
+  const allLabel = labelMap["all" as T];
+
+  if (activeChips.has("all" as T)) {
+    return `${filterLabel} - ${allLabel}`;
+  }
+
+  const selected = order
+    .filter((id) => id !== "all" && activeChips.has(id))
+    .map((id) => labelMap[id]);
+
+  if (selected.length === 0) {
+    return `${filterLabel} - ${allLabel}`;
+  }
+
+  return `${filterLabel} - ${selected.join(", ")}`;
+}
+
+type LegacyBenefitFilterChipId = StoreFilterChipId | "openNow";
+
+const LEGACY_BENEFIT_FILTER_CHIP_ORDER: LegacyBenefitFilterChipId[] = [
+  "all",
+  "chilsungro",
+  "localCurrency",
+  "highOilSupport",
+  "openNow",
+];
+
+const ChipButton = forwardRef<
+  HTMLButtonElement,
+  {
+    id: string;
+    active: boolean;
+    label: string;
+    onToggle?: () => void;
+    showChevron?: boolean;
+  } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick">
+>(function ChipButton(
+  { id, active, label, onToggle, showChevron = false, className, onClick, ...rest },
+  ref
+) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-pressed={active}
-      onClick={onToggle}
+      onClick={(event) => {
+        onClick?.(event);
+        onToggle?.();
+      }}
       className={cn(
         "flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground shadow-sm"
-          : "border-border bg-card text-foreground hover:bg-muted/80"
+          : "border-border bg-card text-foreground hover:bg-muted/80",
+        className
       )}
+      {...rest}
     >
       {id === "openNow" && (
         <span
           className={cn(
-            "shrink-0 inline-block h-1.5 w-1.5 rounded-full",
+            "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
             active ? "bg-green-300" : "bg-green-500"
           )}
         />
       )}
       <span className="whitespace-nowrap text-xs">{label}</span>
+      {showChevron && <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />}
     </button>
   );
-}
+});
 
-const Main = () => {
+type MainProps = {
+  legacyFilterUI?: boolean;
+};
+
+const Main = ({ legacyFilterUI = false }: MainProps) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -771,8 +821,12 @@ const Main = () => {
     input.blur();
   };
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const [benefitFilterChips, setBenefitFilterChips] = useState<Set<StoreFilterChipId>>(
-    () => new Set<StoreFilterChipId>(["all", "openNow"])
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [benefitFilterChips, setBenefitFilterChips] = useState<Set<LegacyBenefitFilterChipId>>(
+    () =>
+      new Set<LegacyBenefitFilterChipId>(
+        legacyFilterUI ? ["all", "openNow"] : ["all"]
+      )
   );
   const [areaFilterChips, setAreaFilterChips] = useState<Set<StoreAreaFilterChipId>>(
     () => new Set<StoreAreaFilterChipId>(["all"])
@@ -792,13 +846,16 @@ const Main = () => {
     });
   }, [locale]);
 
-  const benefitFilterChipOrder = useMemo(
-    () =>
-      locale === "ko"
-        ? BENEFIT_FILTER_CHIP_ORDER
-        : BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport"),
-    [locale]
-  );
+  const benefitFilterChipOrder = useMemo((): readonly LegacyBenefitFilterChipId[] => {
+    if (legacyFilterUI) {
+      return locale === "ko"
+        ? LEGACY_BENEFIT_FILTER_CHIP_ORDER
+        : LEGACY_BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
+    }
+    return locale === "ko"
+      ? BENEFIT_FILTER_CHIP_ORDER
+      : BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
+  }, [locale, legacyFilterUI]);
   const [showLocationPermModal, setShowLocationPermModal] = useState(false);
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
@@ -1014,6 +1071,25 @@ const Main = () => {
       mapSheetPanelHeight: mapSheetPanelHeightRef.current,
     });
   }, [isMapView]);
+
+  useEffect(() => {
+    if (isMapView) {
+      setShowScrollToTop(false);
+      return;
+    }
+
+    const onScroll = () => {
+      setShowScrollToTop(window.scrollY > 300);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isMapView]);
+
+  const handleScrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   useEffect(() => {
     if (!isMapView || !mapInstanceRef.current) return;
@@ -1531,7 +1607,6 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
   cafe: t.chipCafe,
   shopping: t.chipShopping,
   other: t.chipOther,
-  openNow: t.chipOpenNow,
 };
 
 const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
@@ -1541,7 +1616,12 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
   areaUndergroundMall: t.chipAreaUndergroundMall,
 };
 
-  const toggleAreaFilterChip = (id: StoreAreaFilterChipId) => {
+const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
+  ...chipLabelMap,
+  openNow: t.chipOpenNow,
+};
+
+  const toggleAreaFilter = (id: StoreAreaFilterChipId) => {
     setAreaFilterChips((prev) => {
       if (id === "all") return new Set<StoreAreaFilterChipId>(["all"]);
 
@@ -1555,38 +1635,49 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
     });
   };
 
-  const toggleBenefitFilterChip = (id: StoreFilterChipId) => {
+  const toggleBenefitFilter = (id: LegacyBenefitFilterChipId) => {
     setBenefitFilterChips((prev) => {
+      if (legacyFilterUI) {
+        const next = new Set(prev);
+
+        if (id === "openNow") {
+          if (next.has("openNow")) next.delete("openNow");
+          else next.add("openNow");
+          return next;
+        }
+
+        if (id === "all") {
+          const hasOpenNow = next.has("openNow");
+          next.clear();
+          next.add("all");
+          if (hasOpenNow) next.add("openNow");
+          return next;
+        }
+
+        next.delete("all");
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+
+        const selectedBenefitChips = new Set([...next].filter((c) => c !== "openNow"));
+        if (selectedBenefitChips.size === 0) next.add("all");
+
+        return next;
+      }
+
+      if (id === "openNow") return prev;
+      if (id === "all") return new Set<LegacyBenefitFilterChipId>(["all"]);
+
       const next = new Set(prev);
-
-      // 영업중은 혜택 칩들과 별도로 토글한다.
-      if (id === "openNow") {
-        if (next.has("openNow")) next.delete("openNow");
-        else next.add("openNow");
-        return next;
-      }
-
-      if (id === "all") {
-        const hasOpenNow = next.has("openNow");
-        next.clear();
-        next.add("all");
-        if (hasOpenNow) next.add("openNow");
-        return next;
-      }
-
       next.delete("all");
       if (next.has(id)) next.delete(id);
       else next.add(id);
 
-      // openNow를 제외한 혜택 칩이 하나도 없으면 전체로 복귀한다.
-      const selectedBenefitChips = new Set([...next].filter((c) => c !== "openNow"));
-      if (selectedBenefitChips.size === 0) next.add("all");
-
+      if (next.size === 0) next.add("all");
       return next;
     });
   };
 
-  const toggleCategoryFilterChip = (id: StoreFilterChipId) => {
+  const toggleCategoryFilter = (id: StoreFilterChipId) => {
     setCategoryFilterChips((prev) => {
       if (id === "all") return new Set<StoreFilterChipId>(["all"]);
 
@@ -1600,8 +1691,47 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
     });
   };
 
+  const renderFilterDropdown = <T extends string>(
+    filterLabel: string,
+    order: readonly T[],
+    activeChips: ReadonlySet<T>,
+    onToggle: (id: T) => void,
+    labelMap: Record<T, string>,
+    ariaLabel: string
+  ) => {
+    const triggerLabel = getFilterDropdownLabel(filterLabel, order, activeChips, labelMap);
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <ChipButton
+            id={`filter-${filterLabel}`}
+            active={false}
+            label={triggerLabel}
+            showChevron
+            aria-label={ariaLabel}
+            className={cn(isMapView && "pointer-events-auto")}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-52 p-1.5">
+          {order.map((id) => (
+            <DropdownMenuCheckboxItem
+              key={id}
+              checked={activeChips.has(id)}
+              onCheckedChange={() => onToggle(id)}
+              onSelect={(event) => event.preventDefault()}
+              className="rounded-lg py-2.5 pl-10 pr-3 text-sm font-medium [&>span]:left-3 [&>span]:h-4 [&>span]:w-4 [&>span_svg]:h-2.5 [&>span_svg]:w-2.5"
+            >
+              {labelMap[id]}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   const renderFilterChipRow = <T extends string>(
-    order: T[],
+    order: readonly T[],
     activeChips: ReadonlySet<T>,
     onToggle: (id: T) => void,
     labelMap: Record<T, string>,
@@ -1645,12 +1775,7 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
         role="toolbar"
         aria-label={ariaLabel}
       >
-        <div
-          className={cn(
-            "w-full overflow-x-auto pl-4 pr-4",
-            chipScrollClassName
-          )}
-        >
+        <div className={cn("w-full overflow-x-auto pl-4 pr-4", chipScrollClassName)}>
           <div className="flex w-max flex-nowrap gap-2">{chips}</div>
         </div>
       </div>
@@ -1674,7 +1799,11 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
 
   const benefitFilteredStores = useMemo(() =>
     areaFilteredStores.filter((store) =>
-      storeMatchesBenefitChipFilters(store, benefitFilterChips, locale)
+      storeMatchesBenefitChipFilters(
+        store,
+        benefitFilterChips as ReadonlySet<StoreFilterChipId>,
+        locale
+      )
     ),
     [areaFilteredStores, benefitFilterChips, locale]
   );
@@ -1684,8 +1813,7 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
     [benefitFilteredStores, categoryFilterChips]
   );
 
-  // 혜택 필터 줄의 openNow 칩이 켜진 경우에만 영업중 필터 적용
-  // TODO: 영업중 필터 임시 비활성화 (UI는 유지, 기능만 off)
+  // 혜택·카테고리·구역 필터 적용 후 목록
   const openStores = useMemo(() =>
     categoryFilteredStores,
     [categoryFilteredStores]
@@ -2907,7 +3035,7 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
             <div className="flex items-center gap-2 w-full">
               <Button 
                 variant="outline" 
-                className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border-border/50 transition-colors hover:border-primary/50"
+                className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
                 disabled={isLoadingLocation}
                 onClick={() => navigate('/location')}
               >
@@ -2928,7 +3056,7 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-12 w-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
+                className="h-12 w-12 rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
                 disabled={isLoadingLocation}
                 onClick={handleRefreshLocation}
                 aria-label={h.refreshLocationAria}
@@ -3090,29 +3218,69 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
               </Button>
             )}
           </div>
-          <div className="space-y-2">
-            {renderFilterChipRow(
-              STORE_AREA_FILTER_CHIP_ORDER,
-              areaFilterChips,
-              toggleAreaFilterChip,
-              areaChipLabelMap,
-              t.areaFilterToolbarAria
+          {legacyFilterUI ? (
+            <div className="space-y-2">
+              {renderFilterChipRow(
+                STORE_AREA_FILTER_CHIP_ORDER,
+                areaFilterChips,
+                toggleAreaFilter,
+                areaChipLabelMap,
+                t.areaFilterToolbarAria
+              )}
+              {renderFilterChipRow(
+                benefitFilterChipOrder,
+                benefitFilterChips,
+                toggleBenefitFilter,
+                legacyBenefitChipLabelMap,
+                t.benefitFilterToolbarAria
+              )}
+              {renderFilterChipRow(
+                STORE_CATEGORY_CHIP_ORDER,
+                categoryFilterChips,
+                toggleCategoryFilter,
+                chipLabelMap,
+                t.categoryFilterToolbarAria
+              )}
+            </div>
+          ) : (
+          <div
+            className={cn(
+              "-mx-4 w-[calc(100%+2rem)] py-1",
+              isMapView && "pointer-events-auto"
             )}
-            {renderFilterChipRow(
-              benefitFilterChipOrder,
-              benefitFilterChips,
-              toggleBenefitFilterChip,
-              chipLabelMap,
-              (t as any).benefitFilterToolbarAria ?? t.storeFilterToolbarAria
-            )}
-            {renderFilterChipRow(
-              STORE_CATEGORY_CHIP_ORDER,
-              categoryFilterChips,
-              toggleCategoryFilterChip,
-              chipLabelMap,
-              (t as any).categoryFilterToolbarAria ?? t.storeFilterToolbarAria
-            )}
+            role="toolbar"
+            aria-label={t.storeFilterToolbarAria}
+          >
+            <div className="w-full overflow-x-auto pl-4 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex w-max flex-nowrap gap-2">
+                {renderFilterDropdown(
+                  t.filterAreaLabel,
+                  STORE_AREA_FILTER_CHIP_ORDER,
+                  areaFilterChips,
+                  toggleAreaFilter,
+                  areaChipLabelMap,
+                  t.areaFilterToolbarAria
+                )}
+                {renderFilterDropdown(
+                  t.filterBenefitLabel,
+                  benefitFilterChipOrder,
+                  benefitFilterChips,
+                  toggleBenefitFilter,
+                  chipLabelMap,
+                  t.benefitFilterToolbarAria
+                )}
+                {renderFilterDropdown(
+                  t.filterCategoryLabel,
+                  STORE_CATEGORY_CHIP_ORDER,
+                  categoryFilterChips,
+                  toggleCategoryFilter,
+                  chipLabelMap,
+                  t.categoryFilterToolbarAria
+                )}
+              </div>
+            </div>
           </div>
+          )}
           {isMapView && showResearchButton && (
             <div className="pointer-events-none flex justify-center pt-0.5">
               <button
@@ -3204,6 +3372,27 @@ const areaChipLabelMap: Record<StoreAreaFilterChipId, string> = {
           )}
         </div>
       </main>
+
+      {!isMapView && showScrollToTop && (
+        <div
+          className="pointer-events-none fixed z-[60] animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            right: CHATWOOT_LAUNCHER_RIGHT,
+            bottom: SCROLL_TO_TOP_BOTTOM,
+          }}
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="pointer-events-auto h-12 w-12 rounded-full border border-border bg-card/95 text-foreground shadow-lg backdrop-blur-sm hover:bg-muted"
+            onClick={handleScrollToTop}
+            aria-label="맨 위로"
+          >
+            <ChevronUp className="h-5 w-5 text-primary" strokeWidth={2.25} aria-hidden />
+          </Button>
+        </div>
+      )}
 
       <BottomNav
         mapViewControl={{

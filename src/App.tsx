@@ -11,6 +11,7 @@ import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import LandingPage from "./pages/Landing/LandingPage";
 import RedirectToJeju from "./pages/RedirectToJeju";
 import DevTools from "./pages/DevTools";
+import FilterLegacyDemo from "./pages/FilterLegacyDemo";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AnalyticsPageTracker from "@/components/AnalyticsPageTracker";
@@ -47,6 +48,7 @@ const App = () => (
           <Route path="/location" element={<Location />} />
           <Route path="/jejuqronedosim" element={<RedirectToJeju />} />
           <Route path="/dev-tools-9f3k" element={<DevTools />} />
+          <Route path="/filter-legacy-demo" element={<FilterLegacyDemo />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <PwaInstallPrompt />

@@ -7,6 +7,11 @@ export const CHATWOOT_WEBSITE_TOKEN = "ZsvpfT9oQbiuhpDwoM6qnBYk";
 /** 기존 ChatSupport 버튼과 동일: bottom-[calc(4rem+30px-1.75rem)] */
 export const CHATWOOT_DEFAULT_BOTTOM = "calc(4rem + 30px - 1.75rem)";
 export const CHATWOOT_LAUNCHER_RIGHT = "1.5rem";
+/** Chatwoot 표준 런처 버블 지름 */
+export const CHATWOOT_LAUNCHER_SIZE = "3.5rem";
+export const SCROLL_TO_TOP_ABOVE_CHAT_GAP = "0.75rem";
+/** 카드뷰 맨 위로 버튼 — 채팅 런처 바로 위 */
+export const SCROLL_TO_TOP_BOTTOM = `calc(${CHATWOOT_DEFAULT_BOTTOM} + ${CHATWOOT_LAUNCHER_SIZE} + ${SCROLL_TO_TOP_ABOVE_CHAT_GAP})`;
 const BUBBLE_HOLDER_ID = "cw-bubble-holder";
 const WIDGET_HOLDER_ID = "cw-widget-holder";
 const CHATWOOT_MOBILE_BREAKPOINT_PX = 667;

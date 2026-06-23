@@ -76,7 +76,12 @@ type MainCopy = {
   chipAreaChilsungro: string;
   chipAreaJungangro: string;
   chipAreaUndergroundMall: string;
+  filterAreaLabel: string;
+  filterBenefitLabel: string;
+  filterCategoryLabel: string;
   areaFilterToolbarAria: string;
+  benefitFilterToolbarAria: string;
+  categoryFilterToolbarAria: string;
   storeFilterToolbarAria: string;
   sortByDistance: string;
   sortByDiscount: string;
@@ -113,7 +118,12 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipAreaChilsungro: "칠성로",
     chipAreaJungangro: "중앙로",
     chipAreaUndergroundMall: "중앙지하상가",
+    filterAreaLabel: "구역",
+    filterBenefitLabel: "할인",
+    filterCategoryLabel: "카테고리",
     areaFilterToolbarAria: "구역 필터",
+    benefitFilterToolbarAria: "할인 필터",
+    categoryFilterToolbarAria: "카테고리 필터",
     storeFilterToolbarAria: "매장 유형 필터",
     sortByDistance: "거리 순으로 정렬됩니다",
     sortByDiscount: "최대 할인율 순으로 정렬됩니다",
@@ -148,7 +158,12 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipAreaChilsungro: "Chilsung-ro",
     chipAreaJungangro: "Jungang-ro",
     chipAreaUndergroundMall: "Jungang underground mall",
+    filterAreaLabel: "Area",
+    filterBenefitLabel: "Discount",
+    filterCategoryLabel: "Category",
     areaFilterToolbarAria: "Area filters",
+    benefitFilterToolbarAria: "Discount filters",
+    categoryFilterToolbarAria: "Category filters",
     storeFilterToolbarAria: "Store type filters",
     sortByDistance: "Sorted by distance",
     sortByDiscount: "Sorted by max discount",
@@ -183,7 +198,12 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipAreaChilsungro: "七星路",
     chipAreaJungangro: "中央路",
     chipAreaUndergroundMall: "中央地下商街",
+    filterAreaLabel: "区域",
+    filterBenefitLabel: "折扣",
+    filterCategoryLabel: "类别",
     areaFilterToolbarAria: "区域筛选",
+    benefitFilterToolbarAria: "折扣筛选",
+    categoryFilterToolbarAria: "类别筛选",
     storeFilterToolbarAria: "门店类型筛选",
     sortByDistance: "按距离排序",
     sortByDiscount: "按最高折扣排序",
@@ -219,7 +239,12 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     chipAreaChilsungro: "七星路",
     chipAreaJungangro: "中央路",
     chipAreaUndergroundMall: "中央地下商店街",
+    filterAreaLabel: "エリア",
+    filterBenefitLabel: "割引",
+    filterCategoryLabel: "カテゴリ",
     areaFilterToolbarAria: "エリア絞り込み",
+    benefitFilterToolbarAria: "割引絞り込み",
+    categoryFilterToolbarAria: "カテゴリ絞り込み",
     storeFilterToolbarAria: "店舗タイプの絞り込み",
     sortByDistance: "距離順に並びます",
     sortByDiscount: "最大割引率順に並びます",
