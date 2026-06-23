@@ -841,17 +841,22 @@ function FilterDropdownChip<T extends string>({
   isMapView,
 }: FilterDropdownChipProps<T>) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const triggerLabel = getFilterDropdownLabel(filterLabel, order, activeChips, labelMap);
 
   return (
     <DropdownMenu
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen) setOpen(false);
+        if (!nextOpen) {
+          setOpen(false);
+          triggerRef.current?.blur();
+        }
       }}
     >
       <DropdownMenuTrigger asChild>
         <ChipButton
+          ref={triggerRef}
           id={`filter-${filterLabel}`}
           active={false}
           label={triggerLabel}
@@ -859,12 +864,15 @@ function FilterDropdownChip<T extends string>({
           aria-label={ariaLabel}
           aria-expanded={open}
           className={cn(
-            "rounded-xl border-primary hover:bg-card",
+            "rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground focus:border-primary focus:bg-card focus:text-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 active:border-primary active:bg-card active:text-foreground data-[state=open]:border-primary data-[state=open]:bg-card data-[state=open]:text-foreground",
             isMapView && "pointer-events-auto"
           )}
           onPointerDown={(event) => {
             event.preventDefault();
           }}
+          onPointerLeave={(event) => event.currentTarget.blur()}
+          onPointerCancel={(event) => event.currentTarget.blur()}
+          onPointerUp={(event) => event.currentTarget.blur()}
           onClick={(event) => {
             if (scrollDragRef.current.dragged) {
               event.preventDefault();
