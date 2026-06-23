@@ -2939,7 +2939,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 submitSearch(e.currentTarget);
               }}
               className={cn(
-                "w-full h-12 pl-10 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all",
+                "w-full h-12 pl-10 rounded-xl border border-primary bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all",
                 searchInput || searchQuery ? "pr-12" : "pr-3"
               )}
             />
@@ -2965,7 +2965,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border-border/50 bg-card px-3 text-foreground transition-colors hover:bg-card hover:text-foreground focus:bg-card focus:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 active:bg-card active:text-foreground data-[state=open]:bg-card data-[state=open]:text-foreground"
+                className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border border-primary bg-card px-3 text-foreground transition-colors hover:bg-card hover:text-foreground focus:bg-card focus:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 active:bg-card active:text-foreground data-[state=open]:bg-card data-[state=open]:text-foreground"
                 aria-label={t.languageMenuAria}
                 title={LOCALE_MENU_LABELS[locale]}
                 onPointerDown={(event) => event.preventDefault()}
@@ -3017,7 +3017,7 @@ const chipLabelMap: Record<StoreFilterChipId, string> = {
                 variant="outline"
                 size="sm"
                 onClick={() => setSortBy(sortBy === "distance" ? "discount" : "distance")}
-                className="flex shrink-0 items-center gap-2"
+                className="flex shrink-0 items-center gap-2 border border-primary"
                 style={{backgroundColor:"white", color:"#26222A"}}
               >
                 <ArrowUpDown className="w-4 h-4" />
