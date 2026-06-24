@@ -14,7 +14,7 @@ const LandingPage = () => {
       window.open(appDownloadLink, "_blank");
     } else {
       // 플레이스홀더: 로그인 페이지로 이동
-      window.location.href = "/";
+      window.location.href = "/main";
     }
   };
 

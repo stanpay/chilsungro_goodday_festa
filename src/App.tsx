@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Main from "./pages/Main";
 import Location from "./pages/Location";
 import NotFound from "./pages/NotFound";
@@ -12,6 +12,7 @@ import LandingPage from "./pages/Landing/LandingPage";
 import RedirectToJeju from "./pages/RedirectToJeju";
 import DevTools from "./pages/DevTools";
 import FilterLegacyDemo from "./pages/FilterLegacyDemo";
+import FilterDropdownLegacyDemo from "./pages/FilterDropdownLegacyDemo";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AnalyticsPageTracker from "@/components/AnalyticsPageTracker";
@@ -41,7 +42,7 @@ const App = () => (
       >
         <AnalyticsPageTracker />
         <Routes>
-          <Route path="/" element={<Main />} />
+          <Route path="/" element={<Navigate to="/main" replace />} />
           <Route path="/jeju" element={<Main />} />
           <Route path="/main" element={<Main />} />
           <Route path="/landing" element={<LandingPage />} />
@@ -49,6 +50,7 @@ const App = () => (
           <Route path="/jejuqronedosim" element={<RedirectToJeju />} />
           <Route path="/dev-tools-9f3k" element={<DevTools />} />
           <Route path="/filter-legacy-demo" element={<FilterLegacyDemo />} />
+          <Route path="/filter-dropdown-legacy-demo" element={<FilterDropdownLegacyDemo />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <PwaInstallPrompt />

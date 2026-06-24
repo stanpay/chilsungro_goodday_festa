@@ -6,7 +6,7 @@ import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { pwaInstallStrings } from "@/lib/locale";
 
-const HOME_PATHS = new Set(["/", "/jeju", "/main"]);
+const HOME_PATHS = new Set(["/jeju", "/main"]);
 
 function isHomePath(pathname: string) {
   return HOME_PATHS.has(pathname);

@@ -793,9 +793,10 @@ const ChipButton = forwardRef<
     label: string;
     onToggle?: () => void;
     showChevron?: boolean;
+    primaryBorder?: boolean;
   } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick">
 >(function ChipButton(
-  { id, active, label, onToggle, showChevron = false, className, onClick, ...rest },
+  { id, active, label, onToggle, showChevron = false, primaryBorder = false, className, onClick, ...rest },
   ref
 ) {
   return (
@@ -811,7 +812,9 @@ const ChipButton = forwardRef<
         "flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground shadow-sm"
-          : "border-border bg-card text-foreground hover:bg-muted/80",
+          : primaryBorder
+            ? "border-primary bg-card text-foreground hover:bg-muted/80 focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/20"
+            : "border-border bg-card text-foreground hover:bg-muted/80",
         className
       )}
       {...rest}
@@ -858,15 +861,13 @@ function FilterDropdownChip<T extends string>({
         <ChipButton
           ref={triggerRef}
           id={`filter-${filterLabel}`}
-          active={false}
+          active={!activeChips.has("all")}
           label={triggerLabel}
           showChevron
+          primaryBorder
           aria-label={ariaLabel}
           aria-expanded={open}
-          className={cn(
-            "rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground focus:border-primary focus:bg-card focus:text-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 active:border-primary active:bg-card active:text-foreground data-[state=open]:border-primary data-[state=open]:bg-card data-[state=open]:text-foreground",
-            isMapView && "pointer-events-auto"
-          )}
+          className={cn(isMapView && "pointer-events-auto")}
           onPointerDown={(event) => {
             event.preventDefault();
           }}
@@ -901,10 +902,13 @@ function FilterDropdownChip<T extends string>({
 }
 
 type MainProps = {
+  /** 3단 가로 칩 행 필터 */
   legacyFilterUI?: boolean;
+  /** 구역·할인·카테고리 3중 드롭다운 한 줄 (검토용 데모) */
+  threeDropdownFilterUI?: boolean;
 };
 
-const Main = ({ legacyFilterUI = false }: MainProps) => {
+const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainProps) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1868,8 +1872,10 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     activeChips: ReadonlySet<T>,
     onToggle: (id: T) => void,
     labelMap: Record<T, string>,
-    ariaLabel: string
+    ariaLabel: string,
+    compact = false
   ) => {
+    const rowPaddingClass = compact ? "py-0.5" : "py-1";
     const chips = order.map((id) => (
       <ChipButton
         key={id}
@@ -1885,7 +1891,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     if (isMapView) {
       return (
         <div
-          className="-mx-4 w-[calc(100%+2rem)] py-1 pointer-events-none"
+          className={cn("-mx-4 w-[calc(100%+2rem)] pointer-events-none", rowPaddingClass)}
           role="toolbar"
           aria-label={ariaLabel}
         >
@@ -1898,7 +1904,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
     return (
       <div
-        className="-mx-4 w-[calc(100%+2rem)] py-1"
+        className={cn("-mx-4 w-[calc(100%+2rem)]", rowPaddingClass)}
         role="toolbar"
         aria-label={ariaLabel}
       >
@@ -3369,50 +3375,96 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                 t.categoryFilterToolbarAria
               )}
             </div>
-          ) : (
-          <div
-            className={cn(
-              "-mx-4 w-[calc(100%+2rem)] py-1",
-              isMapView && "pointer-events-auto"
-            )}
-            role="toolbar"
-            aria-label={t.storeFilterToolbarAria}
-          >
+          ) : threeDropdownFilterUI ? (
             <div
               className={cn(
-                FILTER_CHIP_ROW_SCROLL_CLASS,
+                "-mx-4 w-[calc(100%+2rem)] py-1",
                 isMapView && "pointer-events-auto"
               )}
-              {...filterChipScrollDragHandlers}
+              role="toolbar"
+              aria-label={t.storeFilterToolbarAria}
             >
-              <div className="flex w-max flex-nowrap gap-2">
-                {renderFilterDropdown(
-                  t.filterAreaLabel,
-                  STORE_AREA_FILTER_CHIP_ORDER,
-                  areaFilterChips,
-                  toggleAreaFilter,
-                  areaChipLabelMap,
-                  t.areaFilterToolbarAria
+              <div
+                className={cn(
+                  FILTER_CHIP_ROW_SCROLL_CLASS,
+                  isMapView && "pointer-events-auto"
                 )}
-                {renderFilterDropdown(
-                  t.filterBenefitLabel,
-                  benefitFilterChipOrder,
-                  benefitFilterChips,
-                  toggleBenefitFilter,
-                  chipLabelMap,
-                  t.benefitFilterToolbarAria
-                )}
-                {renderFilterDropdown(
-                  t.filterCategoryLabel,
-                  STORE_CATEGORY_CHIP_ORDER,
-                  categoryFilterChips,
-                  toggleCategoryFilter,
-                  chipLabelMap,
-                  t.categoryFilterToolbarAria
-                )}
+                {...filterChipScrollDragHandlers}
+              >
+                <div className="flex w-max flex-nowrap gap-2">
+                  {renderFilterDropdown(
+                    t.filterAreaLabel,
+                    STORE_AREA_FILTER_CHIP_ORDER,
+                    areaFilterChips,
+                    toggleAreaFilter,
+                    areaChipLabelMap,
+                    t.areaFilterToolbarAria
+                  )}
+                  {renderFilterDropdown(
+                    t.filterBenefitLabel,
+                    benefitFilterChipOrder,
+                    benefitFilterChips,
+                    toggleBenefitFilter,
+                    chipLabelMap,
+                    t.benefitFilterToolbarAria
+                  )}
+                  {renderFilterDropdown(
+                    t.filterCategoryLabel,
+                    STORE_CATEGORY_CHIP_ORDER,
+                    categoryFilterChips,
+                    toggleCategoryFilter,
+                    chipLabelMap,
+                    t.categoryFilterToolbarAria
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              {renderFilterChipRow(
+                STORE_AREA_FILTER_CHIP_ORDER,
+                areaFilterChips,
+                toggleAreaFilter,
+                areaChipLabelMap,
+                t.areaFilterToolbarAria,
+                true
+              )}
+              <div
+                className={cn(
+                  "-mx-4 w-[calc(100%+2rem)] py-0.5",
+                  isMapView && "pointer-events-auto"
+                )}
+                role="toolbar"
+                aria-label={t.storeFilterToolbarAria}
+              >
+                <div
+                  className={cn(
+                    FILTER_CHIP_ROW_SCROLL_CLASS,
+                    isMapView && "pointer-events-auto"
+                  )}
+                  {...filterChipScrollDragHandlers}
+                >
+                  <div className="flex w-max flex-nowrap gap-2">
+                    {renderFilterDropdown(
+                      t.filterBenefitLabel,
+                      benefitFilterChipOrder,
+                      benefitFilterChips,
+                      toggleBenefitFilter,
+                      chipLabelMap,
+                      t.benefitFilterToolbarAria
+                    )}
+                    {renderFilterDropdown(
+                      t.filterCategoryLabel,
+                      STORE_CATEGORY_CHIP_ORDER,
+                      categoryFilterChips,
+                      toggleCategoryFilter,
+                      chipLabelMap,
+                      t.categoryFilterToolbarAria
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
           {isMapView && showResearchButton && (
             <div className="pointer-events-none flex justify-center pt-0.5">
