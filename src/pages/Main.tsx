@@ -1915,6 +1915,21 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     );
   };
 
+  const chipFilteredStores = useMemo(
+    () =>
+      stores.filter(
+        (store) =>
+          storeMatchesAreaChipFilters(store, areaFilterChips) &&
+          storeMatchesBenefitChipFilters(
+            store,
+            benefitFilterChips as ReadonlySet<StoreFilterChipId>,
+            locale
+          ) &&
+          storeMatchesCategoryChipFilters(store, categoryFilterChips)
+      ),
+    [stores, areaFilterChips, benefitFilterChips, categoryFilterChips, locale]
+  );
+
   // 검색어로 필터링
   const filteredStores = useMemo(() =>
     searchQuery.trim()
@@ -1958,7 +1973,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
   mapSearchMatchRef.current = (query: string) => {
     const trimmed = query.trim().toLowerCase();
     if (!trimmed) return true;
-    return categoryFilteredStores.some(
+    return chipFilteredStores.some(
       (store) =>
         hasStoreCoords(store) && store.name.toLowerCase().includes(trimmed)
     );
@@ -3247,8 +3262,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                 setSearchInput(value);
                 if (pendingSearchSubmitRef.current) {
                   pendingSearchSubmitRef.current = false;
-                  setSearchQuery(value);
-                  e.currentTarget.blur();
+                  submitSearch(e.currentTarget);
                 }
               }}
               onKeyDown={(e) => {
