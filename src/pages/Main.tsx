@@ -950,19 +950,33 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const mapSearchEmptyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapSearchEmptyNotice, setMapSearchEmptyNotice] = useState(false);
   const showMapSearchEmptyNoticeRef = useRef<() => void>(() => {});
-  const [mapSearchSheetCollapsed, setMapSearchSheetCollapsed] = useState(false);
+  const [mapSearchInputFocused, setMapSearchInputFocused] = useState(false);
+  const [mapSearchAwaitingRestore, setMapSearchAwaitingRestore] = useState(false);
+  const mapSearchRestoreGenRef = useRef(0);
   const mapSearchSheetFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
   isMobileRef.current = isMobile;
 
-  const beginMapSearchSheetCollapse = () => {
+  const mapSearchSheetCollapsed = mapSearchInputFocused || mapSearchAwaitingRestore;
+
+  const handleMapSearchFocus = () => {
+    if (!isMapViewRef.current || !isMobileRef.current) return;
+    setMapSearchInputFocused(true);
+  };
+
+  const handleMapSearchBlur = () => {
+    setMapSearchInputFocused(false);
+  };
+
+  const beginMapSearchAwaitingRestore = () => {
     if (!isMapViewRef.current || !isMobileRef.current) return;
     if (mapSearchSheetFinishTimerRef.current) {
       clearTimeout(mapSearchSheetFinishTimerRef.current);
       mapSearchSheetFinishTimerRef.current = null;
     }
-    setMapSearchSheetCollapsed(true);
+    mapSearchRestoreGenRef.current += 1;
+    setMapSearchAwaitingRestore(true);
   };
 
   const submitSearch = (input: HTMLInputElement) => {
@@ -983,13 +997,13 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       setMapFilteredStores(null);
       setSelectedMapStoreId(null);
       setHighlightMapSheetCard(false);
-      beginMapSearchSheetCollapse();
+      beginMapSearchAwaitingRestore();
       showMapSearchEmptyNoticeRef.current();
       return;
     }
 
     if (isMapViewRef.current && trimmed) {
-      beginMapSearchSheetCollapse();
+      beginMapSearchAwaitingRestore();
     }
 
     setSearchInput(value);
@@ -3113,30 +3127,33 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
 
-  // 지도뷰 모바일 검색: 바텀시트 접힘 후 지도 갱신이 끝나면 이전 높이로 복원
+  // 지도뷰 모바일 검색 제출 후: 지도 갱신이 끝나면 바텀시트 이전 높이로 복원
   useEffect(() => {
-    if (!isMapView || !isMobile || !mapSearchSheetCollapsed) return;
+    if (!isMapView || !isMobile || !mapSearchAwaitingRestore) return;
 
+    const restoreGen = mapSearchRestoreGenRef.current;
     let cancelled = false;
-    const finishCollapse = () => {
-      if (!cancelled) setMapSearchSheetCollapsed(false);
+
+    const finishRestore = () => {
+      if (cancelled || mapSearchRestoreGenRef.current !== restoreGen) return;
+      setMapSearchAwaitingRestore(false);
     };
 
     const scheduleFinish = () => {
-      if (cancelled) return;
+      if (cancelled || mapSearchRestoreGenRef.current !== restoreGen) return;
       const map = mapInstanceRef.current;
       const naver = (window as any).naver;
       if (map && naver?.maps?.Event) {
         let finished = false;
         const done = () => {
-          if (finished || cancelled) return;
+          if (finished || cancelled || mapSearchRestoreGenRef.current !== restoreGen) return;
           finished = true;
-          finishCollapse();
+          finishRestore();
         };
         naver.maps.Event.once(map, "idle", done);
         mapSearchSheetFinishTimerRef.current = setTimeout(done, 500);
       } else {
-        finishCollapse();
+        finishRestore();
       }
     };
 
@@ -3149,7 +3166,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         mapSearchSheetFinishTimerRef.current = null;
       }
     };
-  }, [searchQuery, storesWithCoords, isMapView, isMobile, mapSearchSheetCollapsed]);
+  }, [searchQuery, storesWithCoords, isMapView, isMobile, mapSearchAwaitingRestore]);
 
   // storesWithCoords 변경 시 ref 업데이트 + 지도 핀 교체 (지도 재생성 없음)
   useEffect(() => {
@@ -3315,6 +3332,8 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               enterKeyHint="search"
               placeholder={t.searchPlaceholder}
               value={searchInput}
+              onFocus={handleMapSearchFocus}
+              onBlur={handleMapSearchBlur}
               onChange={(e) => setSearchInput(e.target.value)}
               onCompositionEnd={(e) => {
                 const value = e.currentTarget.value;

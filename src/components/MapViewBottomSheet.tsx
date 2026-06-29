@@ -284,7 +284,7 @@ const MapViewBottomSheet = ({
     setIsDragging(false);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!collapseForMapSearch) {
       if (preMapSearchHeightRef.current === null) return;
       const restored = Math.min(preMapSearchHeightRef.current, expandedCap());
