@@ -3209,7 +3209,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
 
-  // 모바일 지도뷰: 키보드 닫힘·포커스 해제 시 검색 포커스 상태 동기화 → 바텀시트 복원
+  // 모바일 지도뷰: 포커스 해제·키보드 닫힘 시 바텀시트 복원 (포커스 직후 blur 금지)
   useEffect(() => {
     if (!isMapView || !isMobile) return;
 
@@ -3219,34 +3219,39 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       return window.innerHeight - vv.height > 80;
     };
 
-    const sync = () => syncSearchInputFocused();
+    let keyboardWasOpen = isKeyboardOpen();
+
+    const onFocusOut = () => {
+      window.setTimeout(() => {
+        syncSearchInputFocused();
+      }, 0);
+    };
 
     const onViewportChange = () => {
       if (mapSearchAwaitingRestoreRef.current) return;
-      const input = searchInputRef.current;
-      if (!input) return;
 
-      if (!isKeyboardOpen()) {
-        if (document.activeElement === input) {
-          input.blur();
+      const keyboardOpen = isKeyboardOpen();
+      const input = searchInputRef.current;
+
+      if (keyboardWasOpen && !keyboardOpen) {
+        if (input && document.activeElement === input) {
+          setSearchInputFocused(false);
+        } else {
+          syncSearchInputFocused();
         }
-        setSearchInputFocused(false);
-        return;
       }
 
-      sync();
+      keyboardWasOpen = keyboardOpen;
     };
 
-    document.addEventListener("focusin", sync);
-    document.addEventListener("focusout", sync);
+    document.addEventListener("focusin", syncSearchInputFocused);
+    document.addEventListener("focusout", onFocusOut);
     window.visualViewport?.addEventListener("resize", onViewportChange);
-    window.visualViewport?.addEventListener("scroll", onViewportChange);
 
     return () => {
-      document.removeEventListener("focusin", sync);
-      document.removeEventListener("focusout", sync);
+      document.removeEventListener("focusin", syncSearchInputFocused);
+      document.removeEventListener("focusout", onFocusOut);
       window.visualViewport?.removeEventListener("resize", onViewportChange);
-      window.visualViewport?.removeEventListener("scroll", onViewportChange);
     };
   }, [isMapView, isMobile, syncSearchInputFocused]);
 
