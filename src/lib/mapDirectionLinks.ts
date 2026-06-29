@@ -251,8 +251,6 @@ function getNaverMapAppName(): string {
 
 const ANDROID_DEEP_LINK_FALLBACK_MS = 1500;
 const IOS_DEEP_LINK_FALLBACK_MS = ANDROID_DEEP_LINK_FALLBACK_MS;
-/** Play Store 등 외부 앱 전환 후 빠르게 복귀하면 앱 미설치로 간주 */
-const ANDROID_QUICK_RETURN_MS = 5000;
 
 const PLAY_STORE_URL_PATTERN =
   /play\.google\.com|market\.android\.com|market:\/\/details/i;
@@ -327,7 +325,7 @@ function showAndroidDeepLinkFallback(fallback: NaverMapDeepLinkFallback): void {
 /**
  * Android(PWA·모바일 웹 공통):
  * - intent + package로 네이버지도 앱 시도
- * - 앱 실행 성공 시 visibility로 판단
+ * - 앱 실행 성공 시 페이지가 hidden 상태로 유지 → fallback 취소
  * - 미설치·실패 시 timeout 또는 Play Store 복귀 후 설치/웹 선택 팝업
  */
 function tryOpenDeepLinkOnAndroid(
@@ -338,44 +336,34 @@ function tryOpenDeepLinkOnAndroid(
     targetUrl: schemeUrl,
   };
 
-  let wentBackground = false;
-  let returnedToPage = false;
-  let hiddenAt = 0;
-  let returnListener: (() => void) | null = null;
+  let leftPage = false;
 
-  const cleanupReturnListener = () => {
-    if (!returnListener) return;
-    document.removeEventListener("visibilitychange", returnListener);
-    returnListener = null;
+  const markLeftPage = () => {
+    leftPage = true;
   };
 
   const onVisibilityChange = () => {
     if (document.hidden) {
-      wentBackground = true;
-      hiddenAt = Date.now();
-      return;
-    }
-    if (wentBackground) {
-      returnedToPage = true;
+      markLeftPage();
     }
   };
 
-  const watchQuickReturn = () => {
-    cleanupReturnListener();
-    returnListener = () => {
-      if (document.hidden) return;
-      if (!wentBackground || Date.now() - hiddenAt > ANDROID_QUICK_RETURN_MS) {
-        cleanupReturnListener();
-        return;
+  const onPageHide = () => {
+    markLeftPage();
+  };
+
+  const onBlur = () => {
+    // intent 전환 시 visibilitychange가 늦게 오거나 누락되는 기기 대응
+    window.setTimeout(() => {
+      if (document.hidden) {
+        markLeftPage();
       }
-      cleanupReturnListener();
-      showAndroidDeepLinkFallback(fallback);
-    };
-    document.addEventListener("visibilitychange", returnListener);
-    window.setTimeout(cleanupReturnListener, ANDROID_QUICK_RETURN_MS);
+    }, 300);
   };
 
   document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("blur", onBlur);
 
   const launchUrl = options?.intentUrl ?? schemeUrl;
 
@@ -387,6 +375,8 @@ function tryOpenDeepLinkOnAndroid(
 
   window.setTimeout(() => {
     document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("pagehide", onPageHide);
+    window.removeEventListener("blur", onBlur);
 
     if (isPlayStoreNavigation()) {
       window.history.back();
@@ -396,11 +386,12 @@ function tryOpenDeepLinkOnAndroid(
       return;
     }
 
-    if (wentBackground && !returnedToPage && document.hidden) {
-      watchQuickReturn();
+    // 앱이 전면에 있으면 성공 — 복귀 후에도 fallback을 띄우지 않음
+    if (leftPage && document.hidden) {
       return;
     }
 
+    // 페이지를 벗어나지 않았거나, timeout 전에 이미 복귀한 경우 실패로 간주
     showAndroidDeepLinkFallback(fallback);
   }, ANDROID_DEEP_LINK_FALLBACK_MS);
 }
