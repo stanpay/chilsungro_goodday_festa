@@ -1,4 +1,5 @@
 import {
+  buildNaverMapCoordEntryUrl,
   buildNaverMapOpenUrl,
   buildNaverMapWebFallbackUrl,
   openNativeDeepLink,
@@ -51,12 +52,20 @@ function shouldOpenRedirectUrlDirectlyOnDesktop(url: string): boolean {
 function buildDesktopRegeneratedUrl(
   context?: StoreRedirectContext,
 ): string | undefined {
+  if (
+    context?.lat != null &&
+    context?.lon != null &&
+    !Number.isNaN(context.lat) &&
+    !Number.isNaN(context.lon)
+  ) {
+    return buildNaverMapCoordEntryUrl(
+      context.lon,
+      context.lat,
+      context.name?.trim(),
+    );
+  }
   if (!context?.name?.trim()) return undefined;
-  return buildNaverMapOpenUrl({
-    name: context.name,
-    lat: context.lat,
-    lon: context.lon,
-  });
+  return buildNaverMapOpenUrl({ name: context.name });
 }
 
 /** 데스크톱: naver.me(또는 API redirect→naver.me)면 해당 URL만, 없으면 context로 재생성 후 단일 window.open */

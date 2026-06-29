@@ -87,11 +87,27 @@ export function resolveNaverMapFallbackWebUrl(
     "targetUrl" | "context" | "webFallbackUrl"
   >,
 ): string {
-  if (detail.webFallbackUrl?.startsWith("http")) {
-    return detail.webFallbackUrl;
+  const targetUrl = (detail.targetUrl ?? "").trim();
+
+  if (isNativeMapSchemeUrl(targetUrl)) {
+    const fromNmap = computeNaverMapWebUrl(targetUrl, detail.context);
+    if (isNaverMapEntryUrl(fromNmap)) {
+      return fromNmap;
+    }
   }
 
-  return computeNaverMapWebUrl(detail.targetUrl ?? "nmap://", detail.context);
+  const httpCandidate = [detail.webFallbackUrl, targetUrl]
+    .map((u) => u?.trim())
+    .find((u) => u?.startsWith("http") && !isNaverMapSearchUrl(u));
+  if (httpCandidate) {
+    return httpCandidate;
+  }
+
+  if (isNativeMapSchemeUrl(targetUrl)) {
+    return computeNaverMapWebUrl(targetUrl, detail.context);
+  }
+
+  return "https://map.naver.com/";
 }
 
 const EARTH_RADIUS_M = 6378137;
@@ -113,7 +129,13 @@ export function buildNaverMapCoordEntryUrl(
   const displayLabel = label?.trim() || `${lat},${lon}`;
   return (
     `https://map.naver.com/p/entry/address/${x},${y},` +
-    `${encodeURIComponent(displayLabel)}?c=${NAVER_MAP_WEB_ZOOM},0,0,0,dh`
+    `${encodeURIComponent(displayLabel)}?c=${NAVER_MAP_WEB_ZOOM.toFixed(2)},0,0,0,dh`
+  );
+}
+
+function isNaverMapEntryUrl(url: string): boolean {
+  return (
+    url.includes("/p/entry/address/") || url.includes("/p/entry/place/")
   );
 }
 
@@ -147,8 +169,20 @@ function toFallbackDetail(
   platform: NaverMapFallbackPlatform,
   fallback: NaverMapDeepLinkFallback,
 ): NaverMapFallbackDetail {
+  const fromNmap = isNativeMapSchemeUrl(fallback.targetUrl)
+    ? computeNaverMapWebUrl(fallback.targetUrl, fallback.context)
+    : undefined;
+
+  const httpFallback =
+    fallback.webFallbackUrl?.startsWith("http") &&
+    !isNaverMapSearchUrl(fallback.webFallbackUrl)
+      ? fallback.webFallbackUrl
+      : undefined;
+
   const webFallbackUrl =
-    fallback.webFallbackUrl ??
+    (fromNmap && isNaverMapEntryUrl(fromNmap) ? fromNmap : undefined) ??
+    httpFallback ??
+    fromNmap ??
     computeNaverMapWebUrl(fallback.targetUrl, fallback.context);
 
   return {
@@ -482,7 +516,10 @@ export function openNaverMapMarker(input: {
     name,
   });
   const { isIOS, isAndroid } = getMobileEnv();
-  const httpTarget = targetUrl?.startsWith("http") ? targetUrl : undefined;
+  const httpTarget =
+    targetUrl?.startsWith("http") && !isNaverMapSearchUrl(targetUrl)
+      ? targetUrl
+      : undefined;
   const fallback: NaverMapDeepLinkFallback = {
     targetUrl: nmapUrl,
     context: { lat, lon, name },
