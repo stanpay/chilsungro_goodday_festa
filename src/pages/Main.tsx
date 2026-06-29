@@ -260,6 +260,10 @@ type MapPinFocusBand = {
   targetY: number;
 };
 
+function isIOSMobile(): boolean {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function measureMapPinFocusBand(
   mapEl: HTMLElement | null,
   researchButtonEl: HTMLElement | null,
@@ -949,6 +953,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const cardSearchRowRef = useRef<HTMLDivElement>(null);
   const cardBannerRef = useRef<HTMLDivElement>(null);
   const cardHeaderRef = useRef<HTMLElement>(null);
+  const [cardHeaderHeight, setCardHeaderHeight] = useState(0);
   const pendingSearchSubmitRef = useRef(false);
   const mapSearchMatchRef = useRef<(query: string) => boolean>(() => false);
   const isLoadingStoresRef = useRef(true);
@@ -988,9 +993,15 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       const delta = searchTop - headerBottom - bannerSearchGap / 2;
       if (Math.abs(delta) < 2) return;
 
+      // iOS: 키보드가 layout viewport를 밀어 sticky 헤더가 사라지는 것을 막기 위해
+      // visualViewport offset을 보정하고 즉시 스크롤 (interactive-widget=overlays-content)
+      const vv = window.visualViewport;
+      const iosOffset = isIOSMobile() && vv ? vv.offsetTop : 0;
+      const targetTop = Math.max(0, window.scrollY + delta - iosOffset);
+
       window.scrollTo({
-        top: Math.max(0, window.scrollY + delta),
-        behavior: "smooth",
+        top: targetTop,
+        behavior: isIOSMobile() ? "auto" : "smooth",
       });
     };
 
@@ -1373,6 +1384,44 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       window.scrollTo(0, y);
     });
   }, [isMapView]);
+
+  useLayoutEffect(() => {
+    if (isMapView || !isMobile) return;
+    const header = cardHeaderRef.current;
+    if (!header) return;
+
+    const syncHeight = () => setCardHeaderHeight(header.offsetHeight);
+    syncHeight();
+
+    const ro = new ResizeObserver(syncHeight);
+    ro.observe(header);
+    return () => ro.disconnect();
+  }, [isMapView, isMobile]);
+
+  // iOS 카드뷰: 검색 포커스 시 Safari가 visual viewport를 밀어 헤더가 가려지는 것 방지
+  useEffect(() => {
+    if (!isMobile || isMapView || !searchInputFocused || !isIOSMobile()) return;
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const keepHeaderInView = () => {
+      const offsetTop = vv.offsetTop;
+      if (offsetTop <= 1) return;
+      window.scrollTo({
+        top: Math.max(0, window.scrollY - offsetTop),
+        behavior: "auto",
+      });
+    };
+
+    keepHeaderInView();
+    vv.addEventListener("resize", keepHeaderInView);
+    vv.addEventListener("scroll", keepHeaderInView);
+    return () => {
+      vv.removeEventListener("resize", keepHeaderInView);
+      vv.removeEventListener("scroll", keepHeaderInView);
+    };
+  }, [isMobile, isMapView, searchInputFocused]);
 
   useEffect(() => {
     updateChatwootBubblePosition({
@@ -3436,45 +3485,57 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       />
       {/* Header — 지도뷰에서는 숨기고 지도 위 FAB로 위치만 조정 */}
       {!isMapView && (
-        <header
-          ref={cardHeaderRef}
-          className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95"
-        >
-          <div className="max-w-md mx-auto px-4 py-3">
-            <div className="flex items-center gap-2 w-full">
-              <Button 
-                variant="outline" 
-                className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
-                disabled={isLoadingLocation}
-                onClick={() => navigate('/location')}
-              >
-                <div className="flex w-full min-w-0 items-center overflow-hidden">
-                  {isLoadingLocation ? (
-                    <Loader2 className="w-5 h-5 mr-2 shrink-0 text-primary animate-spin" />
-                  ) : (
-                    <MapPin className="w-5 h-5 mr-2 shrink-0 text-primary group-hover:text-white transition-colors" />
-                  )}
-                  <AutoFitMarquee
-                    text={headerLocationText}
-                    className="flex-1"
-                    textClassName="text-left font-medium !leading-6"
-                    fontSizeClasses={["text-sm", "text-xs"]}
-                  />
-                </div>
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-12 w-12 rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
-                disabled={isLoadingLocation}
-                onClick={handleRefreshLocation}
-                aria-label={h.refreshLocationAria}
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoadingLocation ? 'animate-spin' : ''}`} />
-              </Button>
+        <>
+          <header
+            ref={cardHeaderRef}
+            className={cn(
+              "z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95",
+              isMobile ? "fixed inset-x-0 top-0" : "sticky top-0"
+            )}
+          >
+            <div className="max-w-md mx-auto px-4 py-3">
+              <div className="flex items-center gap-2 w-full">
+                <Button 
+                  variant="outline" 
+                  className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
+                  disabled={isLoadingLocation}
+                  onClick={() => navigate('/location')}
+                >
+                  <div className="flex w-full min-w-0 items-center overflow-hidden">
+                    {isLoadingLocation ? (
+                      <Loader2 className="w-5 h-5 mr-2 shrink-0 text-primary animate-spin" />
+                    ) : (
+                      <MapPin className="w-5 h-5 mr-2 shrink-0 text-primary group-hover:text-white transition-colors" />
+                    )}
+                    <AutoFitMarquee
+                      text={headerLocationText}
+                      className="flex-1"
+                      textClassName="text-left font-medium !leading-6"
+                      fontSizeClasses={["text-sm", "text-xs"]}
+                    />
+                  </div>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-12 w-12 rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
+                  disabled={isLoadingLocation}
+                  onClick={handleRefreshLocation}
+                  aria-label={h.refreshLocationAria}
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingLocation ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
+          {isMobile && (
+            <div
+              aria-hidden
+              className="shrink-0"
+              style={{ height: cardHeaderHeight > 0 ? cardHeaderHeight : undefined }}
+            />
+          )}
+        </>
       )}
 
       {/* Store Grid — 지도뷰: 지도는 뷰포트에서 하단 네비(4rem) 제외 전체 */}
