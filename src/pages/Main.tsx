@@ -970,7 +970,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     setSearchInputFocused(Boolean(input && document.activeElement === input));
   }, []);
 
-  const scrollCardBannerUp = useCallback(() => {
+  const scrollCardBannerUp = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (isMapViewRef.current || !isMobileRef.current) return;
 
     const run = () => {
@@ -979,17 +979,19 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       if (!banner || !header) return;
 
       const headerBottom = header.getBoundingClientRect().bottom;
-      const bannerTop = banner.getBoundingClientRect().top;
-      const delta = bannerTop - headerBottom;
+      const bannerBottom = banner.getBoundingClientRect().bottom;
+      const delta = bannerBottom - headerBottom;
       if (delta <= 2) return;
 
       window.scrollTo({
-        top: window.scrollY + delta,
-        behavior: "auto",
+        top: Math.max(0, window.scrollY + delta),
+        behavior,
       });
     };
 
-    requestAnimationFrame(run);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
   }, []);
 
   const handleSearchFocus = () => {
@@ -1012,11 +1014,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
 
   const handleSearchPointerDown = () => {
     armSearchFocusTapGuard();
-    if (!isMobileRef.current || isMapViewRef.current) return;
-    const input = searchInputRef.current;
-    if (!input || document.activeElement === input) return;
-    input.focus({ preventScroll: true });
-    scrollCardBannerUp();
   };
 
   const focusSearchInput = useCallback(() => {
@@ -3261,6 +3258,20 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     skipInitialMapFitRef.current = false;
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
+
+  // 모바일 카드뷰: 검색 포커스 시 배너가 헤더 뒤로 완전히 숨을 때까지 스크롤 (키보드 열림 후 재시도)
+  useEffect(() => {
+    if (isMapView || !isMobile || !searchInputFocused) return;
+
+    scrollCardBannerUp();
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const onViewportChange = () => scrollCardBannerUp("auto");
+    vv.addEventListener("resize", onViewportChange);
+    return () => vv.removeEventListener("resize", onViewportChange);
+  }, [isMapView, isMobile, searchInputFocused, scrollCardBannerUp]);
 
   // 모바일 지도뷰: 포커스 해제·키보드 닫힘 시 바텀시트 복원 (포커스 직후 blur 금지)
   useEffect(() => {
