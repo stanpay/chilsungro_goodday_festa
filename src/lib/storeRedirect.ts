@@ -22,7 +22,7 @@ export type StoreRedirectContext = {
   name?: string;
 };
 
-/** PWA·모바일 웹이 아닌 데스크톱 브라우저 */
+/** PWA·모바일 웹이 아닌 데스크톱 브라우저 — nmap/intent 시도 없이 HTTPS 웹으로 바로 연다 */
 function isDesktopWebBrowser(): boolean {
   if (typeof navigator === "undefined") return false;
   if (isInStandaloneMode()) return false;
@@ -222,6 +222,10 @@ function isNativeMapScheme(url: string): boolean {
   return url.startsWith("nmap://") || url.startsWith("intent://");
 }
 
+/**
+ * 데스크톱 전용: redirect 해석 결과가 nmap/intent 이면 앱 시도 없이 HTTPS 로 변환해 새 탭.
+ * 모바일(PWA·iOS·Android 웹)은 false 를 반환해 openNativeDeepLink 경로로 넘긴다.
+ */
 function openNmapOnWeb(
   schemeUrl: string,
   context?: StoreRedirectContext,
@@ -241,7 +245,7 @@ function launchMapTarget(
   context?: StoreRedirectContext,
 ): void {
   if (isNativeMapScheme(targetUrl)) {
-    // 일반 웹: redirect 1차 응답이 nmap이면 앱 시도 없이 HTTPS로 바로 연다
+    // 데스크톱: nmap/intent → HTTPS 변환 후 새 탭 (모바일은 아래 openNativeDeepLink)
     if (openNmapOnWeb(targetUrl, context)) return;
 
     const nmapUrl = toNmapUrl(targetUrl) ?? targetUrl;
@@ -275,10 +279,12 @@ function launchMapTarget(
   }
 
   if (isInStandaloneMode()) {
+    // PWA: 외부 HTTPS 는 anchor click 새 탭 (현재 SPA 유지)
     openExternalUrl(targetUrl, { targetBlank: true });
     return;
   }
 
+  // 데스크톱·모바일 웹: map 관련 HTTPS 새 탭
   openNaverMapWebFallback(targetUrl);
 }
 

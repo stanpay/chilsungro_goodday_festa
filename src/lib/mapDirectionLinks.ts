@@ -252,6 +252,37 @@ function getNaverMapAppName(): string {
 const ANDROID_DEEP_LINK_FALLBACK_MS = 1500;
 const IOS_DEEP_LINK_FALLBACK_MS = ANDROID_DEEP_LINK_FALLBACK_MS;
 
+/**
+ * 네이버지도 앱 딥링크 — 플랫폼·실행 환경별 전략
+ *
+ * 데스크톱
+ * - nmap://·intent:// 는 OS 앱 핸들러가 없어 시도하지 않음
+ * - map.naver.com HTTPS URL을 새 탭으로 바로 연다 (앱 설치 유도·fallback 팝업 없음)
+ *
+ * iOS (PWA·모바일 웹 동일)
+ * - WebKit이 PWA(홈 화면 추가)와 Safari/Chrome iOS에서 nmap 처리 방식이 같아 분기하지 않음
+ * - nmap:// + window.location.href (같은 탭 이동)
+ *   → anchor click·window.open 은 보조 탭이 열리고 원본 탭은 hidden 되지 않아
+ *     앱이 열렸는데도 fallback 오탐이 난다
+ * - 실패 시 1.5초 timeout 후 설치(App Store)·웹 선택 팝업
+ *
+ * Android PWA (isInStandaloneMode)
+ * - nmap:// 직접 시도 (openExternalUrl = hidden anchor click)
+ *   → intent:// 는 Chrome intent 해석 중간 화면이 뜨며 standalone UX가 깨질 수 있음
+ *   → S.browser_fallback_url 은 실패 시 현재 SPA가 리로드되므로 사용하지 않음
+ * - 미설치 시 페이지에 그대로 남음 → timeout 후 fallback 팝업
+ *
+ * Android 모바일 웹 (Chrome 등 브라우저 탭)
+ * - intent:// + package (Chrome Android Intent URI 표준)
+ *   → 미설치 시 Play Store로 보낼 수 있음 (package 지정)
+ * - 실행은 PWA와 같이 openExternalUrl (현재 탭을 intent 페이지로 교체하지 않음)
+ *
+ * 모바일 공통 — 앱 실행 성공 판별
+ * - intent/nmap 은 성공 콜백이 없음 → visibilitychange·pagehide·blur 로
+ *   한 번이라도 백그라운드로 갔으면(leftPage) fallback 취소 (앱 쓰고 복귀해도 유지)
+ * - browser_fallback_url 은 실패만 확정적으로 알려주지만 SPA 리로드라 제외
+ */
+
 const PLAY_STORE_URL_PATTERN =
   /play\.google\.com|market\.android\.com|market:\/\/details/i;
 
@@ -265,10 +296,11 @@ function isIosPageHidden(): boolean {
 }
 
 /**
- * iOS(사파리·크롬 등 WebKit 공통):
- * - window.open 보조 탭은 스크립트로 닫을 수 없음(iOS 보안 제한) → 같은 탭에서 nmap 시도
- * - 보조 탭에서 앱을 열면 원본 탭은 hidden 되지 않아 오탐 fallback 발생 → location.href 사용
- * - 한 번이라도 백그라운드로 가면(앱 전환) 웹 fallback 취소 (복귀 후 visible이어도 유지)
+ * iOS — PWA·모바일 웹 공통 (분기 없음, 이유는 파일 상단 플랫폼 주석 참고)
+ *
+ * 실행: nmap:// 를 window.location.href 로 같은 탭에서 연다.
+ * 성공 판별: hidden·pagehide·blur 중 하나라도 발생하면 leftPage → fallback 안 띄움.
+ * 실패 판별: timeout(1.5s)까지 leftPage 없으면 설치·웹 선택 팝업.
  */
 function tryOpenDeepLinkOnIos(
   schemeUrl: string,
@@ -323,10 +355,21 @@ function showAndroidDeepLinkFallback(fallback: NaverMapDeepLinkFallback): void {
 }
 
 /**
- * Android(모바일 웹·PWA):
- * - browser_fallback_url은 페이지 리로드가 되므로 사용하지 않음
- * - 한 번이라도 백그라운드로 가면(앱 전환) fallback 취소 (iOS와 동일, 복귀 후 visible이어도 유지)
- * - Play Store 이탈 시에만 설치/웹 선택 팝업
+ * Android — PWA vs 모바일 웹 분기
+ *
+ * PWA: nmap:// (schemeUrl)
+ *   intent 중간 페이지·SPA 리로드 없이 앱으로 바로 핸드오프.
+ *
+ * 모바일 웹: intent:// + package (intentUrl)
+ *   Chrome 표준 Intent URI. package 로 미설치 시 Play Store 연결 가능.
+ *
+ * 실행: openExternalUrl (hidden anchor click) — iOS와 달리 location.href 를 쓰지 않음.
+ *   intent/nmap 시 현재 탭이 Chrome intent 처리 페이지로 바뀌는 것을 막기 위함.
+ *
+ * browser_fallback_url 미사용: 실패 시 SPA 전체 리로드됨.
+ *
+ * 성공 판별: iOS 와 동일 leftPage (복귀 후 visible 이어도 fallback 취소).
+ * Play Store 이탈: URL 패턴 감지 후 history.back → fallback 팝업.
  */
 function tryOpenDeepLinkOnAndroid(
   schemeUrl: string,
@@ -365,7 +408,7 @@ function tryOpenDeepLinkOnAndroid(
   window.addEventListener("pagehide", onPageHide);
   window.addEventListener("blur", onBlur);
 
-  // PWA: nmap 직접 시도. 모바일 웹: intent 사용.
+  // PWA → nmap 직접 / 모바일 웹 → intent (상단 Android 분기 주석 참고)
   const launchUrl =
     !standalone && options?.intentUrl ? options.intentUrl : schemeUrl;
 
@@ -396,6 +439,7 @@ function tryOpenDeepLinkOnAndroid(
   }, ANDROID_DEEP_LINK_FALLBACK_MS);
 }
 
+/** 플랫폼 라우터: 데스크톱 → 웹 HTTPS / iOS → nmap / Android → nmap 또는 intent */
 function tryOpenDeepLink(
   schemeUrl: string,
   options?: { fallback?: NaverMapDeepLinkFallback; intentUrl?: string },
@@ -403,6 +447,7 @@ function tryOpenDeepLink(
   const { isIOS, isAndroid } = getMobileEnv();
   const fallback = options?.fallback ?? { targetUrl: schemeUrl };
 
+  // 데스크톱: 커스텀 스킴 핸들러 없음 → nmap/intent 변환한 HTTPS 를 새 탭으로
   if (!isIOS && !isAndroid) {
     openNaverMapWebFallback(
       buildNaverMapWebFallbackUrl(fallback.targetUrl, fallback.context),
@@ -429,7 +474,7 @@ export function openNativeDeepLink(
   });
 }
 
-/** 딥링크 실패·좌표 없음 등 최종 웹 fallback (모바일 포함) */
+/** 데스크톱·모바일 공통 최종 웹 fallback — map.naver.com 등 HTTPS 를 새 탭으로 */
 export function openNaverMapWebFallback(url: string): void {
   window.open(url, "_blank", "noopener,noreferrer");
 }
@@ -533,7 +578,10 @@ function buildNaverMapMarkerDeepLinks(input: {
 }
 
 /**
- * 네이버지도 앱 딥링크로 장소 마커를 연다 (공식 place?lat/lng/name 스킴).
+ * 네이버지도 앱 딥링크로 장소 마커를 연다.
+ * - 데스크톱: HTTPS 웹 지도 새 탭
+ * - Android: PWA nmap / 모바일 웹 intent (실패 시 팝업)
+ * - iOS: nmap (PWA·웹 동일, 실패 시 팝업)
  */
 export function openNaverMapMarker(input: {
   lat: number;
@@ -576,10 +624,10 @@ export function openNaverMapMarker(input: {
 }
 
 /**
- * 네이버지도 앱 딥링크로 매장 위치를 열어준다.
- * - Android: intent + package (실패 시 timeout·Play Store 복귀 후 팝업)
- * - iOS: nmap:// 시도 후 실패 시 설치·웹 선택 팝업
- * - 데스크탑/기타: 웹 네이버지도 새 탭
+ * 네이버지도 앱 딥링크로 매장 위치를 연다.
+ * - 데스크톱: HTTPS 웹 지도 새 탭
+ * - Android: PWA nmap / 모바일 웹 intent (실패·Play Store 복귀 시 팝업)
+ * - iOS: nmap (PWA·웹 동일, 실패 시 팝업)
  */
 export function openNaverMapsApp(input: MapDirectionInput): void {
   const { name, lat, lon } = input;
@@ -628,7 +676,9 @@ export function parsePlaceIdFromNaverUrl(url: string): string | undefined {
 
 /**
  * 네이버 지도 장소 ID(place)로 연다.
- * place ID가 있으면 nmap/intent(place?id=)를 사용하고, 좌표 마커보다 우선합니다.
+ * - 데스크톱: HTTPS place URL 새 탭
+ * - Android: PWA nmap / 모바일 웹 intent
+ * - iOS: nmap (PWA·웹 동일)
  */
 export function openNaverMapPlace(
   placeId: string,
@@ -671,10 +721,9 @@ export function openNaverMapPlace(
 }
 
 /**
- * 배너 등 길안내 CTA — 앱 스킴 우선, 실패·데이터 부족 시 fallback 팝업에서 웹 URL 계산.
- * 1. placeId (또는 map.naver.com URL에서 추출) → intent/nmap
- * 2. lat/lon/name → intent/nmap
- * 3. url / 장소명만 → 즉시 웹 (좌표 없어도 동작)
+ * 배너 등 길안내 CTA.
+ * - placeId / 좌표+이름 있음 → openNaverMapPlace·Marker (모바일은 앱 시도, 데스크톱은 웹)
+ * - url·이름만 → 데스크톱·모바일 모두 즉시 HTTPS 웹 (좌표 없어도 동작)
  */
 export function openNaverMapDirections(input: {
   lat?: number;

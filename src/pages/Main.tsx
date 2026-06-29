@@ -117,6 +117,8 @@ function isMapAtMaxZoom(map: { getMaxZoom?: () => number; getZoom: () => number 
 }
 const MAP_SPIDERFY_RADIUS_PX = 32;
 const INITIAL_STORE_BATCH = 10;
+/** 모바일 카드뷰 검색 포커스 시 배너 완전 숨김용 추가 스크롤 (main pt-3·서브픽셀 여유) */
+const CARD_BANNER_SCROLL_EXTRA_PX = 16;
 const LOAD_MORE_STORE_BATCH = 10;
 
 const BRAND_NAME_MAP: Record<string, string> = {
@@ -989,7 +991,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
 
       const headerBottom = header.getBoundingClientRect().bottom;
       const bannerBottom = banner.getBoundingClientRect().bottom;
-      const delta = bannerBottom - headerBottom;
+      const delta = bannerBottom - headerBottom + CARD_BANNER_SCROLL_EXTRA_PX;
       if (delta <= 2) return;
 
       window.scrollTo({
