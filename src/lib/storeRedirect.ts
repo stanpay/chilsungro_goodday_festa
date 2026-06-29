@@ -1,6 +1,6 @@
 import {
   buildNaverMapOpenUrl,
-  buildNaverMapWebUrlFromScheme,
+  buildNaverMapWebFallbackUrl,
   openNativeDeepLink,
   openNaverMapMarker,
   openNaverMapPlace,
@@ -213,52 +213,6 @@ function isNativeMapScheme(url: string): boolean {
   return url.startsWith("nmap://") || url.startsWith("intent://");
 }
 
-function hasValidStoreCoords(lat?: number, lon?: number): boolean {
-  return (
-    typeof lat === "number" &&
-    typeof lon === "number" &&
-    !Number.isNaN(lat) &&
-    !Number.isNaN(lon) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lon >= -180 &&
-    lon <= 180
-  );
-}
-
-function resolveWebFallbackUrl(
-  targetUrl: string,
-  context?: StoreRedirectContext,
-): string {
-  if (isNativeMapScheme(targetUrl)) {
-    const httpsUrl = buildNaverMapWebUrlFromScheme(targetUrl, context);
-    if (httpsUrl) return httpsUrl;
-  }
-
-  const contextName = context?.name?.trim();
-  if (contextName && hasValidStoreCoords(context.lat, context.lon)) {
-    return buildNaverMapOpenUrl({
-      name: context.name,
-      lat: context.lat,
-      lon: context.lon,
-    });
-  }
-
-  if (isMapRelatedUrl(targetUrl) && targetUrl.startsWith("http")) {
-    return targetUrl;
-  }
-
-  if (contextName) {
-    return buildNaverMapOpenUrl({
-      name: context.name,
-      lat: context.lat,
-      lon: context.lon,
-    });
-  }
-
-  return targetUrl;
-}
-
 function openNmapOnWeb(
   schemeUrl: string,
   context?: StoreRedirectContext,
@@ -266,7 +220,7 @@ function openNmapOnWeb(
   // 모바일(iOS Safari·Android)은 nmap/intent 앱 시도 후 실패 시에만 웹으로 연다.
   if (!isDesktopWebBrowser()) return false;
 
-  const httpsUrl = resolveWebFallbackUrl(schemeUrl, context);
+  const httpsUrl = buildNaverMapWebFallbackUrl(schemeUrl, context);
   if (!httpsUrl.startsWith("http")) return false;
 
   openNaverMapWebFallback(httpsUrl);
@@ -277,8 +231,6 @@ function launchMapTarget(
   targetUrl: string,
   context?: StoreRedirectContext,
 ): void {
-  const webFallback = resolveWebFallbackUrl(targetUrl, context);
-
   if (isNativeMapScheme(targetUrl)) {
     // 일반 웹: redirect 1차 응답이 nmap이면 앱 시도 없이 HTTPS로 바로 연다
     if (openNmapOnWeb(targetUrl, context)) return;
@@ -286,7 +238,7 @@ function launchMapTarget(
     const nmapUrl = toNmapUrl(targetUrl) ?? targetUrl;
 
     openNativeDeepLink(nmapUrl, {
-      webFallback,
+      fallback: { targetUrl, context },
       intentUrl: buildIntentFromNmap(nmapUrl),
     });
     return;
@@ -294,7 +246,7 @@ function launchMapTarget(
 
   const placeId = parsePlaceIdFromNaverUrl(targetUrl);
   if (placeId) {
-    openNaverMapPlace(placeId, webFallback);
+    openNaverMapPlace(placeId, { targetUrl, context });
     return;
   }
 
@@ -308,7 +260,7 @@ function launchMapTarget(
       lat: context.lat,
       lon: context.lon,
       name: context.name.trim(),
-      webFallback,
+      targetUrl,
     });
     return;
   }
@@ -354,7 +306,7 @@ async function openStoreRedirectResolved(
     launchResolvedTarget(resolved, context);
   } catch {
     const httpsUrl = context?.name?.trim()
-      ? resolveWebFallbackUrl("nmap://", context)
+      ? buildNaverMapWebFallbackUrl("nmap://", context)
       : undefined;
 
     if (httpsUrl?.startsWith("http")) {

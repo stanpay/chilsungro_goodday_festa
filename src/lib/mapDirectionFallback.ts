@@ -13,9 +13,19 @@ export const NAVER_MAP_ANDROID_FALLBACK_EVENT = NAVER_MAP_FALLBACK_EVENT;
 
 export type NaverMapFallbackPlatform = "ios" | "android";
 
+export type NaverMapFallbackContext = {
+  lat?: number;
+  lon?: number;
+  name?: string;
+};
+
 export type NaverMapFallbackDetail = {
-  webFallbackUrl: string;
   platform: NaverMapFallbackPlatform;
+  /** 리다이렉트·nmap 등 — 팝업 표시 시 웹 URL 계산에 사용 */
+  targetUrl?: string;
+  context?: NaverMapFallbackContext;
+  /** 미리 계산된 URL (DevTools 등). 없으면 targetUrl+context로 계산 */
+  webFallbackUrl?: string;
 };
 
 /** @deprecated NaverMapFallbackDetail 사용 */
@@ -70,25 +80,21 @@ export function getNaverMapFallbackCopy(locale?: AppLocale) {
 /** @deprecated getNaverMapFallbackCopy 사용 */
 export const getNaverMapAndroidFallbackCopy = getNaverMapFallbackCopy;
 
-export function promptNaverMapFallback(
-  webFallbackUrl: string,
-  platform: NaverMapFallbackPlatform,
-): void {
+export function promptNaverMapFallback(detail: NaverMapFallbackDetail): void {
   window.dispatchEvent(
     new CustomEvent<NaverMapFallbackDetail>(NAVER_MAP_FALLBACK_EVENT, {
-      detail: { webFallbackUrl, platform },
+      detail,
     }),
   );
 }
 
-/** Android intent 실패 시 팝업에 쓸 web URL·플랫폼을 저장 */
-export function stashNaverMapFallbackForIntent(webFallbackUrl: string): void {
+/** Android intent 실패 시 팝업에 쓸 fallback 정보 저장 */
+export function stashNaverMapFallbackForIntent(
+  detail: NaverMapFallbackDetail,
+): void {
   sessionStorage.setItem(
     NAVER_MAP_FALLBACK_STORAGE_KEY,
-    JSON.stringify({
-      webFallbackUrl,
-      platform: "android" satisfies NaverMapFallbackPlatform,
-    }),
+    JSON.stringify(detail),
   );
 }
 
@@ -101,7 +107,12 @@ function readStashedNaverMapFallback(): NaverMapFallbackDetail | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as NaverMapFallbackDetail;
-    if (parsed?.webFallbackUrl && parsed.platform) return parsed;
+    if (
+      parsed?.platform &&
+      (parsed.webFallbackUrl || parsed.targetUrl || parsed.context)
+    ) {
+      return parsed;
+    }
   } catch {
     /* ignore */
   }
@@ -123,10 +134,12 @@ export function resumeNaverMapFallbackFromNavigation(): void {
     );
   }
 
-  promptNaverMapFallback(
-    stashed?.webFallbackUrl ?? "https://map.naver.com/",
-    stashed?.platform ?? "android",
-  );
+  promptNaverMapFallback({
+    platform: stashed?.platform ?? "android",
+    targetUrl: stashed?.targetUrl,
+    context: stashed?.context,
+    webFallbackUrl: stashed?.webFallbackUrl,
+  });
 }
 
 /**
@@ -135,9 +148,9 @@ export function resumeNaverMapFallbackFromNavigation(): void {
  */
 export function appendAndroidIntentBrowserFallback(
   intentUrl: string,
-  webFallbackUrl: string,
+  fallback: NaverMapFallbackDetail,
 ): string {
-  stashNaverMapFallbackForIntent(webFallbackUrl);
+  stashNaverMapFallbackForIntent(fallback);
   const fallbackTarget = encodeURIComponent(
     `${window.location.origin}${window.location.pathname}${window.location.search}${NAVER_MAP_FALLBACK_HASH}`,
   );
@@ -152,7 +165,7 @@ export function appendAndroidIntentBrowserFallback(
 
 /** @deprecated promptNaverMapFallback 사용 */
 export function promptNaverMapAndroidFallback(webFallbackUrl: string): void {
-  promptNaverMapFallback(webFallbackUrl, "android");
+  promptNaverMapFallback({ platform: "android", webFallbackUrl });
 }
 
 export function openNaverMapIosStore(): void {

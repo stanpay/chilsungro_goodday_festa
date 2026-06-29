@@ -17,9 +17,23 @@ import {
   type NaverMapFallbackDetail,
   type NaverMapFallbackPlatform,
 } from "@/lib/mapDirectionFallback";
-import { openNaverMapWebFallback } from "@/lib/mapDirectionLinks";
+import {
+  buildNaverMapWebFallbackUrl,
+  openNaverMapWebFallback,
+} from "@/lib/mapDirectionLinks";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+function resolveFallbackWebUrl(detail: NaverMapFallbackDetail): string {
+  if (detail.webFallbackUrl?.startsWith("http")) {
+    return detail.webFallbackUrl;
+  }
+
+  return buildNaverMapWebFallbackUrl(
+    detail.targetUrl ?? "nmap://",
+    detail.context,
+  );
+}
 
 export default function NaverMapFallbackDialog() {
   const { locale } = useAppLocale();
@@ -31,10 +45,15 @@ export default function NaverMapFallbackDialog() {
 
   const handleEvent = useCallback((event: Event) => {
     const detail = (event as CustomEvent<NaverMapFallbackDetail>).detail;
-    if (!detail?.webFallbackUrl || !detail.platform) {
+    if (!detail?.platform) {
       return;
     }
-    setWebFallbackUrl(detail.webFallbackUrl);
+
+    if (!detail.targetUrl && !detail.webFallbackUrl && !detail.context) {
+      return;
+    }
+
+    setWebFallbackUrl(resolveFallbackWebUrl(detail));
     setPlatform(detail.platform);
     setOpen(true);
   }, []);
@@ -72,7 +91,15 @@ export default function NaverMapFallbackDialog() {
           >
             {copy.web}
           </AlertDialogAction>
-          <AlertDialogCancel className="w-full">{copy.close}</AlertDialogCancel>
+          <AlertDialogCancel
+            className={cn(
+              "mt-0 w-full border-primary bg-background text-foreground",
+              "hover:bg-accent hover:text-accent-foreground",
+              "focus-visible:ring-0 focus-visible:ring-offset-0",
+            )}
+          >
+            {copy.close}
+          </AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

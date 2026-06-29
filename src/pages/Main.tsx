@@ -949,7 +949,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const cardSearchRowRef = useRef<HTMLDivElement>(null);
   const cardBannerRef = useRef<HTMLDivElement>(null);
   const cardHeaderRef = useRef<HTMLElement>(null);
-  const cardScrollContainerRef = useRef<HTMLElement>(null);
   const pendingSearchSubmitRef = useRef(false);
   const mapSearchMatchRef = useRef<(query: string) => boolean>(() => false);
   const isLoadingStoresRef = useRef(true);
@@ -971,45 +970,31 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     setSearchInputFocused(Boolean(input && document.activeElement === input));
   }, []);
 
-  const scrollCardSearchToTop = useCallback(() => {
+  const scrollCardBannerUp = useCallback(() => {
     if (isMapViewRef.current || !isMobileRef.current) return;
 
     const run = () => {
-      const searchRow = cardSearchRowRef.current;
-      if (!searchRow) return;
+      const banner = cardBannerRef.current;
+      const header = cardHeaderRef.current;
+      if (!banner || !header) return;
 
-      const scrollContainer = cardScrollContainerRef.current;
-      const headerBottom =
-        cardHeaderRef.current?.getBoundingClientRect().bottom ?? 0;
-      const searchTop = searchRow.getBoundingClientRect().top;
-      const bannerRect = cardBannerRef.current?.getBoundingClientRect();
-      const bannerSearchGap =
-        bannerRect && bannerRect.height > 0
-          ? Math.max(0, searchTop - bannerRect.bottom)
-          : 0;
-      const delta = searchTop - headerBottom - bannerSearchGap / 2;
-      if (Math.abs(delta) < 2) return;
+      const headerBottom = header.getBoundingClientRect().bottom;
+      const bannerTop = banner.getBoundingClientRect().top;
+      const delta = bannerTop - headerBottom;
+      if (delta <= 2) return;
 
-      const nextTop = Math.max(
-        0,
-        (scrollContainer?.scrollTop ?? window.scrollY) + delta
-      );
-
-      if (scrollContainer) {
-        scrollContainer.scrollTo({ top: nextTop, behavior: "smooth" });
-      } else {
-        window.scrollTo({ top: nextTop, behavior: "smooth" });
-      }
+      window.scrollTo({
+        top: window.scrollY + delta,
+        behavior: "auto",
+      });
     };
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(run);
-    });
+    requestAnimationFrame(run);
   }, []);
 
   const handleSearchFocus = () => {
     setSearchInputFocused(true);
-    scrollCardSearchToTop();
+    scrollCardBannerUp();
   };
 
   const handleSearchBlur = () => {
@@ -1027,12 +1012,18 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
 
   const handleSearchPointerDown = () => {
     armSearchFocusTapGuard();
+    if (!isMobileRef.current || isMapViewRef.current) return;
+    const input = searchInputRef.current;
+    if (!input || document.activeElement === input) return;
+    input.focus({ preventScroll: true });
+    scrollCardBannerUp();
   };
 
   const focusSearchInput = useCallback(() => {
     armSearchFocusTapGuard();
-    searchInputRef.current?.focus();
-  }, []);
+    searchInputRef.current?.focus({ preventScroll: true });
+    scrollCardBannerUp();
+  }, [scrollCardBannerUp]);
 
   const handleSearchClearPointerDown = (
     e: React.PointerEvent<HTMLButtonElement>
@@ -1173,8 +1164,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
   isMapViewRef.current = isMapView;
-  const useCardBodyScroll = !isMapView && isMobile;
-  const [cardHeaderViewportTop, setCardHeaderViewportTop] = useState(0);
   /** 모바일 지도뷰 검색 중 하단 UI(시트·네비) 숨김 — 내부 상태는 유지 */
   const mapSearchChromeHidden =
     isMapView && isMobile && (searchInputFocused || mapSearchAwaitingRestore);
@@ -1355,10 +1344,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
 
   const toggleMapView = () => {
     if (!isMapView) {
-      const container = cardScrollContainerRef.current;
-      cardScrollYRef.current = container
-        ? container.scrollTop
-        : window.scrollY;
+      cardScrollYRef.current = window.scrollY;
     }
     setSearchParams(
       (prev) => {
@@ -1383,14 +1369,9 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     if (isMapView) return;
     const y = cardScrollYRef.current;
     requestAnimationFrame(() => {
-      const container = cardScrollContainerRef.current;
-      if (container && isMobile) {
-        container.scrollTo(0, y);
-      } else {
-        window.scrollTo(0, y);
-      }
+      window.scrollTo(0, y);
     });
-  }, [isMapView, isMobile]);
+  }, [isMapView]);
 
   useEffect(() => {
     updateChatwootBubblePosition({
@@ -1406,24 +1387,15 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     }
 
     const onScroll = () => {
-      const container = cardScrollContainerRef.current;
-      const scrollY = container && isMobile ? container.scrollTop : window.scrollY;
-      setShowScrollToTop(scrollY > 300);
+      setShowScrollToTop(window.scrollY > 300);
     };
 
     onScroll();
-    const container = cardScrollContainerRef.current;
-    const target = container && isMobile ? container : window;
-    target.addEventListener("scroll", onScroll, { passive: true });
-    return () => target.removeEventListener("scroll", onScroll);
-  }, [isMapView, isMobile]);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isMapView]);
 
   const handleScrollToTop = useCallback(() => {
-    const container = cardScrollContainerRef.current;
-    if (container && isMobileRef.current && !isMapViewRef.current) {
-      container.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
@@ -3431,7 +3403,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
 
   useEffect(() => {
-    if (!isMapView && !useCardBodyScroll) return;
+    if (!isMapView) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtml = html.style.overflow;
@@ -3442,33 +3414,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       html.style.overflow = prevHtml;
       body.style.overflow = prevBody;
     };
-  }, [isMapView, useCardBodyScroll]);
-
-  useEffect(() => {
-    if (!useCardBodyScroll) {
-      setCardHeaderViewportTop(0);
-      return;
-    }
-
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const syncViewport = () => {
-      const offsetTop = Math.max(0, Math.round(vv.offsetTop));
-      setCardHeaderViewportTop(searchInputFocused ? offsetTop : 0);
-      if (searchInputFocused && window.scrollY !== 0) {
-        window.scrollTo(0, 0);
-      }
-    };
-
-    syncViewport();
-    vv.addEventListener("resize", syncViewport);
-    vv.addEventListener("scroll", syncViewport);
-    return () => {
-      vv.removeEventListener("resize", syncViewport);
-      vv.removeEventListener("scroll", syncViewport);
-    };
-  }, [useCardBodyScroll, searchInputFocused]);
+  }, [isMapView]);
 
   return (
     <div
@@ -3476,9 +3422,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         "bg-background",
         isMapView
           ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-none"
-          : useCardBodyScroll
-            ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-none"
-            : "min-h-screen pb-20"
+          : "min-h-screen pb-20"
       )}
     >
       <LocationPermissionModal
@@ -3493,15 +3437,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       {!isMapView && (
         <header
           ref={cardHeaderRef}
-          className={cn(
-            "z-40 shrink-0 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95",
-            !useCardBodyScroll && "sticky top-0"
-          )}
-          style={
-            cardHeaderViewportTop > 0
-              ? { transform: `translateY(${cardHeaderViewportTop}px)` }
-              : undefined
-          }
+          className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95"
         >
           <div className="max-w-md mx-auto px-4 py-3">
             <div className="flex items-center gap-2 w-full">
@@ -3542,14 +3478,11 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
       {/* Store Grid — 지도뷰: 지도는 뷰포트에서 하단 네비(4rem) 제외 전체 */}
       <main
-        ref={cardScrollContainerRef}
         className={cn(
           "mx-auto max-w-md w-full",
           isMapView
             ? "relative flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none px-0 pb-0 pt-[max(0.5rem,env(safe-area-inset-top))]"
-            : useCardBodyScroll
-              ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pt-3 pb-24"
-              : "px-4 pt-3 pb-6"
+            : "px-4 pt-3 pb-6"
         )}
       >
         <div

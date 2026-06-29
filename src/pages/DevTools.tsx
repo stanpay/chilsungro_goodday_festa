@@ -114,7 +114,10 @@ const DevTools = () => {
   const openNaverMapFallbackPreview = () => {
     const ua = navigator.userAgent;
     const platform = /iPhone|iPad|iPod/i.test(ua) ? "ios" : "android";
-    promptNaverMapFallback("https://map.naver.com/", platform);
+    promptNaverMapFallback({
+      platform,
+      webFallbackUrl: "https://map.naver.com/",
+    });
   };
 
   return (

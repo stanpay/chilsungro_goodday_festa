@@ -2,13 +2,21 @@
 export function isInStandaloneMode(): boolean {
     if (typeof window === "undefined")
         return false;
-    if ("standalone" in window.navigator &&
-        (window.navigator as Navigator & {
-            standalone?: boolean;
-        }).standalone) {
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    if ("standalone" in nav && nav.standalone) {
         return true;
     }
-    return ["standalone", "fullscreen", "minimal-ui"].some((mode) => window.matchMedia(`(display-mode: ${mode})`).matches);
+    if (["standalone", "fullscreen", "minimal-ui"].some((mode) => window.matchMedia(`(display-mode: ${mode})`).matches)) {
+        return true;
+    }
+    // Android TWA / 일부 런처: display-mode가 browser가 아니면 홈 화면 실행으로 간주
+    if (/Android/i.test(nav.userAgent) && !window.matchMedia("(display-mode: browser)").matches) {
+        return true;
+    }
+    if (document.referrer.startsWith("android-app://")) {
+        return true;
+    }
+    return false;
 }
 
 /** PWA·모바일에서 intent/custom scheme 등 외부 URL 열기 (location.href 대신 anchor click) */
