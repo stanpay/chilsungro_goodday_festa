@@ -79,8 +79,7 @@ function getNaverMapAppName(): string {
 }
 
 const ANDROID_DEEP_LINK_FALLBACK_MS = 1500;
-/** iOS Safari: "이 페이지를 열겠습니까?" 확인 대기 */
-const IOS_DEEP_LINK_FALLBACK_MS = 4500;
+const IOS_DEEP_LINK_FALLBACK_MS = ANDROID_DEEP_LINK_FALLBACK_MS;
 
 const PLAY_STORE_URL_PATTERN =
   /play\.google\.com|market\.android\.com|market:\/\/details/i;
@@ -143,7 +142,7 @@ function tryOpenDeepLinkOnIos(schemeUrl: string, webFallback: string): void {
     }
 
     clearStashedNaverMapFallback();
-    window.location.assign(webFallback);
+    promptNaverMapFallback(webFallback, "ios");
   }, IOS_DEEP_LINK_FALLBACK_MS);
 }
 

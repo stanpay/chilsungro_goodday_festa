@@ -213,20 +213,42 @@ function isNativeMapScheme(url: string): boolean {
   return url.startsWith("nmap://") || url.startsWith("intent://");
 }
 
+function hasValidStoreCoords(lat?: number, lon?: number): boolean {
+  return (
+    typeof lat === "number" &&
+    typeof lon === "number" &&
+    !Number.isNaN(lat) &&
+    !Number.isNaN(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
+}
+
 function resolveWebFallbackUrl(
   targetUrl: string,
   context?: StoreRedirectContext,
 ): string {
-  if (isMapRelatedUrl(targetUrl) && targetUrl.startsWith("http")) {
-    return targetUrl;
-  }
-
   if (isNativeMapScheme(targetUrl)) {
     const httpsUrl = buildNaverMapWebUrlFromScheme(targetUrl, context);
     if (httpsUrl) return httpsUrl;
   }
 
-  if (context?.name?.trim()) {
+  const contextName = context?.name?.trim();
+  if (contextName && hasValidStoreCoords(context.lat, context.lon)) {
+    return buildNaverMapOpenUrl({
+      name: context.name,
+      lat: context.lat,
+      lon: context.lon,
+    });
+  }
+
+  if (isMapRelatedUrl(targetUrl) && targetUrl.startsWith("http")) {
+    return targetUrl;
+  }
+
+  if (contextName) {
     return buildNaverMapOpenUrl({
       name: context.name,
       lat: context.lat,
