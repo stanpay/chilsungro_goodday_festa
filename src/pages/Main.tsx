@@ -949,6 +949,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const cardSearchRowRef = useRef<HTMLDivElement>(null);
   const cardBannerRef = useRef<HTMLDivElement>(null);
   const cardHeaderRef = useRef<HTMLElement>(null);
+  const cardScrollContainerRef = useRef<HTMLElement>(null);
   const pendingSearchSubmitRef = useRef(false);
   const mapSearchMatchRef = useRef<(query: string) => boolean>(() => false);
   const isLoadingStoresRef = useRef(true);
@@ -964,15 +965,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
   isMobileRef.current = isMobile;
-  const isIOSMobile = useMemo(
-    () =>
-      typeof navigator !== "undefined" &&
-      /iPhone|iPad|iPod/i.test(navigator.userAgent),
-    []
-  );
-  const isIOSMobileRef = useRef(isIOSMobile);
-  isIOSMobileRef.current = isIOSMobile;
-  const [cardHeaderSpacerPx, setCardHeaderSpacerPx] = useState(0);
 
   const syncSearchInputFocused = useCallback(() => {
     const input = searchInputRef.current;
@@ -980,12 +972,13 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   }, []);
 
   const scrollCardSearchToTop = useCallback(() => {
-    if (isMapViewRef.current || !isMobileRef.current || isIOSMobileRef.current) return;
+    if (isMapViewRef.current || !isMobileRef.current) return;
 
     const run = () => {
       const searchRow = cardSearchRowRef.current;
       if (!searchRow) return;
 
+      const scrollContainer = cardScrollContainerRef.current;
       const headerBottom =
         cardHeaderRef.current?.getBoundingClientRect().bottom ?? 0;
       const searchTop = searchRow.getBoundingClientRect().top;
@@ -997,10 +990,16 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       const delta = searchTop - headerBottom - bannerSearchGap / 2;
       if (Math.abs(delta) < 2) return;
 
-      window.scrollTo({
-        top: Math.max(0, window.scrollY + delta),
-        behavior: "smooth",
-      });
+      const nextTop = Math.max(
+        0,
+        (scrollContainer?.scrollTop ?? window.scrollY) + delta
+      );
+
+      if (scrollContainer) {
+        scrollContainer.scrollTo({ top: nextTop, behavior: "smooth" });
+      } else {
+        window.scrollTo({ top: nextTop, behavior: "smooth" });
+      }
     };
 
     requestAnimationFrame(() => {
@@ -1174,7 +1173,8 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
   isMapViewRef.current = isMapView;
-  const useFixedCardHeader = !isMapView && isMobile && isIOSMobile;
+  const useCardBodyScroll = !isMapView && isMobile;
+  const [cardHeaderViewportTop, setCardHeaderViewportTop] = useState(0);
   /** 모바일 지도뷰 검색 중 하단 UI(시트·네비) 숨김 — 내부 상태는 유지 */
   const mapSearchChromeHidden =
     isMapView && isMobile && (searchInputFocused || mapSearchAwaitingRestore);
@@ -1355,7 +1355,10 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
 
   const toggleMapView = () => {
     if (!isMapView) {
-      cardScrollYRef.current = window.scrollY;
+      const container = cardScrollContainerRef.current;
+      cardScrollYRef.current = container
+        ? container.scrollTop
+        : window.scrollY;
     }
     setSearchParams(
       (prev) => {
@@ -1380,9 +1383,14 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     if (isMapView) return;
     const y = cardScrollYRef.current;
     requestAnimationFrame(() => {
-      window.scrollTo(0, y);
+      const container = cardScrollContainerRef.current;
+      if (container && isMobile) {
+        container.scrollTo(0, y);
+      } else {
+        window.scrollTo(0, y);
+      }
     });
-  }, [isMapView]);
+  }, [isMapView, isMobile]);
 
   useEffect(() => {
     updateChatwootBubblePosition({
@@ -1398,15 +1406,24 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     }
 
     const onScroll = () => {
-      setShowScrollToTop(window.scrollY > 300);
+      const container = cardScrollContainerRef.current;
+      const scrollY = container && isMobile ? container.scrollTop : window.scrollY;
+      setShowScrollToTop(scrollY > 300);
     };
 
     onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [isMapView]);
+    const container = cardScrollContainerRef.current;
+    const target = container && isMobile ? container : window;
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [isMapView, isMobile]);
 
   const handleScrollToTop = useCallback(() => {
+    const container = cardScrollContainerRef.current;
+    if (container && isMobileRef.current && !isMapViewRef.current) {
+      container.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
@@ -3414,7 +3431,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
 
   useEffect(() => {
-    if (!isMapView) return;
+    if (!isMapView && !useCardBodyScroll) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtml = html.style.overflow;
@@ -3425,25 +3442,33 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       html.style.overflow = prevHtml;
       body.style.overflow = prevBody;
     };
-  }, [isMapView]);
+  }, [isMapView, useCardBodyScroll]);
 
-  useLayoutEffect(() => {
-    if (!useFixedCardHeader) {
-      setCardHeaderSpacerPx(0);
+  useEffect(() => {
+    if (!useCardBodyScroll) {
+      setCardHeaderViewportTop(0);
       return;
     }
-    const header = cardHeaderRef.current;
-    if (!header) return;
 
-    const syncSpacer = () => {
-      setCardHeaderSpacerPx(header.offsetHeight);
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const syncViewport = () => {
+      const offsetTop = Math.max(0, Math.round(vv.offsetTop));
+      setCardHeaderViewportTop(searchInputFocused ? offsetTop : 0);
+      if (searchInputFocused && window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
     };
 
-    syncSpacer();
-    const observer = new ResizeObserver(syncSpacer);
-    observer.observe(header);
-    return () => observer.disconnect();
-  }, [useFixedCardHeader, headerLocationText, isLoadingLocation]);
+    syncViewport();
+    vv.addEventListener("resize", syncViewport);
+    vv.addEventListener("scroll", syncViewport);
+    return () => {
+      vv.removeEventListener("resize", syncViewport);
+      vv.removeEventListener("scroll", syncViewport);
+    };
+  }, [useCardBodyScroll, searchInputFocused]);
 
   return (
     <div
@@ -3451,7 +3476,9 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         "bg-background",
         isMapView
           ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-none"
-          : "min-h-screen pb-20"
+          : useCardBodyScroll
+            ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-none"
+            : "min-h-screen pb-20"
       )}
     >
       <LocationPermissionModal
@@ -3467,11 +3494,14 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         <header
           ref={cardHeaderRef}
           className={cn(
-            "z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95",
-            useFixedCardHeader
-              ? "fixed inset-x-0 top-0"
-              : "sticky top-0"
+            "z-40 shrink-0 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95",
+            !useCardBodyScroll && "sticky top-0"
           )}
+          style={
+            cardHeaderViewportTop > 0
+              ? { transform: `translateY(${cardHeaderViewportTop}px)` }
+              : undefined
+          }
         >
           <div className="max-w-md mx-auto px-4 py-3">
             <div className="flex items-center gap-2 w-full">
@@ -3509,21 +3539,17 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           </div>
         </header>
       )}
-      {!isMapView && cardHeaderSpacerPx > 0 && (
-        <div
-          aria-hidden
-          className="pointer-events-none shrink-0"
-          style={{ height: cardHeaderSpacerPx }}
-        />
-      )}
 
       {/* Store Grid — 지도뷰: 지도는 뷰포트에서 하단 네비(4rem) 제외 전체 */}
       <main
+        ref={cardScrollContainerRef}
         className={cn(
           "mx-auto max-w-md w-full",
           isMapView
             ? "relative flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none px-0 pb-0 pt-[max(0.5rem,env(safe-area-inset-top))]"
-            : "px-4 pt-3 pb-6"
+            : useCardBodyScroll
+              ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pt-3 pb-24"
+              : "px-4 pt-3 pb-6"
         )}
       >
         <div

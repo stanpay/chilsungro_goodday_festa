@@ -241,7 +241,8 @@ function openNmapOnWeb(
   schemeUrl: string,
   context?: StoreRedirectContext,
 ): boolean {
-  if (isInStandaloneMode()) return false;
+  // 모바일(iOS Safari·Android)은 nmap/intent 앱 시도 후 실패 시에만 웹으로 연다.
+  if (!isDesktopWebBrowser()) return false;
 
   const httpsUrl = resolveWebFallbackUrl(schemeUrl, context);
   if (!httpsUrl.startsWith("http")) return false;

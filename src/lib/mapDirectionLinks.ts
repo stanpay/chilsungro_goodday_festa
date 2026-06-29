@@ -78,13 +78,123 @@ function getNaverMapAppName(): string {
   return encodeURIComponent(window.location.href);
 }
 
-const DEEP_LINK_FALLBACK_MS = 1500;
+const ANDROID_DEEP_LINK_FALLBACK_MS = 1500;
+/** iOS Safari: "이 페이지를 열겠습니까?" 확인 대기 */
+const IOS_DEEP_LINK_FALLBACK_MS = 4500;
 
 const PLAY_STORE_URL_PATTERN =
   /play\.google\.com|market\.android\.com|market:\/\/details/i;
 
 function isPlayStoreNavigation(): boolean {
   return PLAY_STORE_URL_PATTERN.test(window.location.href);
+}
+
+function isIosPageHidden(): boolean {
+  const doc = document as Document & { webkitHidden?: boolean };
+  return document.hidden || doc.webkitHidden === true;
+}
+
+/**
+ * iOS(사파리·크롬 등 WebKit 공통):
+ * - window.open 보조 탭은 스크립트로 닫을 수 없음(iOS 보안 제한) → 같은 탭에서 nmap 시도
+ * - 보조 탭에서 앱을 열면 원본 탭은 hidden 되지 않아 오탐 fallback 발생 → location.href 사용
+ * - 한 번이라도 백그라운드로 가면(앱 전환) 웹 fallback 취소 (복귀 후 visible이어도 유지)
+ */
+function tryOpenDeepLinkOnIos(schemeUrl: string, webFallback: string): void {
+  let leftPage = false;
+
+  const markLeftPage = () => {
+    leftPage = true;
+    clearStashedNaverMapFallback();
+  };
+
+  const onVisibilityChange = () => {
+    if (isIosPageHidden()) {
+      markLeftPage();
+    }
+  };
+
+  const onPageHide = () => {
+    markLeftPage();
+  };
+
+  const onBlur = () => {
+    // iOS Chrome: 확인 없이 앱이 바로 열릴 때 visibilitychange가 늦게 올 수 있음
+    window.setTimeout(() => {
+      if (isIosPageHidden()) {
+        markLeftPage();
+      }
+    }, 500);
+  };
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("blur", onBlur);
+
+  window.location.href = schemeUrl;
+
+  window.setTimeout(() => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("pagehide", onPageHide);
+    window.removeEventListener("blur", onBlur);
+
+    if (leftPage) {
+      return;
+    }
+
+    clearStashedNaverMapFallback();
+    window.location.assign(webFallback);
+  }, IOS_DEEP_LINK_FALLBACK_MS);
+}
+
+function tryOpenDeepLinkOnAndroid(
+  schemeUrl: string,
+  options?: { webFallback?: string; intentUrl?: string },
+): void {
+  const webFallback = options?.webFallback ?? "https://map.naver.com/";
+
+  let appOpened = false;
+  const onHide = () => {
+    appOpened = true;
+    clearStashedNaverMapFallback();
+    document.removeEventListener("visibilitychange", onHide);
+  };
+
+  document.addEventListener("visibilitychange", onHide);
+
+  let launchUrl = schemeUrl;
+  if (options?.intentUrl && !isInStandaloneMode()) {
+    launchUrl = appendAndroidIntentBrowserFallback(
+      options.intentUrl,
+      webFallback,
+    );
+  }
+
+  try {
+    openExternalUrl(launchUrl);
+  } catch {
+    /* timeout fallback으로 처리 */
+  }
+
+  window.setTimeout(() => {
+    document.removeEventListener("visibilitychange", onHide);
+
+    if (appOpened && !isPlayStoreNavigation()) {
+      return;
+    }
+
+    if (isPlayStoreNavigation()) {
+      clearStashedNaverMapFallback();
+      window.history.back();
+      window.setTimeout(() => {
+        promptNaverMapFallback(webFallback, "android");
+      }, 300);
+      return;
+    }
+
+    clearStashedNaverMapFallback();
+    promptNaverMapFallback(webFallback, "android");
+  }, ANDROID_DEEP_LINK_FALLBACK_MS);
 }
 
 function tryOpenDeepLink(
@@ -99,54 +209,12 @@ function tryOpenDeepLink(
     return;
   }
 
-  let appOpened = false;
-  const onHide = () => {
-    appOpened = true;
-    clearStashedNaverMapFallback();
-    document.removeEventListener("visibilitychange", onHide);
-  };
-
-  document.addEventListener("visibilitychange", onHide);
-
-  let launchUrl = schemeUrl;
-  if (isAndroid && options?.intentUrl && !isInStandaloneMode()) {
-    launchUrl = appendAndroidIntentBrowserFallback(
-      options.intentUrl,
-      webFallback,
-    );
+  if (isIOS) {
+    tryOpenDeepLinkOnIos(schemeUrl, webFallback);
+    return;
   }
 
-  try {
-    openExternalUrl(launchUrl);
-  } catch {
-    // openExternalUrl 실패 시 타임아웃 fallback으로 처리
-  }
-
-  window.setTimeout(() => {
-    document.removeEventListener("visibilitychange", onHide);
-
-    // Play Store로 넘어간 경우(visibility만 바뀐 케이스)에도 팝업 표시
-    if (appOpened && !isPlayStoreNavigation()) {
-      return;
-    }
-
-    if (isPlayStoreNavigation()) {
-      clearStashedNaverMapFallback();
-      window.history.back();
-      window.setTimeout(() => {
-        promptNaverMapFallback(webFallback, isIOS ? "ios" : "android");
-      }, 300);
-      return;
-    }
-
-    if (isIOS || isAndroid) {
-      clearStashedNaverMapFallback();
-      promptNaverMapFallback(webFallback, isIOS ? "ios" : "android");
-      return;
-    }
-
-    openNaverMapWebFallback(webFallback);
-  }, DEEP_LINK_FALLBACK_MS);
+  tryOpenDeepLinkOnAndroid(schemeUrl, options);
 }
 
 /** 리다이렉트 해석 후 nmap/intent 등 네이티브 스킴 실행 */
