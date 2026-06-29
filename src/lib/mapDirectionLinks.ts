@@ -39,41 +39,14 @@ function isNaverMapSearchUrl(url: string): boolean {
   }
 }
 
-function normalizeCoord(value: unknown): number | undefined {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : undefined;
-  }
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function normalizeFallbackContext(
-  context?: NaverMapFallbackContext,
-): NaverMapFallbackContext | undefined {
-  if (!context) return undefined;
-
-  const lat = normalizeCoord(context.lat);
-  const lon = normalizeCoord(context.lon);
-  const name = context.name?.trim();
-
-  if (lat === undefined && lon === undefined && !name) {
-    return undefined;
-  }
-
-  return { lat, lon, name };
-}
-
 /**
- * http → 그대로, nmap/intent → lat/lon(또는 place ID) 웹 URL. 이름 검색은 좌표가 없을 때만.
+ * http → 그대로, nmap/intent → URL 내 lat/lon(또는 place ID)만 재구성.
+ * context 좌표 핀·매장명 검색은 사용하지 않음.
  */
 export function computeNaverMapWebUrl(
   targetUrl: string,
-  context?: NaverMapFallbackContext,
+  _context?: NaverMapFallbackContext,
 ): string {
-  const ctx = normalizeFallbackContext(context);
   const url = targetUrl.trim();
 
   if (url.startsWith("http")) {
@@ -87,21 +60,13 @@ export function computeNaverMapWebUrl(
       return buildNaverMapPlaceEntryUrl(placeId);
     }
 
-    const lat = parsed?.lat ?? ctx?.lat;
-    const lon = parsed?.lon ?? ctx?.lon;
-    const label = parsed?.name?.trim() || ctx?.name?.trim();
+    const lat = parsed?.lat;
+    const lon = parsed?.lon;
+    const label = parsed?.name?.trim();
 
     if (hasValidCoords(lat, lon) && lat != null && lon != null) {
       return buildNaverMapCoordEntryUrl(lon, lat, label);
     }
-  }
-
-  if (hasValidCoords(ctx?.lat, ctx?.lon)) {
-    return buildNaverMapCoordEntryUrl(ctx!.lon!, ctx!.lat!, ctx?.name);
-  }
-
-  if (ctx?.name) {
-    return `https://map.naver.com/p/search/${encodeURIComponent(ctx.name)}`;
   }
 
   return "https://map.naver.com/";
@@ -122,17 +87,11 @@ export function resolveNaverMapFallbackWebUrl(
     "targetUrl" | "context" | "webFallbackUrl"
   >,
 ): string {
-  const targetUrl = detail.targetUrl ?? "nmap://";
-
   if (detail.webFallbackUrl?.startsWith("http")) {
-    const recomputed = computeNaverMapWebUrl(targetUrl, detail.context);
-    if (isNaverMapSearchUrl(detail.webFallbackUrl) && !isNaverMapSearchUrl(recomputed)) {
-      return recomputed;
-    }
     return detail.webFallbackUrl;
   }
 
-  return computeNaverMapWebUrl(targetUrl, detail.context);
+  return computeNaverMapWebUrl(detail.targetUrl ?? "nmap://", detail.context);
 }
 
 const EARTH_RADIUS_M = 6378137;

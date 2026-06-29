@@ -305,15 +305,6 @@ async function openStoreRedirectResolved(
     REDIRECT_CACHE.set(redirectUrl, resolved);
     launchResolvedTarget(resolved, context);
   } catch {
-    const httpsUrl = context?.name?.trim()
-      ? buildNaverMapWebFallbackUrl("nmap://", context)
-      : undefined;
-
-    if (httpsUrl?.startsWith("http")) {
-      openNaverMapWebFallback(httpsUrl);
-      return;
-    }
-
     if (isInStandaloneMode()) {
       openExternalUrl(redirectUrl, { targetBlank: true });
       return;
