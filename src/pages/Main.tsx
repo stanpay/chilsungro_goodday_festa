@@ -260,10 +260,6 @@ type MapPinFocusBand = {
   targetY: number;
 };
 
-function isIOSMobile(): boolean {
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
 function measureMapPinFocusBand(
   mapEl: HTMLElement | null,
   researchButtonEl: HTMLElement | null,
@@ -953,7 +949,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const cardSearchRowRef = useRef<HTMLDivElement>(null);
   const cardBannerRef = useRef<HTMLDivElement>(null);
   const cardHeaderRef = useRef<HTMLElement>(null);
-  const [cardHeaderHeight, setCardHeaderHeight] = useState(0);
   const pendingSearchSubmitRef = useRef(false);
   const mapSearchMatchRef = useRef<(query: string) => boolean>(() => false);
   const isLoadingStoresRef = useRef(true);
@@ -969,6 +964,15 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
   isMobileRef.current = isMobile;
+  const isIOSMobile = useMemo(
+    () =>
+      typeof navigator !== "undefined" &&
+      /iPhone|iPad|iPod/i.test(navigator.userAgent),
+    []
+  );
+  const isIOSMobileRef = useRef(isIOSMobile);
+  isIOSMobileRef.current = isIOSMobile;
+  const [cardHeaderSpacerPx, setCardHeaderSpacerPx] = useState(0);
 
   const syncSearchInputFocused = useCallback(() => {
     const input = searchInputRef.current;
@@ -976,7 +980,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   }, []);
 
   const scrollCardSearchToTop = useCallback(() => {
-    if (isMapViewRef.current || !isMobileRef.current) return;
+    if (isMapViewRef.current || !isMobileRef.current || isIOSMobileRef.current) return;
 
     const run = () => {
       const searchRow = cardSearchRowRef.current;
@@ -993,15 +997,9 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       const delta = searchTop - headerBottom - bannerSearchGap / 2;
       if (Math.abs(delta) < 2) return;
 
-      // iOS: 키보드가 layout viewport를 밀어 sticky 헤더가 사라지는 것을 막기 위해
-      // visualViewport offset을 보정하고 즉시 스크롤 (interactive-widget=overlays-content)
-      const vv = window.visualViewport;
-      const iosOffset = isIOSMobile() && vv ? vv.offsetTop : 0;
-      const targetTop = Math.max(0, window.scrollY + delta - iosOffset);
-
       window.scrollTo({
-        top: targetTop,
-        behavior: isIOSMobile() ? "auto" : "smooth",
+        top: Math.max(0, window.scrollY + delta),
+        behavior: "smooth",
       });
     };
 
@@ -1176,6 +1174,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
   isMapViewRef.current = isMapView;
+  const useFixedCardHeader = !isMapView && isMobile && isIOSMobile;
   /** 모바일 지도뷰 검색 중 하단 UI(시트·네비) 숨김 — 내부 상태는 유지 */
   const mapSearchChromeHidden =
     isMapView && isMobile && (searchInputFocused || mapSearchAwaitingRestore);
@@ -1384,44 +1383,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       window.scrollTo(0, y);
     });
   }, [isMapView]);
-
-  useLayoutEffect(() => {
-    if (isMapView || !isMobile) return;
-    const header = cardHeaderRef.current;
-    if (!header) return;
-
-    const syncHeight = () => setCardHeaderHeight(header.offsetHeight);
-    syncHeight();
-
-    const ro = new ResizeObserver(syncHeight);
-    ro.observe(header);
-    return () => ro.disconnect();
-  }, [isMapView, isMobile]);
-
-  // iOS 카드뷰: 검색 포커스 시 Safari가 visual viewport를 밀어 헤더가 가려지는 것 방지
-  useEffect(() => {
-    if (!isMobile || isMapView || !searchInputFocused || !isIOSMobile()) return;
-
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const keepHeaderInView = () => {
-      const offsetTop = vv.offsetTop;
-      if (offsetTop <= 1) return;
-      window.scrollTo({
-        top: Math.max(0, window.scrollY - offsetTop),
-        behavior: "auto",
-      });
-    };
-
-    keepHeaderInView();
-    vv.addEventListener("resize", keepHeaderInView);
-    vv.addEventListener("scroll", keepHeaderInView);
-    return () => {
-      vv.removeEventListener("resize", keepHeaderInView);
-      vv.removeEventListener("scroll", keepHeaderInView);
-    };
-  }, [isMobile, isMapView, searchInputFocused]);
 
   useEffect(() => {
     updateChatwootBubblePosition({
@@ -3466,6 +3427,24 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     };
   }, [isMapView]);
 
+  useLayoutEffect(() => {
+    if (!useFixedCardHeader) {
+      setCardHeaderSpacerPx(0);
+      return;
+    }
+    const header = cardHeaderRef.current;
+    if (!header) return;
+
+    const syncSpacer = () => {
+      setCardHeaderSpacerPx(header.offsetHeight);
+    };
+
+    syncSpacer();
+    const observer = new ResizeObserver(syncSpacer);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [useFixedCardHeader, headerLocationText, isLoadingLocation]);
+
   return (
     <div
       className={cn(
@@ -3485,57 +3464,57 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       />
       {/* Header — 지도뷰에서는 숨기고 지도 위 FAB로 위치만 조정 */}
       {!isMapView && (
-        <>
-          <header
-            ref={cardHeaderRef}
-            className={cn(
-              "z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95",
-              isMobile ? "fixed inset-x-0 top-0" : "sticky top-0"
-            )}
-          >
-            <div className="max-w-md mx-auto px-4 py-3">
-              <div className="flex items-center gap-2 w-full">
-                <Button 
-                  variant="outline" 
-                  className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
-                  disabled={isLoadingLocation}
-                  onClick={() => navigate('/location')}
-                >
-                  <div className="flex w-full min-w-0 items-center overflow-hidden">
-                    {isLoadingLocation ? (
-                      <Loader2 className="w-5 h-5 mr-2 shrink-0 text-primary animate-spin" />
-                    ) : (
-                      <MapPin className="w-5 h-5 mr-2 shrink-0 text-primary group-hover:text-white transition-colors" />
-                    )}
-                    <AutoFitMarquee
-                      text={headerLocationText}
-                      className="flex-1"
-                      textClassName="text-left font-medium !leading-6"
-                      fontSizeClasses={["text-sm", "text-xs"]}
-                    />
-                  </div>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-12 w-12 rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
-                  disabled={isLoadingLocation}
-                  onClick={handleRefreshLocation}
-                  aria-label={h.refreshLocationAria}
-                >
-                  <RefreshCw className={`w-4 h-4 ${isLoadingLocation ? 'animate-spin' : ''}`} />
-                </Button>
-              </div>
-            </div>
-          </header>
-          {isMobile && (
-            <div
-              aria-hidden
-              className="shrink-0"
-              style={{ height: cardHeaderHeight > 0 ? cardHeaderHeight : undefined }}
-            />
+        <header
+          ref={cardHeaderRef}
+          className={cn(
+            "z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95",
+            useFixedCardHeader
+              ? "fixed inset-x-0 top-0"
+              : "sticky top-0"
           )}
-        </>
+        >
+          <div className="max-w-md mx-auto px-4 py-3">
+            <div className="flex items-center gap-2 w-full">
+              <Button 
+                variant="outline" 
+                className="group h-12 min-w-0 flex-1 justify-start overflow-hidden rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
+                disabled={isLoadingLocation}
+                onClick={() => navigate('/location')}
+              >
+                <div className="flex w-full min-w-0 items-center overflow-hidden">
+                  {isLoadingLocation ? (
+                    <Loader2 className="w-5 h-5 mr-2 shrink-0 text-primary animate-spin" />
+                  ) : (
+                    <MapPin className="w-5 h-5 mr-2 shrink-0 text-primary group-hover:text-white transition-colors" />
+                  )}
+                  <AutoFitMarquee
+                    text={headerLocationText}
+                    className="flex-1"
+                    textClassName="text-left font-medium !leading-6"
+                    fontSizeClasses={["text-sm", "text-xs"]}
+                  />
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-12 w-12 rounded-xl border border-primary bg-card text-foreground transition-colors hover:bg-card hover:text-foreground"
+                disabled={isLoadingLocation}
+                onClick={handleRefreshLocation}
+                aria-label={h.refreshLocationAria}
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingLocation ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          </div>
+        </header>
+      )}
+      {!isMapView && cardHeaderSpacerPx > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none shrink-0"
+          style={{ height: cardHeaderSpacerPx }}
+        />
       )}
 
       {/* Store Grid — 지도뷰: 지도는 뷰포트에서 하단 네비(4rem) 제외 전체 */}
