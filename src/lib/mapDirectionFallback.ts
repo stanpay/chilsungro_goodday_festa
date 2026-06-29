@@ -19,7 +19,7 @@ export type NaverMapFallbackDetail = {
   /** 리다이렉트·nmap 등 — 팝업 표시 시 웹 URL 계산에 사용 */
   targetUrl?: string;
   context?: NaverMapFallbackContext;
-  /** 미리 계산된 URL (DevTools 등). 없으면 targetUrl+context로 계산 */
+  /** 미리 계산된 URL (DevTools 등), 또는 naver.me·place 등 그대로 열 HTTPS URL */
   webFallbackUrl?: string;
 };
 

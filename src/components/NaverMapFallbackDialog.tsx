@@ -17,22 +17,11 @@ import {
   type NaverMapFallbackPlatform,
 } from "@/lib/mapDirectionFallback";
 import {
-  buildNaverMapWebFallbackUrl,
   openNaverMapWebFallback,
+  resolveNaverMapFallbackWebUrl,
 } from "@/lib/mapDirectionLinks";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-function resolveFallbackWebUrl(detail: NaverMapFallbackDetail): string {
-  if (detail.webFallbackUrl?.startsWith("http")) {
-    return detail.webFallbackUrl;
-  }
-
-  return buildNaverMapWebFallbackUrl(
-    detail.targetUrl ?? "nmap://",
-    detail.context,
-  );
-}
 
 export default function NaverMapFallbackDialog() {
   const { locale } = useAppLocale();
@@ -60,7 +49,7 @@ export default function NaverMapFallbackDialog() {
 
   const handleOpenWebFallback = useCallback(() => {
     if (!fallbackDetail) return;
-    openNaverMapWebFallback(resolveFallbackWebUrl(fallbackDetail));
+    openNaverMapWebFallback(resolveNaverMapFallbackWebUrl(fallbackDetail));
   }, [fallbackDetail]);
 
   useEffect(() => {
