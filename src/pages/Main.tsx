@@ -1094,7 +1094,8 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
   isMapViewRef.current = isMapView;
-  const mapSearchSheetHidden =
+  /** 모바일 지도뷰 검색 중 하단 UI(시트·네비) 숨김 — 내부 상태는 유지 */
+  const mapSearchChromeHidden =
     isMapView && isMobile && (searchInputFocused || mapSearchAwaitingRestore);
   mapSearchAwaitingRestoreRef.current = mapSearchAwaitingRestore;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -3804,6 +3805,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           onToggle: toggleMapView,
           disabled: false,
         }}
+        hidden={mapSearchChromeHidden}
       />
 
       <MapViewBottomSheet
@@ -3831,7 +3833,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         }}
         onPanelHeightChange={handleMapSheetPanelHeightChange}
         onDraggingChange={handleMapSheetDraggingChange}
-        hideForMapSearch={mapSearchSheetHidden}
+        hideForMapSearch={mapSearchChromeHidden}
         title={t.mapSheetTitle}
         dragHint={t.mapSheetDragHint}
         sortBy={sortBy}

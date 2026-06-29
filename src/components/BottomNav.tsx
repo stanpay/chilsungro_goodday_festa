@@ -12,9 +12,11 @@ export type BottomNavMapViewControl = {
 
 type BottomNavProps = {
   mapViewControl?: BottomNavMapViewControl;
+  /** 지도뷰 검색 키보드 등 — 레이아웃은 유지하고 화면에서만 숨김 */
+  hidden?: boolean;
 };
 
-const BottomNav = ({ mapViewControl }: BottomNavProps) => {
+const BottomNav = ({ mapViewControl, hidden = false }: BottomNavProps) => {
   const location = useLocation();
   const { locale } = useAppLocale();
   const nav = mainStrings(locale);
@@ -30,7 +32,13 @@ const BottomNav = ({ mapViewControl }: BottomNavProps) => {
     : mapOpenFromUrl;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 pb-0">
+    <nav
+      aria-hidden={hidden}
+      className={cn(
+        "fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card pb-0 transition-[opacity,transform] duration-[180ms] ease-out",
+        hidden && "pointer-events-none translate-y-full opacity-0"
+      )}
+    >
       <div className="max-w-md mx-auto flex justify-around items-center h-16">
         <Link
           to="/main"
