@@ -60,7 +60,6 @@ export function buildNaverMapWebFallbackUrl(
 
 const EARTH_RADIUS_M = 6378137;
 
-const NAVER_MAP_ANDROID_PACKAGE = "com.nhn.android.nmap";
 const NAVER_MAP_WEB_ZOOM = 18;
 
 /**
@@ -205,7 +204,7 @@ function showAndroidDeepLinkFallback(fallback: NaverMapDeepLinkFallback): void {
 
 /**
  * Android(PWA·모바일 웹 공통):
- * - intent + package로 네이버지도 앱 시도
+ * - intent로 nmap 스킴 앱 시도 (package 없음 → 미설치 시 Play Store 자동 이동 없음)
  * - 앱 실행 성공 시 visibility로 판단
  * - 미설치·실패 시 timeout 또는 Play Store 복귀 후 설치/웹 선택 팝업
  */
@@ -422,8 +421,7 @@ function buildNaverMapMarkerDeepLinks(input: {
   const intentUrl =
     `intent://place?lat=${lat}&lng=${lon}&name=${encodedName}&appname=${appName}` +
     `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
-    `category=android.intent.category.BROWSABLE;` +
-    `package=${NAVER_MAP_ANDROID_PACKAGE};end`;
+    `category=android.intent.category.BROWSABLE;end`;
   return { nmapUrl, intentUrl };
 }
 
@@ -467,7 +465,7 @@ export function openNaverMapMarker(input: {
 
 /**
  * 네이버지도 앱 딥링크로 매장 위치를 열어준다.
- * - Android: intent + package (실패 시 timeout·Play Store 복귀 후 팝업)
+ * - Android: intent (package 없음, 실패 시 timeout 후 팝업)
  * - iOS: nmap:// 시도 후 실패 시 설치·웹 선택 팝업
  * - 데스크탑/기타: 웹 네이버지도 새 탭
  */
@@ -485,7 +483,7 @@ export function openNaverMapsApp(input: MapDirectionInput): void {
   const intentUrl =
     `intent://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}` +
     `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
-    `category=android.intent.category.BROWSABLE;package=${NAVER_MAP_ANDROID_PACKAGE};end`;
+    `category=android.intent.category.BROWSABLE;end`;
   const fallback: NaverMapDeepLinkFallback = {
     targetUrl: nmapUrl,
     context: { lat, lon, name },
@@ -539,8 +537,7 @@ export function openNaverMapPlace(
   const intentUrl =
     `intent://place?id=${placeId}&appname=${appName}` +
     `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
-    `category=android.intent.category.BROWSABLE;` +
-    `package=${NAVER_MAP_ANDROID_PACKAGE};end`;
+    `category=android.intent.category.BROWSABLE;end`;
 
   if (isAndroid) {
     tryOpenDeepLink(nmapUrl, { fallback, intentUrl });

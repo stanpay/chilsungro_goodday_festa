@@ -9,7 +9,6 @@ import {
 } from "@/lib/mapDirectionLinks";
 import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
-const NAVER_MAP_ANDROID_PACKAGE = "com.nhn.android.nmap";
 const REDIRECT_CACHE = new Map<string, string>();
 const MAX_REDIRECT_HOPS = 8;
 const STORE_REDIRECT_RESOLVE_PATH = "/api/store-redirect-target";
@@ -195,8 +194,7 @@ function buildIntentFromNmap(nmapUrl: string): string {
   return (
     `intent://${withoutScheme}` +
     `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
-    `category=android.intent.category.BROWSABLE;` +
-    `package=${NAVER_MAP_ANDROID_PACKAGE};end`
+    `category=android.intent.category.BROWSABLE;end`
   );
 }
 
