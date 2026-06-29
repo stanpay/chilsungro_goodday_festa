@@ -945,6 +945,9 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   );
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const cardSearchRowRef = useRef<HTMLDivElement>(null);
+  const cardBannerRef = useRef<HTMLDivElement>(null);
+  const cardHeaderRef = useRef<HTMLElement>(null);
   const pendingSearchSubmitRef = useRef(false);
   const mapSearchMatchRef = useRef<(query: string) => boolean>(() => false);
   const isLoadingStoresRef = useRef(true);
@@ -952,6 +955,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const [mapSearchEmptyNotice, setMapSearchEmptyNotice] = useState(false);
   const showMapSearchEmptyNoticeRef = useRef<() => void>(() => {});
   const [searchInputFocused, setSearchInputFocused] = useState(false);
+  const searchFocusTapRef = useRef(false);
   const [mapSearchAwaitingRestore, setMapSearchAwaitingRestore] = useState(false);
   const mapSearchRestoreGenRef = useRef(0);
   const mapSearchSheetFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -965,8 +969,38 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     setSearchInputFocused(Boolean(input && document.activeElement === input));
   }, []);
 
+  const scrollCardSearchToTop = useCallback(() => {
+    if (isMapViewRef.current || !isMobileRef.current) return;
+
+    const run = () => {
+      const searchRow = cardSearchRowRef.current;
+      if (!searchRow) return;
+
+      const headerBottom =
+        cardHeaderRef.current?.getBoundingClientRect().bottom ?? 0;
+      const searchTop = searchRow.getBoundingClientRect().top;
+      const bannerRect = cardBannerRef.current?.getBoundingClientRect();
+      const bannerSearchGap =
+        bannerRect && bannerRect.height > 0
+          ? Math.max(0, searchTop - bannerRect.bottom)
+          : 0;
+      const delta = searchTop - headerBottom - bannerSearchGap / 2;
+      if (Math.abs(delta) < 2) return;
+
+      window.scrollTo({
+        top: Math.max(0, window.scrollY + delta),
+        behavior: "smooth",
+      });
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+  }, []);
+
   const handleSearchFocus = () => {
     setSearchInputFocused(true);
+    scrollCardSearchToTop();
   };
 
   const handleSearchBlur = () => {
@@ -976,7 +1010,11 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   };
 
   const handleSearchPointerDown = () => {
+    searchFocusTapRef.current = true;
     setSearchInputFocused(true);
+    window.setTimeout(() => {
+      searchFocusTapRef.current = false;
+    }, 400);
   };
 
   const dismissMapSearchKeyboard = useCallback(() => {
@@ -1003,6 +1041,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   };
 
   const handleSearchClear = () => {
+    if (searchFocusTapRef.current) return;
     if (searchInput || searchQuery) {
       clearSearch({ keepFocus: true });
       return;
@@ -1347,17 +1386,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       });
     });
   }, [isMapView]);
-
-  useEffect(() => {
-    if (!isMapView || !mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-    const naver = (window as any).naver;
-    requestAnimationFrame(() => {
-      try {
-        naver?.maps?.Event?.trigger(map, "resize");
-      } catch {}
-    });
-  }, [isMapView, mapSearchChromeHidden]);
 
   useEffect(() => {
     const prevSessionRef = { current: null as any };
@@ -3393,7 +3421,10 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       />
       {/* Header — 지도뷰에서는 숨기고 지도 위 FAB로 위치만 조정 */}
       {!isMapView && (
-        <header className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95">
+        <header
+          ref={cardHeaderRef}
+          className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95"
+        >
           <div className="max-w-md mx-auto px-4 py-3">
             <div className="flex items-center gap-2 w-full">
               <Button 
@@ -3451,21 +3482,22 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         >
           <div ref={mapContainerRef} className="map-container h-full w-full overflow-hidden" />
         </div>
-        {!isMapView && <MainPromoBanner locale={locale} />}
-        <div className={cn("mb-4 flex items-center gap-2", isMapView && "relative z-20 px-4")}>
+        {!isMapView && (
+          <div ref={cardBannerRef}>
+            <MainPromoBanner locale={locale} />
+          </div>
+        )}
+        <div
+          ref={cardSearchRowRef}
+          className={cn("mb-4 flex items-center gap-2", isMapView && "relative z-20 px-4")}
+        >
           <div className="relative min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => {
-                const input = searchInputRef.current;
-                if (input) submitSearch(input);
-                else setSearchQuery(searchInput);
-              }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={t.searchPlaceholder}
+            <span
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground"
+              aria-hidden
             >
               <Search className="w-5 h-5" />
-            </button>
+            </span>
             <input
               ref={searchInputRef}
               type="text"
@@ -3503,10 +3535,14 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               <button
                 type="button"
                 onPointerDown={(e) => {
+                  if (!searchInputFocused) return;
                   if (searchInput || searchQuery) e.preventDefault();
                 }}
                 onClick={handleSearchClear}
-                className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className={cn(
+                  "absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors",
+                  !searchInputFocused && "pointer-events-none"
+                )}
                 aria-label={searchInput || searchQuery ? "검색어 지우기" : "검색 취소"}
               >
                 <X className="w-5 h-5" />
