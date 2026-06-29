@@ -65,7 +65,7 @@ export function computeNaverMapWebUrl(
     const label = parsed?.name?.trim();
 
     if (hasValidCoords(lat, lon) && lat != null && lon != null) {
-      return buildNaverMapCoordEntryUrl(lon, lat, label);
+      return buildNaverMapCoordWebUrl(lon, lat, label);
     }
   }
 
@@ -91,7 +91,7 @@ export function resolveNaverMapFallbackWebUrl(
 
   if (isNativeMapSchemeUrl(targetUrl)) {
     const fromNmap = computeNaverMapWebUrl(targetUrl, detail.context);
-    if (isNaverMapEntryUrl(fromNmap)) {
+    if (isNaverMapCoordWebUrl(fromNmap)) {
       return fromNmap;
     }
   }
@@ -116,8 +116,7 @@ const NAVER_MAP_ANDROID_PACKAGE = "com.nhn.android.nmap";
 const NAVER_MAP_WEB_ZOOM = 18;
 
 /**
- * 좌표 기반 공식 웹 URL (마커 표시).
- * nmap://place?lat=&lng=&name= 과 동일하게 좌표로 핀을 찍고, name은 라벨로만 사용.
+ * 데스크탑 웹 전용 — EPSG:3857 entry/address URL (마커 표시).
  * https://map.naver.com/p/entry/address/{x},{y},{label}?c={zoom},0,0,0,dh
  */
 export function buildNaverMapCoordEntryUrl(
@@ -131,6 +130,50 @@ export function buildNaverMapCoordEntryUrl(
     `https://map.naver.com/p/entry/address/${x},${y},` +
     `${encodeURIComponent(displayLabel)}?c=${NAVER_MAP_WEB_ZOOM.toFixed(2)},0,0,0,dh`
   );
+}
+
+/**
+ * 모바일 웹 fallback — WGS84 lat/lng 쿼리.
+ * /p/entry/address/ 는 모바일에서 매장명 검색으로 리다이렉트되는 경우가 있음.
+ * @see https://stickode.tistory.com/1195
+ */
+export function buildNaverMapMobileCoordUrl(
+  lon: number,
+  lat: number,
+): string {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lng: String(lon),
+    zoom: String(NAVER_MAP_WEB_ZOOM),
+  });
+  return `https://map.naver.com/?${params.toString()}`;
+}
+
+/** 데스크탑·모바일 환경에 맞는 좌표 웹 URL */
+export function buildNaverMapCoordWebUrl(
+  lon: number,
+  lat: number,
+  label?: string,
+): string {
+  const { isIOS, isAndroid } = getMobileEnv();
+  if (isIOS || isAndroid) {
+    return buildNaverMapMobileCoordUrl(lon, lat);
+  }
+  return buildNaverMapCoordEntryUrl(lon, lat, label);
+}
+
+function isNaverMapCoordWebUrl(url: string): boolean {
+  if (isNaverMapEntryUrl(url)) return true;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.includes("map.naver.com") &&
+      parsed.searchParams.has("lat") &&
+      parsed.searchParams.has("lng")
+    );
+  } catch {
+    return /map\.naver\.com\/\?[^#]*\blat=/.test(url);
+  }
 }
 
 function isNaverMapEntryUrl(url: string): boolean {
@@ -180,7 +223,7 @@ function toFallbackDetail(
       : undefined;
 
   const webFallbackUrl =
-    (fromNmap && isNaverMapEntryUrl(fromNmap) ? fromNmap : undefined) ??
+    (fromNmap && isNaverMapCoordWebUrl(fromNmap) ? fromNmap : undefined) ??
     httpFallback ??
     fromNmap ??
     computeNaverMapWebUrl(fallback.targetUrl, fallback.context);
@@ -410,7 +453,7 @@ export function buildNaverMapOpenUrl(input: MapDirectionInput): string {
   const q = name.trim();
 
   if (hasValidCoords(lat, lon) && lat != null && lon != null) {
-    return buildNaverMapCoordEntryUrl(lon, lat, q || undefined);
+    return buildNaverMapCoordWebUrl(lon, lat, q || undefined);
   }
 
   if (q) {

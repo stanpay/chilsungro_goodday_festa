@@ -32,9 +32,9 @@ function getCurrentPosition(options: PositionOptions): Promise<GeolocationPositi
 }
 
 /** GPS 조회 최대 대기 시간 (초과 시 실패 처리) */
-export const GEOLOCATION_TIMEOUT_MS = 5000;
+export const GEOLOCATION_TIMEOUT_MS = 10000;
 
-/** 브라우저 위치 조회 — 5초 내 응답 없으면 실패 */
+/** 브라우저 위치 조회 — 10초 내 응답 없으면 실패 */
 export async function getBrowserPosition(): Promise<GeoCoords> {
   if (!navigator.geolocation) {
     throw new Error("Geolocation not supported");
