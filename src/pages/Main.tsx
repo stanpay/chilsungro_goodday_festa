@@ -711,8 +711,11 @@ const LEGACY_BENEFIT_FILTER_CHIP_ORDER: LegacyBenefitFilterChipId[] = [
   "openNow",
 ];
 
-const FILTER_CHIP_ROW_SCROLL_CLASS =
-  "w-full min-w-0 overflow-x-scroll overscroll-x-contain pl-4 pr-4 touch-pan-x [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_button]:touch-pan-x";
+const FILTER_CHIP_ROW_VIEWPORT_CLASS =
+  "w-full min-w-0 overflow-x-scroll overscroll-x-contain pl-4 pr-4 pointer-events-none [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+
+const FILTER_CHIP_ROW_INNER_CLASS =
+  "flex w-max flex-nowrap gap-2 pointer-events-auto touch-pan-x [&_button]:touch-pan-x";
 
 const FILTER_CHIP_SCROLL_DRAG_THRESHOLD_PX = 8;
 
@@ -783,7 +786,6 @@ type FilterDropdownChipProps<T extends string> = {
   labelMap: Record<T, string>;
   ariaLabel: string;
   scrollDragRef: MutableRefObject<FilterChipScrollDragState>;
-  isMapView: boolean;
 };
 
 const ChipButton = forwardRef<
@@ -810,7 +812,7 @@ const ChipButton = forwardRef<
         onToggle?.();
       }}
       className={cn(
-        "flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
+        "pointer-events-auto flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground shadow-sm"
           : primaryBorder
@@ -842,7 +844,6 @@ function FilterDropdownChip<T extends string>({
   labelMap,
   ariaLabel,
   scrollDragRef,
-  isMapView,
 }: FilterDropdownChipProps<T>) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -868,7 +869,7 @@ function FilterDropdownChip<T extends string>({
           primaryBorder
           aria-label={ariaLabel}
           aria-expanded={open}
-          className={cn(isMapView && "pointer-events-auto")}
+          className="pointer-events-auto"
           onPointerDown={(event) => {
             event.preventDefault();
           }}
@@ -1011,11 +1012,18 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
 
   const handleSearchPointerDown = () => {
     searchFocusTapRef.current = true;
-    setSearchInputFocused(true);
     window.setTimeout(() => {
       searchFocusTapRef.current = false;
     }, 400);
   };
+
+  const focusSearchInput = useCallback(() => {
+    searchFocusTapRef.current = true;
+    searchInputRef.current?.focus();
+    window.setTimeout(() => {
+      searchFocusTapRef.current = false;
+    }, 400);
+  }, []);
 
   const dismissMapSearchKeyboard = useCallback(() => {
     if (!isMapViewRef.current || !isMobileRef.current) return;
@@ -1985,7 +1993,6 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       labelMap={labelMap}
       ariaLabel={ariaLabel}
       scrollDragRef={filterChipScrollDragRef}
-      isMapView={isMapView}
     />
   );
 
@@ -2008,30 +2015,14 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       />
     ));
 
-    const chipScrollClassName = FILTER_CHIP_ROW_SCROLL_CLASS;
-
-    if (isMapView) {
-      return (
-        <div
-          className={cn("-mx-4 w-[calc(100%+2rem)] pointer-events-none", rowPaddingClass)}
-          role="toolbar"
-          aria-label={ariaLabel}
-        >
-          <div className={cn(chipScrollClassName, "pointer-events-auto")}>
-            <div className="flex w-max flex-nowrap gap-2">{chips}</div>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div
-        className={cn("-mx-4 w-[calc(100%+2rem)]", rowPaddingClass)}
+        className={cn("-mx-4 w-[calc(100%+2rem)] pointer-events-none", rowPaddingClass)}
         role="toolbar"
         aria-label={ariaLabel}
       >
-        <div className={chipScrollClassName}>
-          <div className="flex w-max flex-nowrap gap-2">{chips}</div>
+        <div className={FILTER_CHIP_ROW_VIEWPORT_CLASS}>
+          <div className={FILTER_CHIP_ROW_INNER_CLASS}>{chips}</div>
         </div>
       </div>
     );
@@ -3535,14 +3526,17 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               <button
                 type="button"
                 onPointerDown={(e) => {
-                  if (!searchInputFocused) return;
+                  const input = searchInputRef.current;
+                  const isFocused = Boolean(input && document.activeElement === input);
+                  if (!isFocused) {
+                    e.preventDefault();
+                    focusSearchInput();
+                    return;
+                  }
                   if (searchInput || searchQuery) e.preventDefault();
                 }}
                 onClick={handleSearchClear}
-                className={cn(
-                  "absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors",
-                  !searchInputFocused && "pointer-events-none"
-                )}
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={searchInput || searchQuery ? "검색어 지우기" : "검색 취소"}
               >
                 <X className="w-5 h-5" />
@@ -3619,7 +3613,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             )}
           </div>
           {legacyFilterUI ? (
-            <div className="space-y-2">
+            <div className="space-y-2 pointer-events-none">
               {renderFilterChipRow(
                 STORE_AREA_FILTER_CHIP_ORDER,
                 areaFilterChips,
@@ -3644,21 +3638,15 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             </div>
           ) : threeDropdownFilterUI ? (
             <div
-              className={cn(
-                "-mx-4 w-[calc(100%+2rem)] py-1",
-                isMapView && "pointer-events-auto"
-              )}
+              className="-mx-4 w-[calc(100%+2rem)] py-1 pointer-events-none"
               role="toolbar"
               aria-label={t.storeFilterToolbarAria}
             >
-              <div
-                className={cn(
-                  FILTER_CHIP_ROW_SCROLL_CLASS,
-                  isMapView && "pointer-events-auto"
-                )}
-                {...filterChipScrollDragHandlers}
-              >
-                <div className="flex w-max flex-nowrap gap-2">
+              <div className={FILTER_CHIP_ROW_VIEWPORT_CLASS}>
+                <div
+                  className={FILTER_CHIP_ROW_INNER_CLASS}
+                  {...filterChipScrollDragHandlers}
+                >
                   {renderFilterDropdown(
                     t.filterAreaLabel,
                     STORE_AREA_FILTER_CHIP_ORDER,
@@ -3687,7 +3675,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 pointer-events-none">
               {renderFilterChipRow(
                 STORE_AREA_FILTER_CHIP_ORDER,
                 areaFilterChips,
@@ -3697,21 +3685,15 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                 true
               )}
               <div
-                className={cn(
-                  "-mx-4 w-[calc(100%+2rem)] py-0.5",
-                  isMapView && "pointer-events-auto"
-                )}
+                className="-mx-4 w-[calc(100%+2rem)] py-0.5 pointer-events-none"
                 role="toolbar"
                 aria-label={t.storeFilterToolbarAria}
               >
-                <div
-                  className={cn(
-                    FILTER_CHIP_ROW_SCROLL_CLASS,
-                    isMapView && "pointer-events-auto"
-                  )}
-                  {...filterChipScrollDragHandlers}
-                >
-                  <div className="flex w-max flex-nowrap gap-2">
+                <div className={FILTER_CHIP_ROW_VIEWPORT_CLASS}>
+                  <div
+                    className={FILTER_CHIP_ROW_INNER_CLASS}
+                    {...filterChipScrollDragHandlers}
+                  >
                     {renderFilterDropdown(
                       t.filterBenefitLabel,
                       benefitFilterChipOrder,
