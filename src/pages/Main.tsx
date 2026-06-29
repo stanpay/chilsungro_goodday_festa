@@ -1010,20 +1010,44 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     }, 0);
   };
 
-  const handleSearchPointerDown = () => {
+  const armSearchFocusTapGuard = () => {
     searchFocusTapRef.current = true;
     window.setTimeout(() => {
       searchFocusTapRef.current = false;
     }, 400);
   };
 
+  const handleSearchPointerDown = () => {
+    armSearchFocusTapGuard();
+  };
+
   const focusSearchInput = useCallback(() => {
-    searchFocusTapRef.current = true;
+    armSearchFocusTapGuard();
     searchInputRef.current?.focus();
-    window.setTimeout(() => {
-      searchFocusTapRef.current = false;
-    }, 400);
   }, []);
+
+  const handleSearchClearPointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>
+  ) => {
+    const input = searchInputRef.current;
+    const isFocused = Boolean(input && document.activeElement === input);
+    const hasQuery = Boolean(searchInput || searchQuery);
+
+    if (!isFocused && hasQuery) {
+      e.preventDefault();
+      armSearchFocusTapGuard();
+      clearSearch({ keepFocus: true });
+      return;
+    }
+
+    if (!isFocused) {
+      e.preventDefault();
+      focusSearchInput();
+      return;
+    }
+
+    if (hasQuery) e.preventDefault();
+  };
 
   const dismissMapSearchKeyboard = useCallback(() => {
     if (!isMapViewRef.current || !isMobileRef.current) return;
@@ -3525,17 +3549,12 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             {showSearchClearButton && (
               <button
                 type="button"
-                onPointerDown={(e) => {
+                onPointerDown={handleSearchClearPointerDown}
+                onClick={() => {
                   const input = searchInputRef.current;
-                  const isFocused = Boolean(input && document.activeElement === input);
-                  if (!isFocused) {
-                    e.preventDefault();
-                    focusSearchInput();
-                    return;
-                  }
-                  if (searchInput || searchQuery) e.preventDefault();
+                  if (!input || document.activeElement !== input) return;
+                  handleSearchClear();
                 }}
-                onClick={handleSearchClear}
                 className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={searchInput || searchQuery ? "검색어 지우기" : "검색 취소"}
               >
