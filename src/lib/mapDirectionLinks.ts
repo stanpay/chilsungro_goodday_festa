@@ -1,7 +1,4 @@
 import {
-  appendAndroidIntentBrowserFallback,
-  clearStashedNaverMapFallback,
-  NAVER_MAP_FALLBACK_HASH,
   promptNaverMapFallback,
   type NaverMapFallbackContext,
 } from "@/lib/mapDirectionFallback";
@@ -165,7 +162,6 @@ function tryOpenDeepLinkOnIos(
 
   const markLeftPage = () => {
     leftPage = true;
-    clearStashedNaverMapFallback();
   };
 
   const onVisibilityChange = () => {
@@ -202,7 +198,6 @@ function tryOpenDeepLinkOnIos(
       return;
     }
 
-    clearStashedNaverMapFallback();
     promptNaverMapFallback({
       platform: "ios",
       targetUrl: fallback.targetUrl,
@@ -212,7 +207,6 @@ function tryOpenDeepLinkOnIos(
 }
 
 function showAndroidDeepLinkFallback(fallback: NaverMapDeepLinkFallback): void {
-  clearStashedNaverMapFallback();
   promptNaverMapFallback({
     platform: "android",
     targetUrl: fallback.targetUrl,
@@ -222,9 +216,9 @@ function showAndroidDeepLinkFallback(fallback: NaverMapDeepLinkFallback): void {
 
 /**
  * Android(PWA·모바일 웹 공통):
- * - intent + package + S.browser_fallback_url → 실패 시 #naver-map-fallback 복귀 후 팝업
- * - 앱 실행 성공 시 visibility로 판단, stash 정리
- * - browser_fallback_url 미동작·Play Store 이탈 등은 timeout 보조 처리
+ * - intent + package로 네이버지도 앱 시도
+ * - 앱 실행 성공 시 visibility로 판단
+ * - 미설치·실패 시 timeout 또는 Play Store 복귀 후 설치/웹 선택 팝업
  */
 function tryOpenDeepLinkOnAndroid(
   schemeUrl: string,
@@ -273,13 +267,7 @@ function tryOpenDeepLinkOnAndroid(
 
   document.addEventListener("visibilitychange", onVisibilityChange);
 
-  const launchUrl = options?.intentUrl
-    ? appendAndroidIntentBrowserFallback(options.intentUrl, {
-        platform: "android",
-        targetUrl: fallback.targetUrl,
-        context: fallback.context,
-      })
-    : schemeUrl;
+  const launchUrl = options?.intentUrl ?? schemeUrl;
 
   try {
     openExternalUrl(launchUrl);
@@ -290,23 +278,15 @@ function tryOpenDeepLinkOnAndroid(
   window.setTimeout(() => {
     document.removeEventListener("visibilitychange", onVisibilityChange);
 
-    if (window.location.hash === NAVER_MAP_FALLBACK_HASH) {
-      return;
-    }
-
     if (isPlayStoreNavigation()) {
       window.history.back();
       window.setTimeout(() => {
-        if (window.location.hash === NAVER_MAP_FALLBACK_HASH) {
-          return;
-        }
         showAndroidDeepLinkFallback(fallback);
       }, 300);
       return;
     }
 
     if (wentBackground && !returnedToPage && document.hidden) {
-      clearStashedNaverMapFallback();
       watchQuickReturn();
       return;
     }
@@ -502,7 +482,7 @@ export function openNaverMapMarker(input: {
 
 /**
  * 네이버지도 앱 딥링크로 매장 위치를 열어준다.
- * - Android: intent + browser_fallback_url (PWA·모바일 웹 동일)
+ * - Android: intent + package (실패 시 timeout·Play Store 복귀 후 팝업)
  * - iOS: nmap:// 시도 후 실패 시 설치·웹 선택 팝업
  * - 데스크탑/기타: 웹 네이버지도 새 탭
  */

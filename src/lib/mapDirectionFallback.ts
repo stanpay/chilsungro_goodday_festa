@@ -3,11 +3,6 @@ import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 export const NAVER_MAP_FALLBACK_EVENT = "naver-map:fallback";
 
-/** intent 실패 시 Chrome이 돌아오는 해시 (Play Store 대신 팝업 표시) */
-export const NAVER_MAP_FALLBACK_HASH = "#naver-map-fallback";
-
-const NAVER_MAP_FALLBACK_STORAGE_KEY = "naverMapFallbackPending";
-
 /** @deprecated NAVER_MAP_FALLBACK_EVENT 사용 */
 export const NAVER_MAP_ANDROID_FALLBACK_EVENT = NAVER_MAP_FALLBACK_EVENT;
 
@@ -86,81 +81,6 @@ export function promptNaverMapFallback(detail: NaverMapFallbackDetail): void {
       detail,
     }),
   );
-}
-
-/** Android intent 실패 시 팝업에 쓸 fallback 정보 저장 */
-export function stashNaverMapFallbackForIntent(
-  detail: NaverMapFallbackDetail,
-): void {
-  sessionStorage.setItem(
-    NAVER_MAP_FALLBACK_STORAGE_KEY,
-    JSON.stringify(detail),
-  );
-}
-
-export function clearStashedNaverMapFallback(): void {
-  sessionStorage.removeItem(NAVER_MAP_FALLBACK_STORAGE_KEY);
-}
-
-function readStashedNaverMapFallback(): NaverMapFallbackDetail | null {
-  const raw = sessionStorage.getItem(NAVER_MAP_FALLBACK_STORAGE_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as NaverMapFallbackDetail;
-    if (
-      parsed?.platform &&
-      (parsed.webFallbackUrl || parsed.targetUrl || parsed.context)
-    ) {
-      return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-/** intent S.browser_fallback_url 로 돌아온 뒤 설치/웹 선택 팝업 표시 */
-export function resumeNaverMapFallbackFromNavigation(): void {
-  const fromHash = window.location.hash === NAVER_MAP_FALLBACK_HASH;
-  const stashed = readStashedNaverMapFallback();
-  if (!fromHash && !stashed) return;
-
-  clearStashedNaverMapFallback();
-  if (fromHash) {
-    history.replaceState(
-      null,
-      "",
-      `${window.location.pathname}${window.location.search}`,
-    );
-  }
-
-  promptNaverMapFallback({
-    platform: stashed?.platform ?? "android",
-    targetUrl: stashed?.targetUrl,
-    context: stashed?.context,
-    webFallbackUrl: stashed?.webFallbackUrl,
-  });
-}
-
-/**
- * Android Chrome: package만 있으면 미설치 시 Play Store로 이동.
- * S.browser_fallback_url을 넣으면 실패 시 해당 URL(현재 페이지)로 복귀한다.
- */
-export function appendAndroidIntentBrowserFallback(
-  intentUrl: string,
-  fallback: NaverMapFallbackDetail,
-): string {
-  stashNaverMapFallbackForIntent(fallback);
-  const fallbackTarget = encodeURIComponent(
-    `${window.location.origin}${window.location.pathname}${window.location.search}${NAVER_MAP_FALLBACK_HASH}`,
-  );
-  if (intentUrl.endsWith(";end")) {
-    return intentUrl.replace(
-      ";end",
-      `;S.browser_fallback_url=${fallbackTarget};end`,
-    );
-  }
-  return `${intentUrl};S.browser_fallback_url=${fallbackTarget};end`;
 }
 
 /** @deprecated promptNaverMapFallback 사용 */

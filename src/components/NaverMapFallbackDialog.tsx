@@ -13,7 +13,6 @@ import {
   getNaverMapFallbackCopy,
   NAVER_MAP_FALLBACK_EVENT,
   openNaverMapStore,
-  resumeNaverMapFallbackFromNavigation,
   type NaverMapFallbackDetail,
   type NaverMapFallbackPlatform,
 } from "@/lib/mapDirectionFallback";
@@ -56,10 +55,6 @@ export default function NaverMapFallbackDialog() {
     setWebFallbackUrl(resolveFallbackWebUrl(detail));
     setPlatform(detail.platform);
     setOpen(true);
-  }, []);
-
-  useEffect(() => {
-    resumeNaverMapFallbackFromNavigation();
   }, []);
 
   useEffect(() => {
