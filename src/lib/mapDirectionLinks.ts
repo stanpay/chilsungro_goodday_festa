@@ -4,7 +4,7 @@ import {
   type NaverMapFallbackDetail,
   type NaverMapFallbackPlatform,
 } from "@/lib/mapDirectionFallback";
-import { openExternalUrl } from "@/lib/pwa";
+import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 /**
  * 네이버 지도 웹에서 매장 위치 열기 (좌표가 있으면 해당 지점 중심, 없으면 매장명 검색).
@@ -323,10 +323,10 @@ function showAndroidDeepLinkFallback(fallback: NaverMapDeepLinkFallback): void {
 }
 
 /**
- * Android(PWA·모바일 웹 공통):
- * - intent + package로 네이버지도 앱 시도
- * - 앱 실행 성공 시 페이지가 hidden 상태로 유지 → fallback 취소
- * - 미설치·실패 시 timeout 또는 Play Store 복귀 후 설치/웹 선택 팝업
+ * Android(모바일 웹·PWA):
+ * - browser_fallback_url은 페이지 리로드가 되므로 사용하지 않음
+ * - 한 번이라도 백그라운드로 가면(앱 전환) fallback 취소 (iOS와 동일, 복귀 후 visible이어도 유지)
+ * - Play Store 이탈 시에만 설치/웹 선택 팝업
  */
 function tryOpenDeepLinkOnAndroid(
   schemeUrl: string,
@@ -335,6 +335,7 @@ function tryOpenDeepLinkOnAndroid(
   const fallback = options?.fallback ?? {
     targetUrl: schemeUrl,
   };
+  const standalone = isInStandaloneMode();
 
   let leftPage = false;
 
@@ -353,7 +354,6 @@ function tryOpenDeepLinkOnAndroid(
   };
 
   const onBlur = () => {
-    // intent 전환 시 visibilitychange가 늦게 오거나 누락되는 기기 대응
     window.setTimeout(() => {
       if (document.hidden) {
         markLeftPage();
@@ -365,7 +365,9 @@ function tryOpenDeepLinkOnAndroid(
   window.addEventListener("pagehide", onPageHide);
   window.addEventListener("blur", onBlur);
 
-  const launchUrl = options?.intentUrl ?? schemeUrl;
+  // PWA: nmap 직접 시도. 모바일 웹: intent 사용.
+  const launchUrl =
+    !standalone && options?.intentUrl ? options.intentUrl : schemeUrl;
 
   try {
     openExternalUrl(launchUrl);
@@ -386,12 +388,10 @@ function tryOpenDeepLinkOnAndroid(
       return;
     }
 
-    // 앱이 전면에 있으면 성공 — 복귀 후에도 fallback을 띄우지 않음
-    if (leftPage && document.hidden) {
+    if (leftPage) {
       return;
     }
 
-    // 페이지를 벗어나지 않았거나, timeout 전에 이미 복귀한 경우 실패로 간주
     showAndroidDeepLinkFallback(fallback);
   }, ANDROID_DEEP_LINK_FALLBACK_MS);
 }

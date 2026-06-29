@@ -964,6 +964,16 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
   isMobileRef.current = isMobile;
+  const isIOSMobile = useMemo(
+    () =>
+      typeof navigator !== "undefined" &&
+      /iPhone|iPad|iPod/i.test(navigator.userAgent),
+    []
+  );
+  const isIOSMobileRef = useRef(isIOSMobile);
+  isIOSMobileRef.current = isIOSMobile;
+  const cardScrollLockYRef = useRef<number | null>(null);
+  const [cardHeaderIosTop, setCardHeaderIosTop] = useState(0);
 
   const syncSearchInputFocused = useCallback(() => {
     const input = searchInputRef.current;
@@ -981,10 +991,19 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       const headerBottom = header.getBoundingClientRect().bottom;
       const bannerBottom = banner.getBoundingClientRect().bottom;
       const delta = bannerBottom - headerBottom;
+      const nextTop =
+        delta <= 2
+          ? window.scrollY
+          : Math.max(0, window.scrollY + delta);
+
+      if (isIOSMobileRef.current) {
+        cardScrollLockYRef.current = nextTop;
+      }
+
       if (delta <= 2) return;
 
       window.scrollTo({
-        top: Math.max(0, window.scrollY + delta),
+        top: nextTop,
         behavior,
       });
     };
@@ -1014,6 +1033,12 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
 
   const handleSearchPointerDown = () => {
     armSearchFocusTapGuard();
+    if (!isIOSMobileRef.current || isMapViewRef.current || !isMobileRef.current) {
+      return;
+    }
+    const input = searchInputRef.current;
+    if (!input || document.activeElement === input) return;
+    input.focus({ preventScroll: true });
   };
 
   const focusSearchInput = useCallback(() => {
@@ -3259,19 +3284,46 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
 
-  // 모바일 카드뷰: 검색 포커스 시 배너가 헤더 뒤로 완전히 숨을 때까지 스크롤 (키보드 열림 후 재시도)
+  // 모바일 카드뷰: 검색 포커스 시 배너 숨김 스크롤 + iOS 키보드 시 헤더 고정
   useEffect(() => {
-    if (isMapView || !isMobile || !searchInputFocused) return;
+    if (isMapView || !isMobile || !searchInputFocused) {
+      setCardHeaderIosTop(0);
+      cardScrollLockYRef.current = null;
+      return;
+    }
 
     scrollCardBannerUp();
 
     const vv = window.visualViewport;
     if (!vv) return;
 
-    const onViewportChange = () => scrollCardBannerUp("auto");
+    const onViewportChange = () => {
+      if (isIOSMobile) {
+        setCardHeaderIosTop(Math.max(0, Math.round(vv.offsetTop)));
+        const lockY = cardScrollLockYRef.current;
+        if (lockY !== null && Math.abs(window.scrollY - lockY) > 2) {
+          window.scrollTo(0, lockY);
+        }
+      }
+      scrollCardBannerUp("auto");
+    };
+
+    onViewportChange();
     vv.addEventListener("resize", onViewportChange);
-    return () => vv.removeEventListener("resize", onViewportChange);
-  }, [isMapView, isMobile, searchInputFocused, scrollCardBannerUp]);
+    vv.addEventListener("scroll", onViewportChange);
+    return () => {
+      vv.removeEventListener("resize", onViewportChange);
+      vv.removeEventListener("scroll", onViewportChange);
+      setCardHeaderIosTop(0);
+      cardScrollLockYRef.current = null;
+    };
+  }, [
+    isMapView,
+    isMobile,
+    isIOSMobile,
+    searchInputFocused,
+    scrollCardBannerUp,
+  ]);
 
   // 모바일 지도뷰: 포커스 해제·키보드 닫힘 시 바텀시트 복원 (포커스 직후 blur 금지)
   useEffect(() => {
@@ -3449,6 +3501,11 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         <header
           ref={cardHeaderRef}
           className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95"
+          style={
+            cardHeaderIosTop > 0
+              ? { transform: `translateY(${cardHeaderIosTop}px)` }
+              : undefined
+          }
         >
           <div className="max-w-md mx-auto px-4 py-3">
             <div className="flex items-center gap-2 w-full">
