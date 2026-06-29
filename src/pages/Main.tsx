@@ -923,6 +923,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const [isLoadingStores, setIsLoadingStores] = useState(true);
   const [isLoadingMoreStores, setIsLoadingMoreStores] = useState(false);
   const [visibleStoreCount, setVisibleStoreCount] = useState(INITIAL_STORE_BATCH);
+  const [visibleMapSheetCount, setVisibleMapSheetCount] = useState(INITIAL_STORE_BATCH);
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
 
   /** 사용자가 /location에서 직접 고른 위치만 유지. 자동 GPS 캐시는 실패 시 제거 */
@@ -950,7 +951,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const mapSearchEmptyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapSearchEmptyNotice, setMapSearchEmptyNotice] = useState(false);
   const showMapSearchEmptyNoticeRef = useRef<() => void>(() => {});
-  const [mapSearchInputFocused, setMapSearchInputFocused] = useState(false);
+  const [searchInputFocused, setSearchInputFocused] = useState(false);
   const [mapSearchAwaitingRestore, setMapSearchAwaitingRestore] = useState(false);
   const mapSearchRestoreGenRef = useRef(0);
   const mapSearchSheetFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -958,16 +959,40 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMobileRef = useRef(isMobile);
   isMobileRef.current = isMobile;
 
-  const mapSearchSheetCollapsed = mapSearchInputFocused || mapSearchAwaitingRestore;
-
-  const handleMapSearchFocus = () => {
-    if (!isMapViewRef.current || !isMobileRef.current) return;
-    setMapSearchInputFocused(true);
+  const handleSearchFocus = () => {
+    setSearchInputFocused(true);
   };
 
-  const handleMapSearchBlur = () => {
-    setMapSearchInputFocused(false);
+  const handleSearchBlur = () => {
+    setSearchInputFocused(false);
   };
+
+  const handleSearchPointerDown = () => {
+    setSearchInputFocused(true);
+  };
+
+  const clearSearch = (options?: { keepFocus?: boolean }) => {
+    preserveMapViewportRef.current = true;
+    skipNextFitMapRef.current = true;
+    setSearchInput("");
+    setSearchQuery("");
+    if (options?.keepFocus) {
+      searchInputRef.current?.focus();
+      return;
+    }
+    searchInputRef.current?.blur();
+  };
+
+  const handleSearchClear = () => {
+    if (searchInput || searchQuery) {
+      clearSearch({ keepFocus: true });
+      return;
+    }
+    clearSearch();
+  };
+
+  const showSearchClearButton =
+    searchInputFocused || Boolean(searchInput || searchQuery);
 
   const beginMapSearchAwaitingRestore = () => {
     if (!isMapViewRef.current || !isMobileRef.current) return;
@@ -1050,6 +1075,8 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
   isMapViewRef.current = isMapView;
+  const mapSearchSheetHidden =
+    isMapView && isMobile && (searchInputFocused || mapSearchAwaitingRestore);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapResearchButtonRef = useRef<HTMLButtonElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -1668,6 +1695,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       }
       setShowResearchButton(false);
       setVisibleStoreCount(INITIAL_STORE_BATCH);
+      setVisibleMapSheetCount(INITIAL_STORE_BATCH);
       enrichedStoreIdsRef.current.clear();
 
       // 초기 1회 fetch로 전체 매장 확보 (이후 재검색은 캐시 필터링)
@@ -2090,14 +2118,48 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
   const hasMoreStores = visibleStoreCount < sortedStores.length;
 
+  const storesWithCoords = useMemo(() => {
+    // 지도뷰: 재검색 결과 또는 불러온 매장 중 좌표 있는 것 (영업중 필터는 시트에서만 적용 가능)
+    const base = mapFilteredStores
+      ? mapFilteredStores.filter(hasStoreCoords)
+      : categoryFilteredStores.filter(hasStoreCoords);
+    if (!currentCoords) {
+      if (sortBy === "discount") {
+        return [...base].sort(
+          (a, b) => b.discountNum - a.discountNum || a.name.localeCompare(b.name, "ko")
+        );
+      }
+      return sortStoresByName(base);
+    }
+    return [...base].sort((a, b) =>
+      sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
+    );
+  }, [mapFilteredStores, categoryFilteredStores, sortBy, currentCoords]);
+
+  const visibleMapSheetStores = useMemo(
+    () => storesWithCoords.slice(0, visibleMapSheetCount),
+    [storesWithCoords, visibleMapSheetCount]
+  );
+
+  const hasMoreMapSheetStores = visibleMapSheetCount < storesWithCoords.length;
+
+  const handleMapSheetLoadMore = useCallback(() => {
+    setVisibleMapSheetCount((prev) => {
+      if (prev >= storesWithCoords.length) return prev;
+      return Math.min(prev + LOAD_MORE_STORE_BATCH, storesWithCoords.length);
+    });
+  }, [storesWithCoords.length]);
+
   useEffect(() => {
     storesLengthRef.current = stores.length;
   }, [stores.length]);
 
   useEffect(() => {
-    if (isMapView || isLoadingStores) return;
+    if (isLoadingStores) return;
 
-    const toShow = sortedStores.slice(0, visibleStoreCount);
+    const toShow = isMapView
+      ? visibleMapSheetStores
+      : sortedStores.slice(0, visibleStoreCount);
     const needsEnrich = toShow.filter((store) => !enrichedStoreIdsRef.current.has(store.id));
     if (needsEnrich.length === 0) return;
 
@@ -2110,6 +2172,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     });
   }, [
     visibleStoreCount,
+    visibleMapSheetStores,
     sortedStores,
     isMapView,
     isLoadingStores,
@@ -2144,23 +2207,22 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     );
   }, [visibleStores]);
 
-  const storesWithCoords = useMemo(() => {
-    // 지도뷰: 재검색 결과 또는 불러온 매장 중 좌표 있는 것 (영업중 필터는 시트에서만 적용 가능)
-    const base = mapFilteredStores
-      ? mapFilteredStores.filter(hasStoreCoords)
-      : categoryFilteredStores.filter(hasStoreCoords);
-    if (!currentCoords) {
-      if (sortBy === "discount") {
-        return [...base].sort(
-          (a, b) => b.discountNum - a.discountNum || a.name.localeCompare(b.name, "ko")
-        );
-      }
-      return sortStoresByName(base);
-    }
-    return [...base].sort((a, b) =>
-      sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
-    );
-  }, [mapFilteredStores, categoryFilteredStores, sortBy, currentCoords]);
+  useEffect(() => {
+    setVisibleMapSheetCount(INITIAL_STORE_BATCH);
+  }, [mapFilteredStores]);
+
+  useEffect(() => {
+    if (!selectedMapStoreId) return;
+    const index = storesWithCoords.findIndex((s) => s.id === selectedMapStoreId);
+    if (index < 0) return;
+    setVisibleMapSheetCount((prev) => {
+      if (index < prev) return prev;
+      return Math.min(
+        storesWithCoords.length,
+        Math.ceil((index + 1) / LOAD_MORE_STORE_BATCH) * LOAD_MORE_STORE_BATCH
+      );
+    });
+  }, [selectedMapStoreId, storesWithCoords]);
 
   storesWithCoordsRef.current = storesWithCoords;
 
@@ -3332,8 +3394,9 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               enterKeyHint="search"
               placeholder={t.searchPlaceholder}
               value={searchInput}
-              onFocus={handleMapSearchFocus}
-              onBlur={handleMapSearchBlur}
+              onPointerDown={handleSearchPointerDown}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
               onChange={(e) => setSearchInput(e.target.value)}
               onCompositionEnd={(e) => {
                 const value = e.currentTarget.value;
@@ -3354,21 +3417,18 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               }}
               className={cn(
                 "w-full h-12 pl-10 rounded-xl border border-primary bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all",
-                searchInput || searchQuery ? "pr-12" : "pr-3"
+                showSearchClearButton ? "pr-12" : "pr-3"
               )}
             />
-            {(searchInput || searchQuery) && (
+            {showSearchClearButton && (
               <button
                 type="button"
-                onClick={() => {
-                  preserveMapViewportRef.current = true;
-                  skipNextFitMapRef.current = true;
-                  setSearchInput("");
-                  setSearchQuery("");
-                  searchInputRef.current?.focus();
+                onPointerDown={(e) => {
+                  if (searchInput || searchQuery) e.preventDefault();
                 }}
+                onClick={handleSearchClear}
                 className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="검색어 지우기"
+                aria-label={searchInput || searchQuery ? "검색어 지우기" : "검색 취소"}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3682,7 +3742,11 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       <MapViewBottomSheet
         className={cn(!isMapView && "invisible pointer-events-none")}
         aria-hidden={!isMapView}
-        stores={storesWithCoords}
+        stores={visibleMapSheetStores}
+        totalStoreCount={storesWithCoords.length}
+        hasMoreStores={hasMoreMapSheetStores}
+        onLoadMore={handleMapSheetLoadMore}
+        isLoadingMore={isLoadingMoreStores}
         selectedStoreId={selectedMapStoreId}
         highlightSelectedCard={highlightMapSheetCard}
         onSelectStoreFromCard={(store) => {
@@ -3700,7 +3764,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         }}
         onPanelHeightChange={handleMapSheetPanelHeightChange}
         onDraggingChange={handleMapSheetDraggingChange}
-        collapseForMapSearch={mapSearchSheetCollapsed}
+        hideForMapSearch={mapSearchSheetHidden}
         title={t.mapSheetTitle}
         dragHint={t.mapSheetDragHint}
         sortBy={sortBy}

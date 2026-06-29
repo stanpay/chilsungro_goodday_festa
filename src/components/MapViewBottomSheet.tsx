@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { GripHorizontal, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StoreCard from "@/components/StoreCard";
+import StoreCardSkeleton from "@/components/StoreCardSkeleton";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 
 export const MAP_VIEW_SHEET_BOTTOM_NAV_PX = 64;
@@ -75,8 +76,13 @@ type MapViewBottomSheetProps = {
   onPanelHeightChange?: (height: number) => void;
   /** 시트 드래그 시작/종료 (지도 제스처 차단용) */
   onDraggingChange?: (dragging: boolean) => void;
-  /** 지도뷰 검색 중 바텀시트를 접었다가 검색 완료 후 이전 높이로 복원 */
-  collapseForMapSearch?: boolean;
+  /** 모바일 지도뷰 검색 중 바텀시트 숨김 (내부 높이·스크롤은 유지) */
+  hideForMapSearch?: boolean;
+  /** 전체 매장 수 (목록에는 stores만 렌더, 헤더 카운트용) */
+  totalStoreCount?: number;
+  hasMoreStores?: boolean;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
   className?: string;
   "aria-hidden"?: boolean;
 };
@@ -94,7 +100,11 @@ const MapViewBottomSheet = ({
   sortDiscountLabel,
   onPanelHeightChange,
   onDraggingChange,
-  collapseForMapSearch = false,
+  hideForMapSearch = false,
+  totalStoreCount,
+  hasMoreStores = false,
+  onLoadMore,
+  isLoadingMore = false,
   className,
   "aria-hidden": ariaHidden,
 }: MapViewBottomSheetProps) => {
@@ -118,6 +128,7 @@ const MapViewBottomSheet = ({
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const scrollTrackRef = useRef<HTMLDivElement>(null);
   const scrollThumbRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   /** 선택 매장으로 스크롤은 매장당 최초 1회만 */
   const scrollSyncedStoreIdRef = useRef<string | null>(null);
   const prevSelectedStoreIdRef = useRef<string | null>(null);
@@ -129,7 +140,8 @@ const MapViewBottomSheet = ({
     startH: number;
     mode: "pending" | "sheet" | "scroll";
   } | null>(null);
-  const preMapSearchHeightRef = useRef<number | null>(null);
+  const hideForMapSearchRef = useRef(hideForMapSearch);
+  hideForMapSearchRef.current = hideForMapSearch;
 
   panelHeightRef.current = panelHeight;
 
@@ -190,6 +202,7 @@ const MapViewBottomSheet = ({
 
   useEffect(() => {
     const onResize = () => {
+      if (hideForMapSearchRef.current) return;
       const cap = expandedCap();
       setPanelHeight((h) => Math.min(h, cap));
       if (Math.abs(panelHeightRef.current - MAP_VIEW_SHEET_SINGLE_ROW_HEIGHT) <= 8) {
@@ -260,11 +273,11 @@ const MapViewBottomSheet = ({
   }, [selectedStoreId, highlightSelectedCard, showContent, stores, scrollSelectedStoreRowIntoView]);
 
   useLayoutEffect(() => {
-    if (isDragging) return;
+    if (isDragging || hideForMapSearch) return;
     if (reportedPanelHeightRef.current === panelHeight) return;
     reportedPanelHeightRef.current = panelHeight;
     onPanelHeightChange?.(panelHeight);
-  }, [panelHeight, isDragging, onPanelHeightChange]);
+  }, [panelHeight, isDragging, hideForMapSearch, onPanelHeightChange]);
 
   useEffect(() => {
     onDraggingChange?.(isDragging);
@@ -273,6 +286,22 @@ const MapViewBottomSheet = ({
   useEffect(() => {
     return () => onDraggingChange?.(false);
   }, [onDraggingChange]);
+
+  useEffect(() => {
+    if (!hasMoreStores || !onLoadMore) return;
+    const sentinel = loadMoreSentinelRef.current;
+    const root = scrollBodyRef.current;
+    if (!sentinel || !root) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { root, rootMargin: "120px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreStores, onLoadMore, stores.length]);
 
   const maxHeight = Math.max(MIN_EXPANDED, expandedCap());
   maxHeightRef.current = maxHeight;
@@ -285,21 +314,17 @@ const MapViewBottomSheet = ({
   }, []);
 
   useLayoutEffect(() => {
-    if (!collapseForMapSearch) {
-      if (preMapSearchHeightRef.current === null) return;
-      const restored = Math.min(preMapSearchHeightRef.current, expandedCap());
-      preMapSearchHeightRef.current = null;
-      panelHeightRef.current = restored;
-      setPanelHeight(restored);
+    if (hideForMapSearch) {
+      reportedPanelHeightRef.current = PEEK_HEIGHT;
+      onPanelHeightChange?.(PEEK_HEIGHT);
       return;
     }
+    if (reportedPanelHeightRef.current === panelHeightRef.current) return;
+    reportedPanelHeightRef.current = panelHeightRef.current;
+    onPanelHeightChange?.(panelHeightRef.current);
+  }, [hideForMapSearch, onPanelHeightChange]);
 
-    const current = panelHeightRef.current;
-    if (current <= PEEK_HEIGHT + 2) return;
-
-    preMapSearchHeightRef.current = current;
-    collapseToPeek();
-  }, [collapseForMapSearch, collapseToPeek, expandedCap]);
+  const displayHeight = hideForMapSearch ? 0 : panelHeight;
 
   const startDrag = (clientY: number) => {
     dragRef.current = {
@@ -650,14 +675,20 @@ const MapViewBottomSheet = ({
       className={cn(
         "fixed left-0 right-0 z-[45] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-2xl border border-border/80 bg-card/98 shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-md",
         isDragging && "touch-none",
+        hideForMapSearch && "pointer-events-none border-transparent shadow-none",
         className
       )}
       style={{
         bottom: BOTTOM_NAV_PX,
-        height: panelHeight,
-        maxHeight: `min(${maxHeight}px, calc(100dvh - ${BOTTOM_NAV_PX}px - max(0.5rem, env(safe-area-inset-top, 0px)) - 8px))`,
+        height: displayHeight,
+        opacity: hideForMapSearch ? 0 : 1,
+        maxHeight: hideForMapSearch
+          ? 0
+          : `min(${maxHeight}px, calc(100dvh - ${BOTTOM_NAV_PX}px - max(0.5rem, env(safe-area-inset-top, 0px)) - 8px))`,
         transition:
-          isDragging || !heightTransitionEnabled ? "none" : "height 0.22s ease-out",
+          isDragging || !heightTransitionEnabled
+            ? "none"
+            : "height 0.22s ease-out, opacity 0.18s ease-out",
       }}
     >
       <div
@@ -723,7 +754,9 @@ const MapViewBottomSheet = ({
                 <ArrowUpDown className="h-3 w-3" />
                 {sortBy === "distance" ? sortDistanceLabel : sortDiscountLabel}
               </button>
-              <span className="text-xs text-muted-foreground">{stores.length}</span>
+              <span className="text-xs text-muted-foreground">
+                {totalStoreCount ?? stores.length}
+              </span>
             </div>
           </div>
 
@@ -778,6 +811,16 @@ const MapViewBottomSheet = ({
                     />
                   </div>
                 ))}
+                {hasMoreStores && (
+                  <div ref={loadMoreSentinelRef} className="col-span-2 h-1" aria-hidden />
+                )}
+                {isLoadingMore && hasMoreStores && (
+                  <>
+                    {Array.from({ length: 2 }, (_, index) => (
+                      <StoreCardSkeleton key={`map-sheet-skeleton-${index}`} />
+                    ))}
+                  </>
+                )}
               </div>
             </div>
 
