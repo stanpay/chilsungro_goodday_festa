@@ -36,6 +36,7 @@ import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes, type MutableRefObject, type PointerEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { storesApi, type NearbyStore } from "@/api/stores";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
@@ -949,6 +950,20 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const mapSearchEmptyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapSearchEmptyNotice, setMapSearchEmptyNotice] = useState(false);
   const showMapSearchEmptyNoticeRef = useRef<() => void>(() => {});
+  const [mapSearchSheetCollapsed, setMapSearchSheetCollapsed] = useState(false);
+  const mapSearchSheetFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMobile = useIsMobile();
+  const isMobileRef = useRef(isMobile);
+  isMobileRef.current = isMobile;
+
+  const beginMapSearchSheetCollapse = () => {
+    if (!isMapViewRef.current || !isMobileRef.current) return;
+    if (mapSearchSheetFinishTimerRef.current) {
+      clearTimeout(mapSearchSheetFinishTimerRef.current);
+      mapSearchSheetFinishTimerRef.current = null;
+    }
+    setMapSearchSheetCollapsed(true);
+  };
 
   const submitSearch = (input: HTMLInputElement) => {
     const value = input.value;
@@ -968,8 +983,13 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       setMapFilteredStores(null);
       setSelectedMapStoreId(null);
       setHighlightMapSheetCard(false);
+      beginMapSearchSheetCollapse();
       showMapSearchEmptyNoticeRef.current();
       return;
+    }
+
+    if (isMapViewRef.current && trimmed) {
+      beginMapSearchSheetCollapse();
     }
 
     setSearchInput(value);
@@ -1731,6 +1751,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   useEffect(() => {
     return () => {
       if (mapSearchEmptyTimerRef.current) clearTimeout(mapSearchEmptyTimerRef.current);
+      if (mapSearchSheetFinishTimerRef.current) clearTimeout(mapSearchSheetFinishTimerRef.current);
     };
   }, []);
 
@@ -3092,6 +3113,44 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
 
+  // 지도뷰 모바일 검색: 바텀시트 접힘 후 지도 갱신이 끝나면 이전 높이로 복원
+  useEffect(() => {
+    if (!isMapView || !isMobile || !mapSearchSheetCollapsed) return;
+
+    let cancelled = false;
+    const finishCollapse = () => {
+      if (!cancelled) setMapSearchSheetCollapsed(false);
+    };
+
+    const scheduleFinish = () => {
+      if (cancelled) return;
+      const map = mapInstanceRef.current;
+      const naver = (window as any).naver;
+      if (map && naver?.maps?.Event) {
+        let finished = false;
+        const done = () => {
+          if (finished || cancelled) return;
+          finished = true;
+          finishCollapse();
+        };
+        naver.maps.Event.once(map, "idle", done);
+        mapSearchSheetFinishTimerRef.current = setTimeout(done, 500);
+      } else {
+        finishCollapse();
+      }
+    };
+
+    mapSearchSheetFinishTimerRef.current = setTimeout(scheduleFinish, 120);
+
+    return () => {
+      cancelled = true;
+      if (mapSearchSheetFinishTimerRef.current) {
+        clearTimeout(mapSearchSheetFinishTimerRef.current);
+        mapSearchSheetFinishTimerRef.current = null;
+      }
+    };
+  }, [searchQuery, storesWithCoords, isMapView, isMobile, mapSearchSheetCollapsed]);
+
   // storesWithCoords 변경 시 ref 업데이트 + 지도 핀 교체 (지도 재생성 없음)
   useEffect(() => {
     storesWithCoordsRef.current = storesWithCoords;
@@ -3622,6 +3681,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         }}
         onPanelHeightChange={handleMapSheetPanelHeightChange}
         onDraggingChange={handleMapSheetDraggingChange}
+        collapseForMapSearch={mapSearchSheetCollapsed}
         title={t.mapSheetTitle}
         dragHint={t.mapSheetDragHint}
         sortBy={sortBy}

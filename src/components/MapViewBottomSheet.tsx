@@ -75,6 +75,8 @@ type MapViewBottomSheetProps = {
   onPanelHeightChange?: (height: number) => void;
   /** 시트 드래그 시작/종료 (지도 제스처 차단용) */
   onDraggingChange?: (dragging: boolean) => void;
+  /** 지도뷰 검색 중 바텀시트를 접었다가 검색 완료 후 이전 높이로 복원 */
+  collapseForMapSearch?: boolean;
   className?: string;
   "aria-hidden"?: boolean;
 };
@@ -92,6 +94,7 @@ const MapViewBottomSheet = ({
   sortDiscountLabel,
   onPanelHeightChange,
   onDraggingChange,
+  collapseForMapSearch = false,
   className,
   "aria-hidden": ariaHidden,
 }: MapViewBottomSheetProps) => {
@@ -126,6 +129,7 @@ const MapViewBottomSheet = ({
     startH: number;
     mode: "pending" | "sheet" | "scroll";
   } | null>(null);
+  const preMapSearchHeightRef = useRef<number | null>(null);
 
   panelHeightRef.current = panelHeight;
 
@@ -279,6 +283,23 @@ const MapViewBottomSheet = ({
     dragRef.current = null;
     setIsDragging(false);
   }, []);
+
+  useEffect(() => {
+    if (!collapseForMapSearch) {
+      if (preMapSearchHeightRef.current === null) return;
+      const restored = Math.min(preMapSearchHeightRef.current, expandedCap());
+      preMapSearchHeightRef.current = null;
+      panelHeightRef.current = restored;
+      setPanelHeight(restored);
+      return;
+    }
+
+    const current = panelHeightRef.current;
+    if (current <= PEEK_HEIGHT + 2) return;
+
+    preMapSearchHeightRef.current = current;
+    collapseToPeek();
+  }, [collapseForMapSearch, collapseToPeek, expandedCap]);
 
   const startDrag = (clientY: number) => {
     dragRef.current = {
