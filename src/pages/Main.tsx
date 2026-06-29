@@ -955,21 +955,40 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const [mapSearchAwaitingRestore, setMapSearchAwaitingRestore] = useState(false);
   const mapSearchRestoreGenRef = useRef(0);
   const mapSearchSheetFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapSearchAwaitingRestoreRef = useRef(false);
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
   isMobileRef.current = isMobile;
+
+  const syncSearchInputFocused = useCallback(() => {
+    const input = searchInputRef.current;
+    setSearchInputFocused(Boolean(input && document.activeElement === input));
+  }, []);
 
   const handleSearchFocus = () => {
     setSearchInputFocused(true);
   };
 
   const handleSearchBlur = () => {
-    setSearchInputFocused(false);
+    window.setTimeout(() => {
+      syncSearchInputFocused();
+    }, 0);
   };
 
   const handleSearchPointerDown = () => {
     setSearchInputFocused(true);
   };
+
+  const dismissMapSearchKeyboard = useCallback(() => {
+    if (!isMapViewRef.current || !isMobileRef.current) return;
+    if (mapSearchAwaitingRestoreRef.current) return;
+    const input = searchInputRef.current;
+    if (!input) return;
+    if (document.activeElement === input) {
+      input.blur();
+    }
+    setSearchInputFocused(false);
+  }, []);
 
   const clearSearch = (options?: { keepFocus?: boolean }) => {
     preserveMapViewportRef.current = true;
@@ -1077,6 +1096,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   isMapViewRef.current = isMapView;
   const mapSearchSheetHidden =
     isMapView && isMobile && (searchInputFocused || mapSearchAwaitingRestore);
+  mapSearchAwaitingRestoreRef.current = mapSearchAwaitingRestore;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapResearchButtonRef = useRef<HTMLButtonElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -3189,6 +3209,47 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
 
+  // 모바일 지도뷰: 키보드 닫힘·포커스 해제 시 검색 포커스 상태 동기화 → 바텀시트 복원
+  useEffect(() => {
+    if (!isMapView || !isMobile) return;
+
+    const isKeyboardOpen = () => {
+      const vv = window.visualViewport;
+      if (!vv) return false;
+      return window.innerHeight - vv.height > 80;
+    };
+
+    const sync = () => syncSearchInputFocused();
+
+    const onViewportChange = () => {
+      if (mapSearchAwaitingRestoreRef.current) return;
+      const input = searchInputRef.current;
+      if (!input) return;
+
+      if (!isKeyboardOpen()) {
+        if (document.activeElement === input) {
+          input.blur();
+        }
+        setSearchInputFocused(false);
+        return;
+      }
+
+      sync();
+    };
+
+    document.addEventListener("focusin", sync);
+    document.addEventListener("focusout", sync);
+    window.visualViewport?.addEventListener("resize", onViewportChange);
+    window.visualViewport?.addEventListener("scroll", onViewportChange);
+
+    return () => {
+      document.removeEventListener("focusin", sync);
+      document.removeEventListener("focusout", sync);
+      window.visualViewport?.removeEventListener("resize", onViewportChange);
+      window.visualViewport?.removeEventListener("scroll", onViewportChange);
+    };
+  }, [isMapView, isMobile, syncSearchInputFocused]);
+
   // 지도뷰 모바일 검색 제출 후: 지도 갱신이 끝나면 바텀시트 이전 높이로 복원
   useEffect(() => {
     if (!isMapView || !isMobile || !mapSearchAwaitingRestore) return;
@@ -3369,6 +3430,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             !isMapView && "invisible pointer-events-none"
           )}
           aria-hidden={!isMapView}
+          onPointerDownCapture={dismissMapSearchKeyboard}
         >
           <div ref={mapContainerRef} className="map-container h-full w-full overflow-hidden" />
         </div>
