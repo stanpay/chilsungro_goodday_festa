@@ -972,7 +972,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   );
   const isIOSMobileRef = useRef(isIOSMobile);
   isIOSMobileRef.current = isIOSMobile;
-  const cardScrollLockYRef = useRef<number | null>(null);
   const [cardHeaderIosTop, setCardHeaderIosTop] = useState(0);
 
   const syncSearchInputFocused = useCallback(() => {
@@ -991,19 +990,10 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       const headerBottom = header.getBoundingClientRect().bottom;
       const bannerBottom = banner.getBoundingClientRect().bottom;
       const delta = bannerBottom - headerBottom;
-      const nextTop =
-        delta <= 2
-          ? window.scrollY
-          : Math.max(0, window.scrollY + delta);
-
-      if (isIOSMobileRef.current) {
-        cardScrollLockYRef.current = nextTop;
-      }
-
       if (delta <= 2) return;
 
       window.scrollTo({
-        top: nextTop,
+        top: Math.max(0, window.scrollY + delta),
         behavior,
       });
     };
@@ -3284,46 +3274,43 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     skipNextFitMapRef.current = false;
   }, [searchQuery, isMapView]);
 
-  // 모바일 카드뷰: 검색 포커스 시 배너 숨김 스크롤 + iOS 키보드 시 헤더 고정
+  // 모바일 카드뷰: iOS 키보드 시 헤더 위치 보정 (스크롤 잠금 없음)
   useEffect(() => {
     if (isMapView || !isMobile || !searchInputFocused) {
       setCardHeaderIosTop(0);
-      cardScrollLockYRef.current = null;
       return;
     }
 
-    scrollCardBannerUp();
+    if (!isIOSMobile) return;
 
     const vv = window.visualViewport;
     if (!vv) return;
 
-    const onViewportChange = () => {
-      if (isIOSMobile) {
-        setCardHeaderIosTop(Math.max(0, Math.round(vv.offsetTop)));
-        const lockY = cardScrollLockYRef.current;
-        if (lockY !== null && Math.abs(window.scrollY - lockY) > 2) {
-          window.scrollTo(0, lockY);
-        }
-      }
-      scrollCardBannerUp("auto");
+    const syncHeaderTop = () => {
+      setCardHeaderIosTop(Math.max(0, Math.round(vv.offsetTop)));
     };
 
-    onViewportChange();
-    vv.addEventListener("resize", onViewportChange);
-    vv.addEventListener("scroll", onViewportChange);
+    syncHeaderTop();
+    vv.addEventListener("resize", syncHeaderTop);
+    vv.addEventListener("scroll", syncHeaderTop);
     return () => {
-      vv.removeEventListener("resize", onViewportChange);
-      vv.removeEventListener("scroll", onViewportChange);
+      vv.removeEventListener("resize", syncHeaderTop);
+      vv.removeEventListener("scroll", syncHeaderTop);
       setCardHeaderIosTop(0);
-      cardScrollLockYRef.current = null;
     };
-  }, [
-    isMapView,
-    isMobile,
-    isIOSMobile,
-    searchInputFocused,
-    scrollCardBannerUp,
-  ]);
+  }, [isMapView, isMobile, isIOSMobile, searchInputFocused]);
+
+  // Android: 키보드 열림 후 배너 숨김 위치 재조정
+  useEffect(() => {
+    if (isMapView || !isMobile || !searchInputFocused || isIOSMobile) return;
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const onResize = () => scrollCardBannerUp("auto");
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [isMapView, isMobile, isIOSMobile, searchInputFocused, scrollCardBannerUp]);
 
   // 모바일 지도뷰: 포커스 해제·키보드 닫힘 시 바텀시트 복원 (포커스 직후 blur 금지)
   useEffect(() => {
