@@ -35,8 +35,10 @@ const BottomNav = ({ mapViewControl, hidden = false }: BottomNavProps) => {
     <nav
       aria-hidden={hidden}
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card pb-0 transition-[opacity,transform] duration-[180ms] ease-out",
-        hidden && "pointer-events-none translate-y-full opacity-0"
+        "fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card pb-0",
+        hidden
+          ? "pointer-events-none invisible h-0 min-h-0 overflow-hidden border-0 bg-transparent"
+          : "transition-[opacity,transform] duration-[180ms] ease-out"
       )}
     >
       <div className="max-w-md mx-auto flex justify-around items-center h-16">

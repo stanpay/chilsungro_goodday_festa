@@ -27,7 +27,7 @@ const CHATWOOT_BACKDROP_ID = "stan-chatwoot-backdrop";
 const CHATWOOT_FOCUS_SENTINEL_ID = "stan-chatwoot-focus-sentinel";
 const CHATWOOT_HISTORY_STATE_KEY = "stanChatwoot";
 const CHATWOOT_VIEWPORT_RESIZES =
-  "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content";
+  "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=overlays-content";
 const CHATWOOT_VIEWPORT_OVERLAYS =
   "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=overlays-content";
 

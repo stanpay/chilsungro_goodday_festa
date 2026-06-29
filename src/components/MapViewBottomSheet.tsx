@@ -325,6 +325,7 @@ const MapViewBottomSheet = ({
   }, [hideForMapSearch, onPanelHeightChange]);
 
   const displayHeight = hideForMapSearch ? 0 : panelHeight;
+  const sheetBottom = hideForMapSearch ? 0 : BOTTOM_NAV_PX;
 
   const startDrag = (clientY: number) => {
     dragRef.current = {
@@ -675,20 +676,21 @@ const MapViewBottomSheet = ({
       className={cn(
         "fixed left-0 right-0 z-[45] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-2xl border border-border/80 bg-card/98 shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-md",
         isDragging && "touch-none",
-        hideForMapSearch && "pointer-events-none border-transparent shadow-none",
+        hideForMapSearch &&
+          "pointer-events-none invisible overflow-hidden rounded-none border-0 bg-transparent shadow-none backdrop-blur-none",
         className
       )}
       style={{
-        bottom: BOTTOM_NAV_PX,
+        bottom: sheetBottom,
         height: displayHeight,
-        opacity: hideForMapSearch ? 0 : 1,
+        minHeight: hideForMapSearch ? 0 : undefined,
         maxHeight: hideForMapSearch
           ? 0
           : `min(${maxHeight}px, calc(100dvh - ${BOTTOM_NAV_PX}px - max(0.5rem, env(safe-area-inset-top, 0px)) - 8px))`,
         transition:
-          isDragging || !heightTransitionEnabled
+          isDragging || !heightTransitionEnabled || hideForMapSearch
             ? "none"
-            : "height 0.22s ease-out, opacity 0.18s ease-out",
+            : "height 0.22s ease-out",
       }}
     >
       <div

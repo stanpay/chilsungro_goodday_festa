@@ -1349,7 +1349,17 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   }, [isMapView]);
 
   useEffect(() => {
-    // 이전 로그인 상태를 추적하기 위한 ref 사용
+    if (!isMapView || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const naver = (window as any).naver;
+    requestAnimationFrame(() => {
+      try {
+        naver?.maps?.Event?.trigger(map, "resize");
+      } catch {}
+    });
+  }, [isMapView, mapSearchChromeHidden]);
+
+  useEffect(() => {
     const prevSessionRef = { current: null as any };
     
     const checkAuthAndInitLocation = async () => {
@@ -3432,7 +3442,8 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       >
         <div
           className={cn(
-            "fixed inset-x-0 top-0 z-[5] h-[calc(100dvh-4rem)] w-full bg-card",
+            "fixed inset-x-0 top-0 z-[5] w-full bg-card",
+            mapSearchChromeHidden ? "h-[100dvh]" : "h-[calc(100dvh-4rem)]",
             !isMapView && "invisible pointer-events-none"
           )}
           aria-hidden={!isMapView}
