@@ -21,22 +21,20 @@ export type NaverMapDeepLinkFallback = {
   context?: NaverMapFallbackContext;
 };
 
-function isMapRelatedHttpUrl(url: string): boolean {
-  const lower = url.toLowerCase();
-  return (
-    lower.includes("map.naver.com") ||
-    lower.includes("naver.me/")
-  );
-}
-
 /**
  * fallback 팝업·즉시 웹 열기용 HTTPS URL.
- * nmap/intent → 변환, context 좌표 우선, HTTP map URL, 이름 검색 순.
+ * HTTP 그대로 → nmap/intent 좌표 변환 → context 좌표 → 이름 검색 순.
  */
 export function buildNaverMapWebFallbackUrl(
   targetUrl: string,
   context?: NaverMapFallbackContext,
 ): string {
+  if (targetUrl.startsWith("http")) {
+    return targetUrl;
+  }
+
+  const contextName = context?.name?.trim();
+
   if (
     targetUrl.startsWith("nmap://") ||
     targetUrl.startsWith("intent://")
@@ -45,28 +43,19 @@ export function buildNaverMapWebFallbackUrl(
     if (httpsUrl) return httpsUrl;
   }
 
-  const contextName = context?.name?.trim();
-  if (contextName && hasValidCoords(context.lat, context.lon)) {
+  if (hasValidCoords(context?.lat, context?.lon)) {
     return buildNaverMapOpenUrl({
-      name: context.name ?? contextName,
-      lat: context.lat,
-      lon: context.lon,
+      name: contextName ?? "",
+      lat: context!.lat,
+      lon: context!.lon,
     });
-  }
-
-  if (isMapRelatedHttpUrl(targetUrl) && targetUrl.startsWith("http")) {
-    return targetUrl;
   }
 
   if (contextName) {
-    return buildNaverMapOpenUrl({
-      name: context.name ?? contextName,
-      lat: context.lat,
-      lon: context.lon,
-    });
+    return buildNaverMapOpenUrl({ name: contextName });
   }
 
-  return targetUrl.startsWith("http") ? targetUrl : "https://map.naver.com/";
+  return "https://map.naver.com/";
 }
 
 const EARTH_RADIUS_M = 6378137;
@@ -415,10 +404,6 @@ export function buildNaverMapWebUrlFromScheme(
       lat,
       lon,
     });
-  }
-
-  if (name) {
-    return buildNaverMapOpenUrl({ name });
   }
 
   return undefined;

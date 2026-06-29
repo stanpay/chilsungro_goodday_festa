@@ -37,7 +37,8 @@ function resolveFallbackWebUrl(detail: NaverMapFallbackDetail): string {
 export default function NaverMapFallbackDialog() {
   const { locale } = useAppLocale();
   const [open, setOpen] = useState(false);
-  const [webFallbackUrl, setWebFallbackUrl] = useState("");
+  const [fallbackDetail, setFallbackDetail] =
+    useState<NaverMapFallbackDetail | null>(null);
   const [platform, setPlatform] = useState<NaverMapFallbackPlatform>("android");
 
   const copy = getNaverMapFallbackCopy(locale);
@@ -52,10 +53,15 @@ export default function NaverMapFallbackDialog() {
       return;
     }
 
-    setWebFallbackUrl(resolveFallbackWebUrl(detail));
+    setFallbackDetail(detail);
     setPlatform(detail.platform);
     setOpen(true);
   }, []);
+
+  const handleOpenWebFallback = useCallback(() => {
+    if (!fallbackDetail) return;
+    openNaverMapWebFallback(resolveFallbackWebUrl(fallbackDetail));
+  }, [fallbackDetail]);
 
   useEffect(() => {
     window.addEventListener(NAVER_MAP_FALLBACK_EVENT, handleEvent);
@@ -82,7 +88,7 @@ export default function NaverMapFallbackDialog() {
               buttonVariants({ variant: "outline" }),
               "w-full text-foreground",
             )}
-            onClick={() => openNaverMapWebFallback(webFallbackUrl)}
+            onClick={handleOpenWebFallback}
           >
             {copy.web}
           </AlertDialogAction>
