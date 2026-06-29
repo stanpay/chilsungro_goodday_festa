@@ -67,42 +67,52 @@ function normalizeFallbackContext(
 }
 
 /**
- * fallback 팝업·즉시 웹 열기용 HTTPS URL.
- * nmap/intent 재구성 → http(검색 제외) → context 좌표 핀 → 이름 검색 순.
+ * http → 그대로, nmap/intent → lat/lon(또는 place ID) 웹 URL. 이름 검색은 좌표가 없을 때만.
  */
-export function buildNaverMapWebFallbackUrl(
+export function computeNaverMapWebUrl(
   targetUrl: string,
   context?: NaverMapFallbackContext,
 ): string {
   const ctx = normalizeFallbackContext(context);
-  const contextName = ctx?.name?.trim();
+  const url = targetUrl.trim();
 
-  if (isNativeMapSchemeUrl(targetUrl)) {
-    const httpsUrl = buildNaverMapWebUrlFromScheme(targetUrl, ctx);
-    if (httpsUrl) return httpsUrl;
+  if (url.startsWith("http")) {
+    return url;
   }
 
-  if (targetUrl.startsWith("http") && !isNaverMapSearchUrl(targetUrl)) {
-    return targetUrl;
+  if (isNativeMapSchemeUrl(url)) {
+    const parsed = parseNmapSchemeUrl(url);
+    const placeId = parsed?.placeId?.trim();
+    if (placeId) {
+      return buildNaverMapPlaceEntryUrl(placeId);
+    }
+
+    const lat = parsed?.lat ?? ctx?.lat;
+    const lon = parsed?.lon ?? ctx?.lon;
+    const label = parsed?.name?.trim() || ctx?.name?.trim();
+
+    if (hasValidCoords(lat, lon) && lat != null && lon != null) {
+      return buildNaverMapCoordEntryUrl(lon, lat, label);
+    }
   }
 
   if (hasValidCoords(ctx?.lat, ctx?.lon)) {
-    return buildNaverMapOpenUrl({
-      name: contextName ?? "",
-      lat: ctx!.lat,
-      lon: ctx!.lon,
-    });
+    return buildNaverMapCoordEntryUrl(ctx!.lon!, ctx!.lat!, ctx?.name);
   }
 
-  if (contextName) {
-    return buildNaverMapOpenUrl({ name: contextName });
-  }
-
-  if (targetUrl.startsWith("http")) {
-    return targetUrl;
+  if (ctx?.name) {
+    return `https://map.naver.com/p/search/${encodeURIComponent(ctx.name)}`;
   }
 
   return "https://map.naver.com/";
+}
+
+/** @deprecated computeNaverMapWebUrl 사용 */
+export function buildNaverMapWebFallbackUrl(
+  targetUrl: string,
+  context?: NaverMapFallbackContext,
+): string {
+  return computeNaverMapWebUrl(targetUrl, context);
 }
 
 /** 팝업 "웹 지도로 보기" 클릭 시 최종 URL */
@@ -112,31 +122,17 @@ export function resolveNaverMapFallbackWebUrl(
     "targetUrl" | "context" | "webFallbackUrl"
   >,
 ): string {
-  const schemeOrTarget = detail.targetUrl ?? "nmap://";
-  const built = buildNaverMapWebFallbackUrl(schemeOrTarget, detail.context);
+  const targetUrl = detail.targetUrl ?? "nmap://";
 
-  const explicitHttp = detail.webFallbackUrl?.startsWith("http")
-    ? detail.webFallbackUrl
-    : undefined;
-
-  if (
-    explicitHttp &&
-    !isNaverMapSearchUrl(explicitHttp) &&
-    isNaverMapSearchUrl(built)
-  ) {
-    return explicitHttp;
+  if (detail.webFallbackUrl?.startsWith("http")) {
+    const recomputed = computeNaverMapWebUrl(targetUrl, detail.context);
+    if (isNaverMapSearchUrl(detail.webFallbackUrl) && !isNaverMapSearchUrl(recomputed)) {
+      return recomputed;
+    }
+    return detail.webFallbackUrl;
   }
 
-  if (
-    explicitHttp &&
-    !isNaverMapSearchUrl(explicitHttp) &&
-    !detail.targetUrl &&
-    !detail.context
-  ) {
-    return explicitHttp;
-  }
-
-  return built;
+  return computeNaverMapWebUrl(targetUrl, detail.context);
 }
 
 const EARTH_RADIUS_M = 6378137;
@@ -192,11 +188,15 @@ function toFallbackDetail(
   platform: NaverMapFallbackPlatform,
   fallback: NaverMapDeepLinkFallback,
 ): NaverMapFallbackDetail {
+  const webFallbackUrl =
+    fallback.webFallbackUrl ??
+    computeNaverMapWebUrl(fallback.targetUrl, fallback.context);
+
   return {
     platform,
     targetUrl: fallback.targetUrl,
     context: fallback.context,
-    webFallbackUrl: fallback.webFallbackUrl,
+    webFallbackUrl,
   };
 }
 
@@ -463,7 +463,12 @@ export function parseNmapSchemeUrl(url: string): ParsedNmapSchemeUrl | null {
   return {
     placeId: params.get("id") ?? undefined,
     lat: parseNmapCoord(params.get("lat") ?? params.get("latitude")),
-    lon: parseNmapCoord(params.get("lng") ?? params.get("longitude")),
+    lon: parseNmapCoord(
+      params.get("lng") ??
+        params.get("lon") ??
+        params.get("longitude") ??
+        params.get("long"),
+    ),
     name: rawName ? decodeURIComponent(rawName) : undefined,
   };
 }
@@ -473,25 +478,12 @@ export function buildNaverMapWebUrlFromScheme(
   schemeUrl: string,
   context?: NaverMapFallbackContext,
 ): string | undefined {
-  const ctx = normalizeFallbackContext(context);
-  const parsed = parseNmapSchemeUrl(schemeUrl);
-  const placeId = parsed?.placeId?.trim();
-  if (placeId) {
-    return buildNaverMapPlaceEntryUrl(placeId);
+  if (!isNativeMapSchemeUrl(schemeUrl)) return undefined;
+
+  const result = computeNaverMapWebUrl(schemeUrl, context);
+  if (result.startsWith("http") && !isNaverMapSearchUrl(result)) {
+    return result;
   }
-
-  const lat = parsed?.lat ?? ctx?.lat;
-  const lon = parsed?.lon ?? ctx?.lon;
-  const name = parsed?.name?.trim() || ctx?.name?.trim();
-
-  if (hasValidCoords(lat, lon) && lat != null && lon != null) {
-    return buildNaverMapOpenUrl({
-      name: name ?? "",
-      lat,
-      lon,
-    });
-  }
-
   return undefined;
 }
 
@@ -531,10 +523,7 @@ export function openNaverMapMarker(input: {
     name,
   });
   const { isIOS, isAndroid } = getMobileEnv();
-  const httpTarget =
-    targetUrl?.startsWith("http") && !isNaverMapSearchUrl(targetUrl)
-      ? targetUrl
-      : undefined;
+  const httpTarget = targetUrl?.startsWith("http") ? targetUrl : undefined;
   const fallback: NaverMapDeepLinkFallback = {
     targetUrl: nmapUrl,
     context: { lat, lon, name },
@@ -624,10 +613,7 @@ export function openNaverMapPlace(
   const fallback: NaverMapDeepLinkFallback = {
     targetUrl: nmapUrl,
     context: options?.context,
-    webFallbackUrl:
-      targetUrl.startsWith("http") && !isNaverMapSearchUrl(targetUrl)
-        ? targetUrl
-        : undefined,
+    webFallbackUrl: targetUrl.startsWith("http") ? targetUrl : undefined,
   };
   const { isAndroid, isIOS } = getMobileEnv();
   const appName = getNaverMapAppName();

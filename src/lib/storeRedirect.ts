@@ -238,7 +238,7 @@ function launchMapTarget(
     const nmapUrl = toNmapUrl(targetUrl) ?? targetUrl;
 
     openNativeDeepLink(nmapUrl, {
-      fallback: { targetUrl, context },
+      fallback: { targetUrl: nmapUrl, context },
       intentUrl: buildIntentFromNmap(nmapUrl),
     });
     return;
