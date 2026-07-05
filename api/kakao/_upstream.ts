@@ -2,7 +2,12 @@ export function resolveKakaoRestKeyFromEnv(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
 ): string | null {
   const raw =
-    env.KAKAO_REST_API_KEY ?? env.KAKAO_API_KEY ?? env.KAKAO_REST_KEY;
+    env.KAKAO_REST_API_KEY ??
+    env.VITE_KAKAO_REST_API_KEY ??
+    env.KAKAO_API_KEY ??
+    env.VITE_KAKAO_API_KEY ??
+    env.KAKAO_REST_KEY ??
+    env.VITE_KAKAO_REST_KEY;
   if (!raw) return null;
   const trimmed = raw.trim().replace(/^["']|["']$/g, "");
   return trimmed.length > 0 ? trimmed : null;

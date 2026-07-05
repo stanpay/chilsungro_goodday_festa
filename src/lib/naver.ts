@@ -38,11 +38,11 @@ function buildNaverMapsScriptUrl(clientId: string, language: string, withGeocode
     return `https://oapi.map.naver.com/openapi/v3/maps.js?${params.toString()}`;
 }
 function getNaverMapClientId(): string {
-    const env = (import.meta as any).env ?? {};
-    const clientId = env.VITE_NAVER_NCP_KEY_ID ??
-        env.VITE_NAVER_CLIENT_ID ??
-        env.VITE_NAVER_MAP_CLIENT_ID ??
-        env.VITE_NAVER_NCP_CLIENT_ID;
+    const clientId =
+        import.meta.env.VITE_NAVER_NCP_KEY_ID ??
+        import.meta.env.VITE_NAVER_CLIENT_ID ??
+        import.meta.env.VITE_NAVER_MAP_CLIENT_ID ??
+        import.meta.env.VITE_NAVER_NCP_CLIENT_ID;
     if (!clientId) {
         throw new Error("VITE_NAVER_CLIENT_ID(또는 VITE_NAVER_NCP_KEY_ID)가 설정되지 않았습니다.");
     }

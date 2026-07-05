@@ -8,7 +8,7 @@ export async function loadKakaoMaps(appKey?: string): Promise<typeof window & {
     if (w.kakao?.maps && kakaoLoaded)
         return w;
     if (!appKey) {
-        appKey = (import.meta as any).env?.VITE_KAKAO_APP_KEY;
+        appKey = import.meta.env.VITE_KAKAO_APP_KEY;
     }
     if (!appKey) {
         const errorMsg = 'VITE_KAKAO_APP_KEY is not set. Please set the environment variable in your deployment platform (e.g., Vercel, Netlify) or .env file for local development.';
@@ -131,12 +131,12 @@ async function searchKeywordViaProxy(query: string, page: number, size: number):
     const response = await fetch(url.toString());
     if (!response.ok) {
         if (response.status === 401) {
-            throw new Error('카카오 REST API 키가 유효하지 않습니다. 서버 환경변수 KAKAO_REST_API_KEY를 확인해주세요.');
+            throw new Error('카카오 REST API 키가 유효하지 않습니다. Vercel의 VITE_KAKAO_REST_API_KEY를 확인해주세요.');
         }
         if (response.status === 500) {
             const data = await response.json().catch(() => null);
             if (data?.error === 'Kakao REST API key not configured') {
-                throw new Error('카카오 REST API 키가 서버에 설정되지 않았습니다. KAKAO_REST_API_KEY 환경변수를 설정해주세요.');
+                throw new Error('카카오 REST API 키가 서버에 설정되지 않았습니다. Vercel에 VITE_KAKAO_REST_API_KEY(또는 KAKAO_REST_API_KEY)를 설정해주세요.');
             }
         }
         throw new Error(`카카오 API 오류: ${response.status} ${response.statusText}`);
