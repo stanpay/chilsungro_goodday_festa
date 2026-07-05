@@ -123,37 +123,34 @@ function generateSearchVariants(query: string): string[] {
     }
     return variants;
 }
+async function searchKeywordViaProxy(query: string, page: number, size: number): Promise<KakaoSearchResponse> {
+    const url = new URL('/api/kakao/search', window.location.origin);
+    url.searchParams.set('query', query);
+    url.searchParams.set('page', page.toString());
+    url.searchParams.set('size', Math.min(size, 15).toString());
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+        if (response.status === 401) {
+            throw new Error('카카오 REST API 키가 유효하지 않습니다. 서버 환경변수 KAKAO_REST_API_KEY를 확인해주세요.');
+        }
+        if (response.status === 500) {
+            const data = await response.json().catch(() => null);
+            if (data?.error === 'Kakao REST API key not configured') {
+                throw new Error('카카오 REST API 키가 서버에 설정되지 않았습니다. KAKAO_REST_API_KEY 환경변수를 설정해주세요.');
+            }
+        }
+        throw new Error(`카카오 API 오류: ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+}
 /**
- * 카카오 로컬 API를 사용하여 주소/장소 검색
+ * 카카오 로컬 API를 사용하여 주소/장소 검색 (서버 프록시 경유)
  * @param query 검색어 (동/읍/면 또는 장소명)
  * @param page 페이지 번호 (기본값: 1)
  * @param size 페이지당 결과 수 (기본값: 15, 최대 15)
  * @returns 검색 결과 목록
  */
 export async function searchAddress(query: string, page: number = 1, size: number = 15): Promise<KakaoSearchResponse> {
-    // 여러 가능한 환경 변수 이름 확인 (REST API 키 우선, 없으면 APP_KEY 사용)
-    // 환경 변수에서 공백과 따옴표 제거
-    const getEnvValue = (key: string): string | undefined => {
-        const value = import.meta.env[key];
-        if (typeof value === 'string') {
-            return value.trim().replace(/^["']|["']$/g, '');
-        }
-        return value;
-    };
-    const restApiKey = getEnvValue('VITE_KAKAO_REST_API_KEY') ||
-        getEnvValue('VITE_KAKAO_API_KEY') ||
-        getEnvValue('VITE_KAKAO_REST_KEY') ||
-        getEnvValue('VITE_KAKAO_KEY') ||
-        getEnvValue('VITE_KAKAO_APP_KEY'); // JavaScript 키도 시도 (일부 경우 동일할 수 있음)
-    if (!restApiKey) {
-        const errorMsg = '카카오 REST API 키가 설정되지 않았습니다. 카카오 개발자 콘솔(https://developers.kakao.com)에서 REST API 키를 발급받아 .env 파일에 VITE_KAKAO_REST_API_KEY를 설정해주세요.';
-        throw new Error(errorMsg);
-    }
-    // API 키 유효성 검사 (빈 문자열 체크)
-    if (restApiKey.trim().length === 0) {
-        const errorMsg = '카카오 REST API 키가 비어있습니다. .env 파일에서 VITE_KAKAO_REST_API_KEY 값을 확인해주세요.';
-        throw new Error(errorMsg);
-    }
     if (!query || query.trim().length === 0) {
         return {
             documents: [],
@@ -172,37 +169,7 @@ export async function searchAddress(query: string, page: number = 1, size: numbe
     for (let i = 0; i < searchVariants.length; i++) {
         const variant = searchVariants[i];
         try {
-            const url = new URL('https://dapi.kakao.com/v2/local/search/keyword.json');
-            url.searchParams.append('query', variant);
-            url.searchParams.append('page', page.toString());
-            url.searchParams.append('size', Math.min(size, 15).toString());
-            // Authorization 헤더 생성 (공백 제거)
-            const authHeader = `KakaoAK ${restApiKey.trim()}`;
-            const response = await fetch(url.toString(), {
-                method: 'GET',
-                headers: {
-                    Authorization: authHeader,
-                },
-            });
-            if (!response.ok) {
-                // 첫 번째 검색어가 실패하면 다음 변형 시도
-                if (i === 0 && searchVariants.length > 1) {
-                    continue;
-                }
-                // 401 오류인 경우 더 명확한 에러 메시지 제공
-                if (response.status === 401) {
-                    const errorText = await response.text().catch(() => '응답 본문을 읽을 수 없습니다');
-                    const errorMsg = `카카오 REST API 인증 실패 (401). API 키를 확인해주세요. 
-- 카카오 개발자 콘솔(https://developers.kakao.com)에서 REST API 키 확인
-- .env 파일에 VITE_KAKAO_REST_API_KEY 설정 확인
-- API 키에 공백이나 따옴표가 포함되지 않았는지 확인
-- 도메인이 카카오 개발자 콘솔에 등록되어 있는지 확인
-응답: ${errorText}`;
-                    throw new Error('카카오 REST API 키가 유효하지 않습니다. 카카오 개발자 콘솔에서 REST API 키를 확인해주세요.');
-                }
-                throw new Error(`카카오 API 오류: ${response.status} ${response.statusText}`);
-            }
-            const data: KakaoSearchResponse = await response.json();
+            const data = await searchKeywordViaProxy(variant, page, size);
             // 중복 제거하면서 결과 추가
             for (const doc of data.documents) {
                 const placeId = doc.place_name + doc.address_name;
