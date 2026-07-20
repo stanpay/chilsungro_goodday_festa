@@ -13,6 +13,7 @@ import RedirectToJeju from "./pages/RedirectToJeju";
 import DevTools from "./pages/DevTools";
 import FilterLegacyDemo from "./pages/FilterLegacyDemo";
 import FilterDropdownLegacyDemo from "./pages/FilterDropdownLegacyDemo";
+import NavigatePage from "./pages/Navigate";
 import { AppLocaleProvider } from "@/contexts/AppLocaleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AnalyticsPageTracker from "@/components/AnalyticsPageTracker";
@@ -47,6 +48,7 @@ const App = () => (
           <Route path="/main" element={<Main />} />
           <Route path="/landing" element={<LandingPage />} />
           <Route path="/location" element={<Location />} />
+          <Route path="/navigate" element={<NavigatePage />} />
           <Route path="/jejuqronedosim" element={<RedirectToJeju />} />
           <Route path="/dev-tools-9f3k" element={<DevTools />} />
           <Route path="/filter-legacy-demo" element={<FilterLegacyDemo />} />
