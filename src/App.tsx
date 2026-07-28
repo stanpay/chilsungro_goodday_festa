@@ -43,7 +43,7 @@ const App = () => (
       >
         <AnalyticsPageTracker />
         <Routes>
-          <Route path="/" element={<Navigate to="/navigate" replace />} />
+          <Route path="/" element={<Navigate to="/main" replace />} />
           <Route path="/jeju" element={<Main />} />
           <Route path="/main" element={<Main />} />
           <Route path="/landing" element={<LandingPage />} />
