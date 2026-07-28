@@ -8,6 +8,10 @@ import { useToast } from "@/hooks/use-toast";
 import { searchAddress, NaverSearchResult as KakaoSearchResult } from "@/lib/naver";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { getBrowserPosition } from "@/lib/geolocation";
+import {
+  clearLocationPrefetchTimestamp,
+  persistPrefetchedLocation,
+} from "@/lib/locationPrefetch";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 interface RecentLocation {
@@ -98,6 +102,7 @@ const Location = () => {
         // 직접 설정한 위치임을 표시 (이후 현재 위치를 자동으로 가져오지 않도록)
         // 최근 위치를 선택했을 때도 직접 설정한 것으로 처리
         localStorage.setItem("isManualLocation", "true");
+        clearLocationPrefetchTimestamp();
         // 최근 위치에 추가
         if (address) {
             saveToRecentLocations(name, address, coordinates);
@@ -130,9 +135,7 @@ const Location = () => {
             const { latitude, longitude } = await getBrowserPosition();
             const address = await getAddressFromCoords(latitude, longitude, locale);
             const displayName = address !== "위치를 확인할 수 없음" ? address : "현재 위치";
-            localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-            localStorage.setItem("selectedLocation", displayName);
-            localStorage.removeItem("isManualLocation");
+            persistPrefetchedLocation(latitude, longitude, displayName);
             setIsLoadingLocation(false);
             navigate("/main");
         }

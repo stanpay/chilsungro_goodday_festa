@@ -43,6 +43,11 @@ import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { JEJU_DOWNTOWN_COORDS } from "@/lib/naverGeocodeFallback";
 import { getBrowserPosition } from "@/lib/geolocation";
+import {
+  clearLocationPrefetchTimestamp,
+  persistPrefetchedLocation,
+  readValidPrefetchedLocation,
+} from "@/lib/locationPrefetch";
 import { openStoreRedirect, prefetchStoreRedirects } from "@/lib/storeRedirect";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
 import {
@@ -933,6 +938,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const clearAutoSavedLocation = () => {
     localStorage.removeItem("currentCoordinates");
     localStorage.removeItem("selectedLocation");
+    clearLocationPrefetchTimestamp();
     setCurrentCoords(null);
   };
 
@@ -1573,7 +1579,21 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       } else if (isManualLocationValue && !savedLocation) {
         localStorage.removeItem("isManualLocation");
         localStorage.removeItem("currentCoordinates");
+        clearLocationPrefetchTimestamp();
         setIsManualLocation(false);
+      }
+
+      // Navigate 등에서 미리 받아 둔 자동 위치가 TTL 안이면 GPS 스킵
+      const prefetched = readValidPrefetchedLocation();
+      if (prefetched) {
+        const { latitude, longitude } = prefetched.coords;
+        setIsManualLocation(false);
+        setCurrentLocation(prefetched.address);
+        alignMapToCurrentLocationRef.current = true;
+        setCurrentCoords({ latitude, longitude });
+        setIsLoadingLocation(false);
+        await fetchNearbyStoresRef.current?.(latitude, longitude);
+        return;
       }
       
       // 직접 설정한 위치가 없으면 GPS 시도
@@ -1587,9 +1607,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
           ? headerStrings(locale).locationUnknownGeo
           : address;
 
-      localStorage.setItem("selectedLocation", displayAddress);
-      localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-      localStorage.removeItem("isManualLocation");
+      persistPrefetchedLocation(latitude, longitude, displayAddress);
       setIsManualLocation(false);
       setCurrentLocation(displayAddress);
       alignMapToCurrentLocationRef.current = true;
@@ -1652,9 +1670,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         ? headerStrings(locale).locationUnknownGeo
         : address;
 
-    localStorage.setItem("selectedLocation", displayAddress);
-    localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-    localStorage.removeItem("isManualLocation");
+    persistPrefetchedLocation(latitude, longitude, displayAddress);
     setIsManualLocation(false);
     setCurrentLocation(displayAddress);
     skipNextFitMapRef.current = options?.skipMapFit === true;
@@ -1768,9 +1784,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         address === "위치를 확인할 수 없음"
           ? headerStrings(locale).locationUnknownGeo
           : address;
-      localStorage.setItem("selectedLocation", displayAddress);
-      localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-      localStorage.removeItem("isManualLocation");
+      persistPrefetchedLocation(latitude, longitude, displayAddress);
       setIsManualLocation(false);
       setCurrentLocation(displayAddress);
       alignMapToCurrentLocationRef.current = true;
