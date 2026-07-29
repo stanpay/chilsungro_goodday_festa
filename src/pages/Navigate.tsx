@@ -63,6 +63,15 @@ const COUPON_GUIDE_BANNER_ALT: Record<AppLocale, string> = {
   ja: "旅行者消費クーポン利用先案内",
 };
 
+const TRAVEL_CENTER_AREA_MAP_IMAGE = "/jeju-traveler-center-area-map.png";
+
+const TRAVEL_CENTER_AREA_MAP_ALT: Record<AppLocale, string> = {
+  ko: "제주여행자센터 주변 주요 상권 및 랜드마크 안내 지도",
+  en: "Map of major areas and landmarks around Jeju Traveler Center",
+  zh: "济州旅行者中心周边主要商圈与地标导览图",
+  ja: "済州旅行者センター周辺の主要エリア・ランドマーク案内地図",
+};
+
 const NavigatePage = () => {
   const navigate = useNavigate();
   const { locale, setLocale } = useAppLocale();
@@ -104,10 +113,10 @@ const NavigatePage = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-6">
+    <div className="flex min-h-screen flex-col items-center justify-start gap-8 bg-background p-6">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <div className="mb-6 flex justify-end">
+          <div className="mb-2 flex justify-end">
             <DropdownMenu open={isLanguageMenuOpen} onOpenChange={setIsLanguageMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -154,9 +163,21 @@ const NavigatePage = () => {
             </DropdownMenu>
           </div>
 
+          <Button
+            size="lg"
+            className="h-auto w-full whitespace-normal px-4 py-3 text-center text-base font-semibold leading-snug"
+            onClick={() => navigate("/main")}
+          >
+            <SquareArrowOutUpRight className="mr-2 h-5 w-5 shrink-0" />
+            {COUPON_GUIDE_BUTTON_LABEL[locale]}
+          </Button>
+          <p className="whitespace-pre-line px-1 text-center text-sm leading-relaxed text-muted-foreground">
+            {COUPON_GUIDE_DESCRIPTION[locale]}
+          </p>
+
           <button
             type="button"
-            className="block w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="mt-2 block w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={couponGuideBannerAlt}
             onClick={handleTravelCenterDirections}
           >
@@ -168,7 +189,7 @@ const NavigatePage = () => {
           </button>
           <button
             type="button"
-            className="mt-6 block w-full shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="mt-2 block w-full shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={directionsAlt}
             onClick={handleTravelCenterDirections}
           >
@@ -181,20 +202,11 @@ const NavigatePage = () => {
           <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
             {DIRECTIONS_DESCRIPTION[locale]}
           </p>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Button
-            size="lg"
-            className="h-auto w-full whitespace-normal px-4 py-3 text-center text-base font-semibold leading-snug"
-            onClick={() => navigate("/main")}
-          >
-            <SquareArrowOutUpRight className="mr-2 h-5 w-5 shrink-0" />
-            {COUPON_GUIDE_BUTTON_LABEL[locale]}
-          </Button>
-          <p className="whitespace-pre-line px-1 text-center text-sm leading-relaxed text-muted-foreground">
-            {COUPON_GUIDE_DESCRIPTION[locale]}
-          </p>
+          <img
+            src={TRAVEL_CENTER_AREA_MAP_IMAGE}
+            alt={TRAVEL_CENTER_AREA_MAP_ALT[locale]}
+            className="mt-2 w-full rounded-xl object-contain"
+          />
         </div>
       </div>
     </div>
