@@ -178,7 +178,7 @@ const NavigatePage = () => {
             type="button"
             className="mt-2 block w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={couponGuideBannerAlt}
-            onClick={handleTravelCenterDirections}
+            onClick={() => navigate("/main")}
           >
             <img
               src={couponGuideBannerImage}
@@ -203,11 +203,18 @@ const NavigatePage = () => {
           </p>
       </div>
       <div className="mt-2 w-full shrink-0">
-        <img
-          src={TRAVEL_CENTER_AREA_MAP_IMAGE}
-          alt={TRAVEL_CENTER_AREA_MAP_ALT[locale]}
-          className="block w-full object-contain"
-        />
+        <button
+          type="button"
+          className="block w-full shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label={TRAVEL_CENTER_AREA_MAP_ALT[locale]}
+          onClick={handleTravelCenterDirections}
+        >
+          <img
+            src={TRAVEL_CENTER_AREA_MAP_IMAGE}
+            alt={TRAVEL_CENTER_AREA_MAP_ALT[locale]}
+            className="block w-full object-contain"
+          />
+        </button>
       </div>
     </div>
   );
