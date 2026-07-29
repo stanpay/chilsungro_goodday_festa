@@ -113,7 +113,7 @@ const NavigatePage = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background">
+    <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background">
       <div className="flex w-full flex-col gap-2 px-6 pt-6">
           <div className="mb-2 flex justify-end">
             <DropdownMenu open={isLanguageMenuOpen} onOpenChange={setIsLanguageMenuOpen}>
