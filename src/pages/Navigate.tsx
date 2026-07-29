@@ -42,10 +42,10 @@ const DIRECTIONS_DESCRIPTION: Record<AppLocale, string> = {
 };
 
 const COUPON_GUIDE_DESCRIPTION: Record<AppLocale, string> = {
-  ko: "여행자 소비쿠폰 사용 가능 매장을 검색하고\n길안내 받을 수 있습니다.",
-  en: "Search stores that accept traveler coupons\nand get directions.",
-  zh: "可搜索可使用旅行者消费券的店铺\n并获得路线指引。",
-  ja: "旅行者消費クーポンが使える店舗を検索し、\n道案内を受けられます。",
+  ko: "여행자 소비쿠폰 사용 가능 매장을 검색하고 길안내 받을 수 있습니다.",
+  en: "Search stores that accept traveler coupons and get directions.",
+  zh: "可搜索可使用旅行者消费券的店铺并获得路线指引。",
+  ja: "旅行者消費クーポンが使える店舗を検索し、道案内を受けられます。",
 };
 
 /** 일본어 번역본 준비 전까지 en 폴백 */
@@ -113,9 +113,8 @@ const NavigatePage = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-start gap-8 bg-background p-6">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <div className="flex flex-col gap-2">
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background">
+      <div className="flex w-full flex-col gap-2 px-6 pt-6">
           <div className="mb-2 flex justify-end">
             <DropdownMenu open={isLanguageMenuOpen} onOpenChange={setIsLanguageMenuOpen}>
               <DropdownMenuTrigger asChild>
@@ -171,7 +170,7 @@ const NavigatePage = () => {
             <SquareArrowOutUpRight className="mr-2 h-5 w-5 shrink-0" />
             {COUPON_GUIDE_BUTTON_LABEL[locale]}
           </Button>
-          <p className="whitespace-pre-line px-1 text-center text-sm leading-relaxed text-muted-foreground">
+          <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
             {COUPON_GUIDE_DESCRIPTION[locale]}
           </p>
 
@@ -202,12 +201,13 @@ const NavigatePage = () => {
           <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
             {DIRECTIONS_DESCRIPTION[locale]}
           </p>
-          <img
-            src={TRAVEL_CENTER_AREA_MAP_IMAGE}
-            alt={TRAVEL_CENTER_AREA_MAP_ALT[locale]}
-            className="mt-2 w-full rounded-xl object-contain"
-          />
-        </div>
+      </div>
+      <div className="mt-2 w-full shrink-0">
+        <img
+          src={TRAVEL_CENTER_AREA_MAP_IMAGE}
+          alt={TRAVEL_CENTER_AREA_MAP_ALT[locale]}
+          className="block w-full object-contain"
+        />
       </div>
     </div>
   );
