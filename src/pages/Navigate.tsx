@@ -63,7 +63,12 @@ const COUPON_GUIDE_BANNER_ALT: Record<AppLocale, string> = {
   ja: "旅行者消費クーポン利用先案内",
 };
 
-const TRAVEL_CENTER_AREA_MAP_IMAGE = "/jeju-traveler-center-area-map.png";
+const TRAVEL_CENTER_AREA_MAP_IMAGE: Record<AppLocale, string> = {
+  ko: "/jeju-traveler-center-ko.png",
+  en: "/jeju-traveler-center-en.png",
+  zh: "/jeju-traveler-center-zh.png",
+  ja: "/jeju-traveler-center-ja.png",
+};
 
 const TRAVEL_CENTER_AREA_MAP_ALT: Record<AppLocale, string> = {
   ko: "제주여행자센터 주변 주요 상권 및 랜드마크 안내 지도",
@@ -115,93 +120,54 @@ const NavigatePage = () => {
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background">
       <div className="flex w-full flex-col gap-2 px-6 pt-6">
-          <div className="mb-2 flex justify-end">
-            <DropdownMenu open={isLanguageMenuOpen} onOpenChange={setIsLanguageMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border border-primary bg-card px-3 text-foreground transition-colors hover:bg-card hover:text-foreground focus:bg-card focus:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 active:bg-card active:text-foreground data-[state=open]:bg-card data-[state=open]:text-foreground"
-                  aria-label={t.languageMenuAria}
-                  title={LOCALE_MENU_LABELS[locale]}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onPointerLeave={(event) => event.currentTarget.blur()}
-                  onPointerCancel={(event) => event.currentTarget.blur()}
-                  onPointerUp={(event) => event.currentTarget.blur()}
-                  onClick={() => setIsLanguageMenuOpen((open) => !open)}
-                >
-                  <Languages className="h-4 w-4 shrink-0" />
-                  <AutoFitMarquee
-                    text={LOCALE_MENU_LABELS[locale]}
-                    className="flex-1 pr-0"
-                    textClassName="text-center text-sm !leading-4"
-                    fontSizeClasses={["text-sm", "text-xs"]}
-                  />
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 p-1.5">
-                <DropdownMenuRadioGroup
-                  value={locale}
-                  onValueChange={(value) => {
-                    if (!isAppLocale(value)) return;
-                    setLocale(value);
-                  }}
-                >
-                  {APP_LOCALES.map((code) => (
-                    <DropdownMenuRadioItem
-                      key={code}
-                      value={code}
-                      className="rounded-lg py-3 pl-10 pr-3 text-base font-medium [&>span]:left-3 [&>span]:h-4 [&>span]:w-4 [&>span_svg]:h-2.5 [&>span_svg]:w-2.5"
-                    >
-                      {LOCALE_MENU_LABELS[code]}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <Button
-            size="lg"
-            className="h-auto w-full whitespace-normal px-4 py-3 text-center text-base font-semibold leading-snug"
-            onClick={() => navigate("/main")}
-          >
-            <SquareArrowOutUpRight className="mr-2 h-5 w-5 shrink-0" />
-            {COUPON_GUIDE_BUTTON_LABEL[locale]}
-          </Button>
-          <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
-            {COUPON_GUIDE_DESCRIPTION[locale]}
-          </p>
-
-          <button
-            type="button"
-            className="mt-2 block w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label={couponGuideBannerAlt}
-            onClick={() => navigate("/main")}
-          >
-            <img
-              src={couponGuideBannerImage}
-              alt={couponGuideBannerAlt}
-              className="w-full object-contain"
-            />
-          </button>
-          <button
-            type="button"
-            className="mt-2 block w-full shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label={directionsAlt}
-            onClick={handleTravelCenterDirections}
-          >
-            <img
-              src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
-              alt={directionsAlt}
-              className="w-full object-contain"
-            />
-          </button>
-          <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
-            {DIRECTIONS_DESCRIPTION[locale]}
-          </p>
+        <div className="mb-2 flex justify-end">
+          <DropdownMenu open={isLanguageMenuOpen} onOpenChange={setIsLanguageMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 w-[8rem] shrink-0 gap-1.5 rounded-xl border border-primary bg-card px-3 text-foreground transition-colors hover:bg-card hover:text-foreground focus:bg-card focus:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 active:bg-card active:text-foreground data-[state=open]:bg-card data-[state=open]:text-foreground"
+                aria-label={t.languageMenuAria}
+                title={LOCALE_MENU_LABELS[locale]}
+                onPointerDown={(event) => event.preventDefault()}
+                onPointerLeave={(event) => event.currentTarget.blur()}
+                onPointerCancel={(event) => event.currentTarget.blur()}
+                onPointerUp={(event) => event.currentTarget.blur()}
+                onClick={() => setIsLanguageMenuOpen((open) => !open)}
+              >
+                <Languages className="h-4 w-4 shrink-0" />
+                <AutoFitMarquee
+                  text={LOCALE_MENU_LABELS[locale]}
+                  className="flex-1 pr-0"
+                  textClassName="text-center text-sm !leading-4"
+                  fontSizeClasses={["text-sm", "text-xs"]}
+                />
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1.5">
+              <DropdownMenuRadioGroup
+                value={locale}
+                onValueChange={(value) => {
+                  if (!isAppLocale(value)) return;
+                  setLocale(value);
+                }}
+              >
+                {APP_LOCALES.map((code) => (
+                  <DropdownMenuRadioItem
+                    key={code}
+                    value={code}
+                    className="rounded-lg py-3 pl-10 pr-3 text-base font-medium [&>span]:left-3 [&>span]:h-4 [&>span]:w-4 [&>span_svg]:h-2.5 [&>span_svg]:w-2.5"
+                  >
+                    {LOCALE_MENU_LABELS[code]}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
+
       <div className="mt-2 w-full shrink-0">
         <button
           type="button"
@@ -210,11 +176,53 @@ const NavigatePage = () => {
           onClick={handleTravelCenterDirections}
         >
           <img
-            src={TRAVEL_CENTER_AREA_MAP_IMAGE}
+            src={TRAVEL_CENTER_AREA_MAP_IMAGE[locale]}
             alt={TRAVEL_CENTER_AREA_MAP_ALT[locale]}
             className="block w-full object-contain"
           />
         </button>
+      </div>
+
+      <div className="flex w-full flex-col gap-2 px-6 pb-6">
+        <button
+          type="button"
+          className="mt-2 block w-full shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label={directionsAlt}
+          onClick={handleTravelCenterDirections}
+        >
+          <img
+            src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
+            alt={directionsAlt}
+            className="w-full object-contain"
+          />
+        </button>
+        <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
+          {DIRECTIONS_DESCRIPTION[locale]}
+        </p>
+
+        <button
+          type="button"
+          className="mt-2 block w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label={couponGuideBannerAlt}
+          onClick={() => navigate("/main")}
+        >
+          <img
+            src={couponGuideBannerImage}
+            alt={couponGuideBannerAlt}
+            className="w-full object-contain"
+          />
+        </button>
+        <Button
+          size="lg"
+          className="h-auto w-full whitespace-normal px-4 py-3 text-center text-base font-semibold leading-snug"
+          onClick={() => navigate("/main")}
+        >
+          <SquareArrowOutUpRight className="mr-2 h-5 w-5 shrink-0" />
+          {COUPON_GUIDE_BUTTON_LABEL[locale]}
+        </Button>
+        <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
+          {COUPON_GUIDE_DESCRIPTION[locale]}
+        </p>
       </div>
     </div>
   );
