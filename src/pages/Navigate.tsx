@@ -64,10 +64,10 @@ const COUPON_GUIDE_BANNER_ALT: Record<AppLocale, string> = {
 };
 
 const TRAVEL_CENTER_AREA_MAP_IMAGE: Record<AppLocale, string> = {
-  ko: "/jeju-traveler-center-ko.png",
-  en: "/jeju-traveler-center-en.png",
-  zh: "/jeju-traveler-center-zh.png",
-  ja: "/jeju-traveler-center-ja.png",
+  ko: "/jeju-traveler-center-ko.webp",
+  en: "/jeju-traveler-center-en.webp",
+  zh: "/jeju-traveler-center-zh.webp",
+  ja: "/jeju-traveler-center-ja.webp",
 };
 
 const TRAVEL_CENTER_AREA_MAP_ALT: Record<AppLocale, string> = {
