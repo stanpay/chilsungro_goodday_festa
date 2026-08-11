@@ -38,7 +38,11 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, for
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
-import { storesApi, type NearbyStore } from "@/api/stores";
+import {
+  NEARBY_RADIUS_UNLIMITED_M,
+  storesApi,
+  type NearbyStore,
+} from "@/api/stores";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
 import { JEJU_DOWNTOWN_COORDS } from "@/lib/naverGeocodeFallback";
@@ -1817,7 +1821,8 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       enrichedStoreIdsRef.current.clear();
 
       // 초기 1회 fetch로 전체 매장 확보 (이후 재검색은 캐시 필터링)
-      const radius = 100000; // 100km — 전체 매장 로드
+      // radius 미지정/0이면 API가 []만 반환하므로 사실상 무제한 반경 사용
+      const radius = NEARBY_RADIUS_UNLIMITED_M;
 
       const mapNearbyStoreToStore = (store: NearbyStore) => {
         const distanceNum =

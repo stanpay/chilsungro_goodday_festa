@@ -58,11 +58,14 @@ function normalizeNearbyResponse(payload: unknown): NearbyStore[] {
   return [];
 }
 
+/** API는 radius 필수. 서울·해외에서도 제주 매장이 잡히도록 사실상 무제한(약 1만 km). */
+export const NEARBY_RADIUS_UNLIMITED_M = 10_000_000;
+
 export const storesApi = {
   getNearbyStores: async (
     latitude: number,
     longitude: number,
-    radius = 1500
+    radius = NEARBY_RADIUS_UNLIMITED_M
   ): Promise<NearbyStore[]> => {
     const payload = await fetchJson<unknown>(
       `/nearby/${latitude}/${longitude}?radius=${radius}`
