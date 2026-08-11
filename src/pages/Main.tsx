@@ -925,7 +925,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [sortBy, setSortBy] = useState<"distance" | "discount">("distance");
   const [currentLocation, setCurrentLocation] = useState("위치 가져오는 중...");
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const { isLoggedIn } = useAuth();
@@ -2204,18 +2203,9 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
   const sortedStores = useMemo(() => {
     const list = [...openStores];
-    if (!currentCoords) {
-      if (sortBy === "discount") {
-        return list.sort(
-          (a, b) => b.discountNum - a.discountNum || a.name.localeCompare(b.name, "ko")
-        );
-      }
-      return sortStoresByName(list);
-    }
-    return list.sort((a, b) =>
-      sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
-    );
-  }, [openStores, sortBy, currentCoords]);
+    if (!currentCoords) return sortStoresByName(list);
+    return list.sort((a, b) => a.distanceNum - b.distanceNum);
+  }, [openStores, currentCoords]);
 
   const visibleStores = useMemo(
     () => sortedStores.slice(0, visibleStoreCount),
@@ -2229,18 +2219,9 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     const base = mapFilteredStores
       ? mapFilteredStores.filter(hasStoreCoords)
       : categoryFilteredStores.filter(hasStoreCoords);
-    if (!currentCoords) {
-      if (sortBy === "discount") {
-        return [...base].sort(
-          (a, b) => b.discountNum - a.discountNum || a.name.localeCompare(b.name, "ko")
-        );
-      }
-      return sortStoresByName(base);
-    }
-    return [...base].sort((a, b) =>
-      sortBy === "distance" ? a.distanceNum - b.distanceNum : b.discountNum - a.discountNum
-    );
-  }, [mapFilteredStores, categoryFilteredStores, sortBy, currentCoords]);
+    if (!currentCoords) return sortStoresByName(base);
+    return [...base].sort((a, b) => a.distanceNum - b.distanceNum);
+  }, [mapFilteredStores, categoryFilteredStores, currentCoords]);
 
   const visibleMapSheetStores = useMemo(
     () => storesWithCoords.slice(0, visibleMapSheetCount),
@@ -3693,16 +3674,12 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setSortBy(sortBy === "distance" ? "discount" : "distance")}
+                type="button"
                 className="flex shrink-0 items-center gap-2 border border-primary"
-                style={{backgroundColor:"white", color:"#26222A"}}
+                style={{ backgroundColor: "white", color: "#26222A" }}
               >
                 <ArrowUpDown className="w-4 h-4" />
-                {sortBy === "distance"
-                  ? currentCoords
-                    ? t.sortDistance
-                    : t.sortName
-                  : t.sortDiscount}
+                {currentCoords ? t.sortDistance : t.sortName}
               </Button>
             )}
           </div>
@@ -3959,10 +3936,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
         hideForMapSearch={mapSearchChromeHidden}
         title={t.mapSheetTitle}
         dragHint={t.mapSheetDragHint}
-        sortBy={sortBy}
-        onSortChange={setSortBy}
-        sortDistanceLabel={currentCoords ? t.sortDistance : t.sortName}
-        sortDiscountLabel={t.sortDiscount}
+        sortLabel={currentCoords ? t.sortDistance : t.sortName}
       />
     </div>
   );
