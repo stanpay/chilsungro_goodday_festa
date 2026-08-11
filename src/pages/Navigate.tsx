@@ -48,12 +48,11 @@ const COUPON_GUIDE_DESCRIPTION: Record<AppLocale, string> = {
   ja: "旅行者消費クーポンが使える店舗を検索し、道案内を受けられます。",
 };
 
-/** 일본어 번역본 준비 전까지 en 폴백 */
 const COUPON_GUIDE_BANNER_IMAGE: Record<AppLocale, string> = {
-  ko: "/jeju-traveler-coupon-guide-ko.jpg",
-  en: "/jeju-traveler-coupon-guide-en.jpg",
-  zh: "/jeju-traveler-coupon-guide-zh.jpg",
-  ja: "/jeju-traveler-coupon-guide-en.jpg",
+  ko: "/jeju-traveler-coupon-guide.webp",
+  en: "/jeju-traveler-coupon-guide.webp",
+  zh: "/jeju-traveler-coupon-guide.webp",
+  ja: "/jeju-traveler-coupon-guide.webp",
 };
 
 const COUPON_GUIDE_BANNER_ALT: Record<AppLocale, string> = {
@@ -71,10 +70,10 @@ const TRAVEL_CENTER_AREA_MAP_IMAGE: Record<AppLocale, string> = {
 };
 
 const TRAVEL_CENTER_AREA_MAP_ALT: Record<AppLocale, string> = {
-  ko: "제주여행자센터 주변 주요 상권 및 랜드마크 안내 지도",
-  en: "Map of major areas and landmarks around Jeju Traveler Center",
-  zh: "济州旅行者中心周边主要商圈与地标导览图",
-  ja: "済州旅行者センター周辺の主要エリア・ランドマーク案内地図",
+  ko: "제주여행자센터 여행자소비쿠폰 안내",
+  en: "Jeju Traveler Center traveler coupon information",
+  zh: "济州旅行者中心旅行者消费券指南",
+  ja: "済州旅行者センター旅行者消費クーポン案内",
 };
 
 const NavigatePage = () => {
@@ -200,6 +199,22 @@ const NavigatePage = () => {
           {DIRECTIONS_DESCRIPTION[locale]}
         </p>
 
+        <Button
+          className="mt-2 aspect-[1200/123] h-auto w-full max-h-16 items-center rounded-md px-2 py-0 sm:rounded-lg [&_svg]:size-5 sm:[&_svg]:size-6"
+          onClick={() => navigate("/main")}
+        >
+          <AutoFitMarquee
+            text={COUPON_GUIDE_BUTTON_LABEL[locale]}
+            className="flex h-full min-w-0 w-full items-center !pr-0"
+            textClassName="justify-center font-semibold !leading-none"
+            fontSizeClasses={["text-2xl", "text-xl", "text-lg", "text-base", "text-sm"]}
+            leading={<SquareArrowOutUpRight className="size-5 shrink-0 sm:size-6" />}
+          />
+        </Button>
+        <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
+          {COUPON_GUIDE_DESCRIPTION[locale]}
+        </p>
+
         <button
           type="button"
           className="mt-2 block w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -212,17 +227,6 @@ const NavigatePage = () => {
             className="w-full object-contain"
           />
         </button>
-        <Button
-          size="lg"
-          className="h-auto w-full whitespace-normal px-4 py-3 text-center text-base font-semibold leading-snug"
-          onClick={() => navigate("/main")}
-        >
-          <SquareArrowOutUpRight className="mr-2 h-5 w-5 shrink-0" />
-          {COUPON_GUIDE_BUTTON_LABEL[locale]}
-        </Button>
-        <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
-          {COUPON_GUIDE_DESCRIPTION[locale]}
-        </p>
       </div>
     </div>
   );

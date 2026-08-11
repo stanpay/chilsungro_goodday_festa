@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties, ElementType } from "react";
+import type { CSSProperties, ElementType, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type AutoFitMarqueeProps = {
@@ -8,6 +8,8 @@ type AutoFitMarqueeProps = {
   className?: string;
   textClassName?: string;
   fontSizeClasses?: string[];
+  /** 텍스트 span 안 왼쪽에 붙는 아이콘 등 */
+  leading?: ReactNode;
 };
 
 const DEFAULT_FONT_SIZE_CLASSES = ["text-sm", "text-xs"];
@@ -20,8 +22,10 @@ export function AutoFitMarquee({
   className,
   textClassName,
   fontSizeClasses = DEFAULT_FONT_SIZE_CLASSES,
+  leading,
 }: AutoFitMarqueeProps) {
   const containerRef = useRef<HTMLElement>(null);
+  const leadingRef = useRef<HTMLSpanElement>(null);
   const fontSizeKey = fontSizeClasses.join("|");
   const [fontSizeClass, setFontSizeClass] = useState(fontSizeClasses[0]);
   const [marqueeDistance, setMarqueeDistance] = useState(0);
@@ -46,7 +50,8 @@ export function AutoFitMarquee({
     };
 
     const updateLayout = () => {
-      const containerWidth = container.clientWidth - SAFE_RIGHT_PADDING_PX;
+      const leadingWidth = leadingRef.current?.getBoundingClientRect().width ?? 0;
+      const containerWidth = container.clientWidth - SAFE_RIGHT_PADDING_PX - leadingWidth;
       if (containerWidth <= 0) return;
 
       const measured = fontSizeClasses.map((candidateFontSizeClass) => ({
@@ -75,14 +80,14 @@ export function AutoFitMarquee({
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [fontSizeKey, text, textClassName]);
+  }, [fontSizeKey, text, textClassName, leading]);
 
   return (
     <Tag ref={containerRef} className={cn("block min-w-0 pr-1.5", className)}>
-      <span className="block min-w-0 overflow-hidden">
+      <span className="flex h-full min-h-0 min-w-0 w-full items-center justify-center overflow-hidden">
         <span
           className={cn(
-            "block whitespace-nowrap text-left",
+            "inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-left",
             textClassName,
             fontSizeClass,
             marqueeDistance > 0 && "marquee-on-overflow"
@@ -95,7 +100,12 @@ export function AutoFitMarquee({
               : undefined
           }
         >
-          {text}
+          {leading ? (
+            <span ref={leadingRef} className="inline-flex shrink-0 items-center">
+              {leading}
+            </span>
+          ) : null}
+          <span className="min-w-0">{text}</span>
         </span>
       </span>
     </Tag>
