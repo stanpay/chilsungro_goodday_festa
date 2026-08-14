@@ -1,4 +1,5 @@
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
+import { CouponGuideButton } from "@/components/CouponGuideButton";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,7 +24,7 @@ import {
   NAVER_MAP_DIRECTIONS_IMAGE,
 } from "@/lib/mainBanners";
 import { openNaverMapDirections } from "@/lib/mapDirectionLinks";
-import { ChevronDown, Languages, SquareArrowOutUpRight } from "lucide-react";
+import { ChevronDown, Languages } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -199,18 +200,10 @@ const NavigatePage = () => {
           {DIRECTIONS_DESCRIPTION[locale]}
         </p>
 
-        <Button
-          className="mt-2 aspect-[1200/123] h-auto w-full max-h-16 items-center rounded-md px-2 py-0 sm:rounded-lg [&_svg]:size-5 sm:[&_svg]:size-6"
+        <CouponGuideButton
+          label={COUPON_GUIDE_BUTTON_LABEL[locale]}
           onClick={() => navigate("/main")}
-        >
-          <AutoFitMarquee
-            text={COUPON_GUIDE_BUTTON_LABEL[locale]}
-            className="flex h-full min-w-0 w-full items-center !pr-0"
-            textClassName="justify-center font-semibold !leading-none"
-            fontSizeClasses={["text-2xl", "text-xl", "text-lg", "text-base", "text-sm"]}
-            leading={<SquareArrowOutUpRight className="size-5 shrink-0 sm:size-6" />}
-          />
-        </Button>
+        />
         <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
           {COUPON_GUIDE_DESCRIPTION[locale]}
         </p>

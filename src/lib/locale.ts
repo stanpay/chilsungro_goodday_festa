@@ -100,7 +100,8 @@ type MainCopy = {
   noStoresHint: string;
   noSearchResults: string;
   languageMenuAria: string;
-  chipHighOilSupport: string,
+  chipHighOilSupport: string;
+  filterConfirm: string;
 };
 
 const MAIN_COPY: Record<AppLocale, MainCopy> = {
@@ -143,6 +144,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     noSearchResults: "검색결과가 없습니다",
     languageMenuAria: "언어 선택",
     chipHighOilSupport: "고유가 지원금",
+    filterConfirm: "확인",
   },
   en: {
     searchPlaceholder: "Search stores...",
@@ -183,6 +185,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     noSearchResults: "No search results",
     languageMenuAria: "Choose language",
     chipHighOilSupport: "High Oil Price Support",
+    filterConfirm: "Confirm",
   },
   zh: {
     searchPlaceholder: "搜索门店...",
@@ -223,7 +226,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     noSearchResults: "没有搜索结果",
     languageMenuAria: "选择语言",
     chipHighOilSupport: "高油价补贴",
-
+    filterConfirm: "确定",
   },
   ja: {
     searchPlaceholder: "店舗を検索...",
@@ -264,7 +267,7 @@ const MAIN_COPY: Record<AppLocale, MainCopy> = {
     noSearchResults: "検索結果がありません",
     languageMenuAria: "言語を選択",
     chipHighOilSupport: "高油価支援金",
-
+    filterConfirm: "確認",
   },
 };
 

@@ -192,7 +192,7 @@ const Location = () => {
 
         {/* Current Location Button */}
         <div className="mb-6">
-          <Button variant="outline" className="w-full justify-start h-14 rounded-xl border-primary/50 hover:bg-primary/5" onClick={handleCurrentLocation} disabled={isLoadingLocation}>
+          <Button variant="outline" className="w-full justify-start h-14 rounded-xl border-primary/50 hover:bg-background hover:text-foreground" onClick={handleCurrentLocation} disabled={isLoadingLocation}>
             {isLoadingLocation ? (<Loader2 className="w-5 h-5 mr-3 text-primary animate-spin"/>) : (<MapPin className="w-5 h-5 mr-3 text-primary"/>)}
             <span className="font-medium">
               {isLoadingLocation ? "위치 가져오는 중..." : "현재 위치로 설정"}
@@ -207,15 +207,17 @@ const Location = () => {
               {isSearching && (<Loader2 className="w-4 h-4 ml-2 inline animate-spin"/>)}
             </h2>
             {!isSearching && (<div className="space-y-2">
-                {searchResults.length > 0 ? (searchResults.map((result, index) => (<Card key={`${result.place_name}-${index}`} className="p-4 cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSearchResultSelect(result)}>
-                      <div className="flex items-start">
-                        <MapPin className="w-4 h-4 mr-3 mt-1 text-muted-foreground flex-shrink-0"/>
-                        <div className="flex-1 min-w-0">
-                          <AutoFitMarquee text={result.place_name} textClassName="font-medium"/>
+                {searchResults.length > 0 ? (searchResults.map((result, index) => (<Card key={`${result.place_name}-${index}`} className="p-4 cursor-pointer" onClick={() => handleSearchResultSelect(result)}>
+                      <div>
+                        <div className="flex items-center">
+                          <MapPin className="w-4 h-4 mr-3 text-muted-foreground flex-shrink-0"/>
+                          <div className="flex-1 min-w-0">
+                            <AutoFitMarquee text={result.place_name} textClassName="font-medium"/>
+                          </div>
+                        </div>
+                        <div className="pl-7">
                           <AutoFitMarquee as="p" text={result.road_address_name || result.address_name} textClassName="text-muted-foreground" fontSizeClasses={["text-sm", "text-xs"]}/>
-                          {result.category_name && (<p className="text-xs text-muted-foreground mt-1">
-                              {result.category_name}
-                            </p>)}
+                          {result.category_name && (<AutoFitMarquee as="p" text={result.category_name} className="mt-1" textClassName="text-muted-foreground" fontSizeClasses={["text-xs"]}/>)}
                         </div>
                       </div>
                     </Card>))) : (<p className="text-sm text-muted-foreground text-center py-8">
@@ -228,17 +230,35 @@ const Location = () => {
         {searchQuery.trim().length < 2 && recentLocations.length > 0 && (<div>
             <h2 className="text-lg font-bold mb-4">최근 위치</h2>
             <div className="space-y-2">
-              {recentLocations.map((location, index) => (<Card key={`${location.name}-${index}`} className="p-4 cursor-pointer hover:bg-accent transition-colors" onClick={() => handleLocationSelect(location.name, location.address, location.latitude != null && location.longitude != null
-                    ? { latitude: location.latitude, longitude: location.longitude }
-                    : undefined)}>
-                  <div className="flex items-start">
-                    <MapPin className="w-4 h-4 mr-3 mt-1 text-muted-foreground flex-shrink-0"/>
-                    <div className="flex-1 min-w-0">
-                      <AutoFitMarquee text={location.name} textClassName="font-medium"/>
-                      {location.address && location.address !== location.name && (<AutoFitMarquee as="p" text={location.address} textClassName="text-muted-foreground" fontSizeClasses={["text-sm", "text-xs"]}/>)}
+              {recentLocations.map((location, index) => (
+                <Card
+                  key={`${location.name}-${index}`}
+                  className="p-4 cursor-pointer"
+                  onClick={() =>
+                    handleLocationSelect(
+                      location.name,
+                      location.address,
+                      location.latitude != null && location.longitude != null
+                        ? { latitude: location.latitude, longitude: location.longitude }
+                        : undefined,
+                    )
+                  }
+                >
+                  <div>
+                    <div className="flex items-center">
+                      <MapPin className="w-4 h-4 mr-3 text-muted-foreground flex-shrink-0"/>
+                      <div className="flex-1 min-w-0">
+                        <AutoFitMarquee text={location.name} textClassName="font-medium"/>
+                      </div>
                     </div>
+                    {location.address && location.address !== location.name && (
+                      <div className="pl-7">
+                        <AutoFitMarquee as="p" text={location.address} textClassName="text-muted-foreground" fontSizeClasses={["text-sm", "text-xs"]}/>
+                      </div>
+                    )}
                   </div>
-                </Card>))}
+                </Card>
+              ))}
             </div>
           </div>)}
       </main>

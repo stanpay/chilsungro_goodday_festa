@@ -11,10 +11,11 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -793,7 +794,7 @@ type FilterDropdownChipProps<T extends string> = {
   filterLabel: string;
   order: readonly T[];
   activeChips: ReadonlySet<T>;
-  onToggle: (id: T) => void;
+  onApply: (next: Set<T>) => void;
   labelMap: Record<T, string>;
   ariaLabel: string;
   scrollDragRef: MutableRefObject<FilterChipScrollDragState>;
@@ -851,23 +852,41 @@ function FilterDropdownChip<T extends string>({
   filterLabel,
   order,
   activeChips,
-  onToggle,
+  onApply,
   labelMap,
   ariaLabel,
   scrollDragRef,
 }: FilterDropdownChipProps<T>) {
+  const { locale } = useAppLocale();
+  const t = mainStrings(locale);
   const [open, setOpen] = useState(false);
+  const [draftChips, setDraftChips] = useState<Set<T>>(() => new Set(activeChips));
   const triggerRef = useRef<HTMLButtonElement>(null);
   const triggerLabel = getFilterDropdownLabel(filterLabel, order, activeChips, labelMap);
+
+  const closeMenu = () => {
+    setOpen(false);
+    triggerRef.current?.blur();
+  };
+
+  const toggleDraft = (id: T) => {
+    setDraftChips((prev) => {
+      if (id === "all") return new Set<T>(["all" as T]);
+
+      const next = new Set(prev);
+      next.delete("all" as T);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (next.size === 0) next.add("all" as T);
+      return next;
+    });
+  };
 
   return (
     <DropdownMenu
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen) {
-          setOpen(false);
-          triggerRef.current?.blur();
-        }
+        if (!nextOpen) closeMenu();
       }}
     >
       <DropdownMenuTrigger asChild>
@@ -893,22 +912,43 @@ function FilterDropdownChip<T extends string>({
               event.stopPropagation();
               return;
             }
-            setOpen((prev) => !prev);
+            setOpen((prev) => {
+              if (!prev) setDraftChips(new Set(activeChips));
+              return !prev;
+            });
           }}
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52 p-1.5">
         {order.map((id) => (
-          <DropdownMenuCheckboxItem
+          <DropdownMenuItem
             key={id}
-            checked={activeChips.has(id)}
-            onCheckedChange={() => onToggle(id)}
-            onSelect={(event) => event.preventDefault()}
-            className="rounded-lg py-2.5 pl-10 pr-3 text-sm font-medium [&>span]:left-3 [&>span]:h-4 [&>span]:w-4 [&>span_svg]:h-2.5 [&>span_svg]:w-2.5"
+            onSelect={(event) => {
+              event.preventDefault();
+              toggleDraft(id);
+            }}
+            className="gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
           >
+            <Checkbox checked={draftChips.has(id)} className="pointer-events-none" tabIndex={-1} />
             {labelMap[id]}
-          </DropdownMenuCheckboxItem>
+          </DropdownMenuItem>
         ))}
+        <div className="mt-1 border-t pt-1.5">
+          <Button
+            type="button"
+            className="h-9 w-full rounded-lg text-sm"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={() => {
+              onApply(new Set(draftChips));
+              closeMenu();
+            }}
+          >
+            {t.filterConfirm}
+          </Button>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -2036,7 +2076,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     filterLabel: string,
     order: readonly T[],
     activeChips: ReadonlySet<T>,
-    onToggle: (id: T) => void,
+    onApply: (next: Set<T>) => void,
     labelMap: Record<T, string>,
     ariaLabel: string
   ) => (
@@ -2044,7 +2084,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       filterLabel={filterLabel}
       order={order}
       activeChips={activeChips}
-      onToggle={onToggle}
+      onApply={onApply}
       labelMap={labelMap}
       ariaLabel={ariaLabel}
       scrollDragRef={filterChipScrollDragRef}
@@ -3722,7 +3762,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                     t.filterAreaLabel,
                     STORE_AREA_FILTER_CHIP_ORDER,
                     areaFilterChips,
-                    toggleAreaFilter,
+                    (next) => setAreaFilterChips(next),
                     areaChipLabelMap,
                     t.areaFilterToolbarAria
                   )}
@@ -3730,7 +3770,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                     t.filterBenefitLabel,
                     benefitFilterChipOrder,
                     benefitFilterChips,
-                    toggleBenefitFilter,
+                    (next) => setBenefitFilterChips(next),
                     chipLabelMap,
                     t.benefitFilterToolbarAria
                   )}
@@ -3738,7 +3778,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                     t.filterCategoryLabel,
                     STORE_CATEGORY_CHIP_ORDER,
                     categoryFilterChips,
-                    toggleCategoryFilter,
+                    (next) => setCategoryFilterChips(next),
                     chipLabelMap,
                     t.categoryFilterToolbarAria
                   )}
@@ -3769,7 +3809,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                       t.filterBenefitLabel,
                       benefitFilterChipOrder,
                       benefitFilterChips,
-                      toggleBenefitFilter,
+                      (next) => setBenefitFilterChips(next),
                       chipLabelMap,
                       t.benefitFilterToolbarAria
                     )}
@@ -3777,7 +3817,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                       t.filterCategoryLabel,
                       STORE_CATEGORY_CHIP_ORDER,
                       categoryFilterChips,
-                      toggleCategoryFilter,
+                      (next) => setCategoryFilterChips(next),
                       chipLabelMap,
                       t.categoryFilterToolbarAria
                     )}
