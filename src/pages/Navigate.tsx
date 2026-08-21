@@ -1,4 +1,5 @@
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
+import { AutoFitOneLine } from "@/components/AutoFitOneLine";
 import { CouponGuideButton } from "@/components/CouponGuideButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -119,7 +120,7 @@ const NavigatePage = () => {
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background">
-      <div className="flex w-full flex-col gap-2 px-6 pt-6">
+      <div className="flex w-full flex-col gap-2 px-6 pt-3">
         <div className="mb-2 flex justify-end">
           <DropdownMenu open={isLanguageMenuOpen} onOpenChange={setIsLanguageMenuOpen}>
             <DropdownMenuTrigger asChild>
@@ -196,17 +197,19 @@ const NavigatePage = () => {
             className="w-full object-contain"
           />
         </button>
-        <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
-          {DIRECTIONS_DESCRIPTION[locale]}
-        </p>
+        <AutoFitOneLine
+          text={DIRECTIONS_DESCRIPTION[locale]}
+          className="px-1 text-center leading-relaxed text-muted-foreground"
+        />
 
         <CouponGuideButton
           label={COUPON_GUIDE_BUTTON_LABEL[locale]}
           onClick={() => navigate("/main")}
         />
-        <p className="px-1 text-center text-sm leading-relaxed text-muted-foreground">
-          {COUPON_GUIDE_DESCRIPTION[locale]}
-        </p>
+        <AutoFitOneLine
+          text={COUPON_GUIDE_DESCRIPTION[locale]}
+          className="px-1 text-center leading-relaxed text-muted-foreground"
+        />
 
         <button
           type="button"
