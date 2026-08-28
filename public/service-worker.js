@@ -1,4 +1,4 @@
-const CACHE_NAME = "stan-v2";
+const CACHE_NAME = "stan-v3";
 const PRECACHE_URLS = ["/favicon.png", "/pwa-icon-144.png", "/pwa-icon-192.png", "/pwa-icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -25,6 +25,23 @@ self.addEventListener("fetch", (event) => {
 
   if (event.request.mode === "navigate" || url.pathname === "/manifest.json") {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  const isImageAsset = /\.(webp|png|jpe?g|gif|svg)$/i.test(url.pathname);
+
+  if (isImageAsset) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 
