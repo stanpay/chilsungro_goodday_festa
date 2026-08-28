@@ -64,13 +64,11 @@ const COUPON_GUIDE_BANNER_ALT: Record<AppLocale, string> = {
   ja: "旅行者消費クーポン利用先案内",
 };
 
-const withBuildVersion = (path: string) => `${path}?v=${__APP_BUILD_ID__}`;
-
 const TRAVEL_CENTER_AREA_MAP_IMAGE: Record<AppLocale, string> = {
-  ko: withBuildVersion("/jeju-traveler-center-area-map-ko.webp"),
-  en: withBuildVersion("/jeju-traveler-center-area-map-en.webp"),
-  zh: withBuildVersion("/jeju-traveler-center-area-map-zh.webp"),
-  ja: withBuildVersion("/jeju-traveler-center-area-map-ja.webp"),
+  ko: "/jeju-traveler-center-area-map-ko.webp",
+  en: "/jeju-traveler-center-area-map-en.webp",
+  zh: "/jeju-traveler-center-area-map-zh.webp",
+  ja: "/jeju-traveler-center-area-map-ja.webp",
 };
 
 const TRAVEL_CENTER_AREA_MAP_ALT: Record<AppLocale, string> = {

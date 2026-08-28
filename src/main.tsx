@@ -19,20 +19,7 @@ document.addEventListener("gesturechange", (event) => event.preventDefault());
 document.addEventListener("gestureend", (event) => event.preventDefault());
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-        navigator.serviceWorker
-            .register("/service-worker.js")
-            .then((registration) => {
-                registration.update();
-                registration.addEventListener("updatefound", () => {
-                    const nextWorker = registration.installing;
-                    if (!nextWorker) return;
-                    nextWorker.addEventListener("statechange", () => {
-                        if (nextWorker.state === "installed" && navigator.serviceWorker.controller) {
-                            nextWorker.postMessage({ type: "SKIP_WAITING" });
-                        }
-                    });
-                });
-            })
-            .catch(() => {});
+        navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+        });
     });
 }
