@@ -67,10 +67,10 @@ const COUPON_GUIDE_BANNER_ALT: Record<AppLocale, string> = {
 const withBuildVersion = (path: string) => `${path}?v=${__APP_BUILD_ID__}`;
 
 const TRAVEL_CENTER_AREA_MAP_IMAGE: Record<AppLocale, string> = {
-  ko: withBuildVersion("/jeju-traveler-center-area-map-ko.webp"),
-  en: withBuildVersion("/jeju-traveler-center-area-map-en.webp"),
-  zh: withBuildVersion("/jeju-traveler-center-area-map-zh.webp"),
-  ja: withBuildVersion("/jeju-traveler-center-area-map-ja.webp"),
+  ko: withBuildVersion("/banners/jeju-traveler-center-coupon-info-ko.webp"),
+  en: withBuildVersion("/banners/jeju-traveler-center-coupon-info-en.webp"),
+  zh: withBuildVersion("/banners/jeju-traveler-center-coupon-info-zh.webp"),
+  ja: withBuildVersion("/banners/jeju-traveler-center-coupon-info-ja.webp"),
 };
 
 const TRAVEL_CENTER_AREA_MAP_ALT: Record<AppLocale, string> = {
