@@ -3,7 +3,6 @@ import { buildGeocodeQueryVariants, getKnownCoordsForQuery, } from "@/lib/naverG
 import { normalizeGeocodeRestLanguage } from "@/lib/naverGeocodeLanguage";
 let naverLoaded = false;
 let naverGeocoderLoaded = false;
-export const NAVER_GEOCODE_SETUP_HINT = "네이버 클라우드 콘솔 > Maps > Application(stan) > 수정에서 Geocoding을 체크한 뒤 저장하세요. 사용량 화면에 'Geocoding' 행이 보여야 합니다. (Reverse Geocoding만 켜져 있으면 주소→좌표 검색은 403입니다)";
 function normalizeNaverLanguageTag(input?: string | null): string {
     const tag = (input ?? "").trim().toLowerCase().replace(/_/g, "-");
     if (tag.startsWith("ko"))
