@@ -81,12 +81,10 @@ import { cn } from "@/lib/utils";
 import { translateKoText } from "@/lib/koTranslate";
 import {
   StoreFilterChipId,
-  BENEFIT_FILTER_CHIP_ORDER,
   STORE_CATEGORY_CHIP_ORDER,
   StoreAreaFilterChipId,
   STORE_AREA_FILTER_CHIP_ORDER,
   LegacyBenefitFilterChipId,
-  LEGACY_BENEFIT_FILTER_CHIP_ORDER,
   imageFromStoreCategory,
   categoryGroupCodeFromStoreCategory,
   storeMatchesBenefitChipFilters,
@@ -101,6 +99,7 @@ import {
   type FilterChipScrollDragState,
 } from "@/lib/filterChipScroll";
 import { ChipButton, FilterDropdownChip } from "@/components/StoreFilterChips";
+import { useStoreFilters } from "@/hooks/useStoreFilters";
 
 
 const MAP_MAX_ZOOM = 21;
@@ -493,40 +492,19 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   };
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
-  const [benefitFilterChips, setBenefitFilterChips] = useState<Set<LegacyBenefitFilterChipId>>(
-    () =>
-      new Set<LegacyBenefitFilterChipId>(
-        legacyFilterUI ? ["all", "openNow"] : ["all"]
-      )
-  );
-  const [areaFilterChips, setAreaFilterChips] = useState<Set<StoreAreaFilterChipId>>(
-    () => new Set<StoreAreaFilterChipId>(["all"])
-  );
-  const [categoryFilterChips, setCategoryFilterChips] = useState<Set<StoreFilterChipId>>(
-    () => new Set<StoreFilterChipId>(["all"])
-  );
   const { locale, setLocale } = useAppLocale();
-
-  useEffect(() => {
-    if (locale === "ko") return;
-    setBenefitFilterChips((prev) => {
-      if (!prev.has("highOilSupport")) return prev;
-      const next = new Set(prev);
-      next.delete("highOilSupport");
-      return next;
-    });
-  }, [locale]);
-
-  const benefitFilterChipOrder = useMemo((): readonly LegacyBenefitFilterChipId[] => {
-    if (legacyFilterUI) {
-      return locale === "ko"
-        ? LEGACY_BENEFIT_FILTER_CHIP_ORDER
-        : LEGACY_BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
-    }
-    return locale === "ko"
-      ? BENEFIT_FILTER_CHIP_ORDER
-      : BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
-  }, [locale, legacyFilterUI]);
+  const {
+    benefitFilterChips,
+    setBenefitFilterChips,
+    areaFilterChips,
+    setAreaFilterChips,
+    categoryFilterChips,
+    setCategoryFilterChips,
+    benefitFilterChipOrder,
+    toggleAreaFilter,
+    toggleBenefitFilter,
+    toggleCategoryFilter,
+  } = useStoreFilters({ locale, legacyFilterUI });
   const [showLocationPermModal, setShowLocationPermModal] = useState(false);
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
@@ -1341,75 +1319,6 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
   openNow: t.chipOpenNow,
 };
 
-  const toggleAreaFilter = (id: StoreAreaFilterChipId) => {
-    setAreaFilterChips((prev) => {
-      if (id === "all") return new Set<StoreAreaFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
-  };
-
-  const toggleBenefitFilter = (id: LegacyBenefitFilterChipId) => {
-    setBenefitFilterChips((prev) => {
-      if (legacyFilterUI) {
-        const next = new Set(prev);
-
-        if (id === "openNow") {
-          if (next.has("openNow")) next.delete("openNow");
-          else next.add("openNow");
-          return next;
-        }
-
-        if (id === "all") {
-          const hasOpenNow = next.has("openNow");
-          next.clear();
-          next.add("all");
-          if (hasOpenNow) next.add("openNow");
-          return next;
-        }
-
-        next.delete("all");
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-
-        const selectedBenefitChips = new Set([...next].filter((c) => c !== "openNow"));
-        if (selectedBenefitChips.size === 0) next.add("all");
-
-        return next;
-      }
-
-      if (id === "openNow") return prev;
-      if (id === "all") return new Set<LegacyBenefitFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
-  };
-
-  const toggleCategoryFilter = (id: StoreFilterChipId) => {
-    setCategoryFilterChips((prev) => {
-      if (id === "all") return new Set<StoreFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
-  };
 
   const renderFilterDropdown = <T extends string>(
     filterLabel: string,
