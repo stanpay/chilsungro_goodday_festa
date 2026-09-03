@@ -27,6 +27,8 @@ export type MainBanner = {
   href?: string;
   /** 텍스트 배너 배경 스타일 */
   variant?: "primary" | "accent" | "muted";
+  /** 팝업에서 길안내 CTA를 숨긴다 */
+  hideNaverMapDirections?: boolean;
 };
 
 const TRAVEL_CENTER_PLACE_ID = "2031464673";

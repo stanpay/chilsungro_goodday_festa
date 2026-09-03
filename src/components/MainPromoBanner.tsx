@@ -159,7 +159,7 @@ export default function MainPromoBanner({
       preloadImage(NAVER_MAP_DIRECTIONS_IMAGE[locale]);
     };
 
-    if ("requestIdleCallback" in window) {
+    if (typeof window.requestIdleCallback === "function") {
       const idleId = window.requestIdleCallback(deferSecondaryAssets, {
         timeout: 4000,
       });

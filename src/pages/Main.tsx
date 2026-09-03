@@ -648,7 +648,7 @@ function storeChipIsOther(store: StoreLikeForChip): boolean {
 
 function storeMatchesBenefitChipFilters(
   store: StoreLikeForChip,
-  chips: ReadonlySet<StoreFilterChipId>,
+  chips: ReadonlySet<LegacyBenefitFilterChipId>,
   locale: AppLocale
 ): boolean {
   // openNow는 제거됨 — 혜택 칩만 매칭
@@ -812,7 +812,7 @@ const ChipButton = forwardRef<
     onToggle?: () => void;
     showChevron?: boolean;
     primaryBorder?: boolean;
-  } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick">
+  } & ButtonHTMLAttributes<HTMLButtonElement>
 >(function ChipButton(
   { id, active, label, onToggle, showChevron = false, primaryBorder = false, className, onClick, ...rest },
   ref
@@ -896,7 +896,7 @@ function FilterDropdownChip<T extends string>({
         <ChipButton
           ref={triggerRef}
           id={`filter-${filterLabel}`}
-          active={!activeChips.has("all")}
+          active={!(activeChips as ReadonlySet<string>).has("all")}
           label={triggerLabel}
           showChevron
           primaryBorder
@@ -3810,7 +3810,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                     benefitFilterChipOrder,
                     benefitFilterChips,
                     (next) => setBenefitFilterChips(next),
-                    chipLabelMap,
+                    legacyBenefitChipLabelMap,
                     t.benefitFilterToolbarAria
                   )}
                   {renderFilterDropdown(
@@ -3849,7 +3849,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                       benefitFilterChipOrder,
                       benefitFilterChips,
                       (next) => setBenefitFilterChips(next),
-                      chipLabelMap,
+                      legacyBenefitChipLabelMap,
                       t.benefitFilterToolbarAria
                     )}
                     {renderFilterDropdown(

@@ -63,7 +63,7 @@ export function CouponGuideButton({ label, onClick }: CouponGuideButtonProps) {
     updateLayout();
     document.fonts?.ready.then(updateLayout);
 
-    if (!("ResizeObserver" in window)) {
+    if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", updateLayout);
       return () => window.removeEventListener("resize", updateLayout);
     }

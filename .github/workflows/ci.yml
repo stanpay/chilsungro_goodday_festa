@@ -24,18 +24,14 @@ jobs:
       - name: 의존성 설치
         run: npm ci
 
-      # 빌드는 현재 통과하므로 블로킹 게이트로 둔다.
       - name: 빌드
         run: npm run build
 
-      # 아래 두 단계는 기존 코드에 이미 다수의 위반이 있어 지금 블로킹으로 걸면
-      # 모든 PR이 막힌다. 우선 가시화만 하고, 백로그를 정리한 뒤
-      # continue-on-error를 제거해 블로킹으로 승격할 것.
-      # (2026-09-02 기준 기존 위반: 타입 16건 / ESLint 87 errors·16 warnings)
-      - name: 타입 검사 (현재 비블로킹)
+      # 백로그를 정리해 타입 오류 0건, ESLint 오류 0건이 되었으므로 블로킹으로 둔다.
+      # 경고(미사용 변수·exhaustive-deps 등)는 아직 남아 있어 실패시키지 않는다.
+      # 경고까지 막으려면 lint 스크립트에 --max-warnings=0을 붙이면 된다.
+      - name: 타입 검사
         run: npm run typecheck
-        continue-on-error: true
 
-      - name: 린트 (현재 비블로킹)
+      - name: 린트
         run: npm run lint
-        continue-on-error: true
