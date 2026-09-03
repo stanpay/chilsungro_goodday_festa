@@ -386,8 +386,8 @@ function measurePinLabelRect(
 }
 
 function computePinAnchorOffsetBelowVisualCenter(
-  marker: any,
-  proj: any,
+  marker: naver.maps.Marker,
+  proj: naver.maps.Projection,
   spiderfyOffset = { x: 0, y: 0 }
 ): number {
   try {
@@ -447,7 +447,7 @@ function getMaxClusterDistanceM(zoom: number): number {
 
 type ClusterPinItem = {
   id: string;
-  marker: any;
+  marker: naver.maps.Marker;
   bounds: PinLabelRect;
   pos: { lat: () => number; lng: () => number };
 };
@@ -499,12 +499,16 @@ function pinLabelRectsOverlap(rects: PinLabelRect[]): boolean {
 }
 
 function panMapPinAboveSheet(
-  map: { getSize?: () => { height: number }; panBy: (offset: unknown) => void; getProjection?: () => any },
+  map: {
+    getSize?: () => { height: number };
+    panBy: (offset: unknown) => void;
+    getProjection?: () => naver.maps.Projection;
+  },
   naver: { maps: { Point: new (x: number, y: number) => unknown } },
   mapEl: HTMLElement | null,
   researchButtonEl: HTMLElement | null,
   sheetHeightPx: number,
-  selectedMarker?: any
+  selectedMarker?: naver.maps.Marker
 ) {
   const band = measureMapPinFocusBand(
     mapEl,
@@ -1231,16 +1235,16 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   mapSearchAwaitingRestoreRef.current = mapSearchAwaitingRestore;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapResearchButtonRef = useRef<HTMLButtonElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const storeMarkersRef = useRef<{ id: string; marker: any }[]>([]);
-  const clusterMarkersRef = useRef<any[]>([]);
+  const mapInstanceRef = useRef<naver.maps.Map | null>(null);
+  const storeMarkersRef = useRef<{ id: string; marker: naver.maps.Marker }[]>([]);
+  const clusterMarkersRef = useRef<naver.maps.Marker[]>([]);
   const selectStoreOnMapRef = useRef<(id: string) => void>(() => {});
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null);
   /** 바텀시트 카드 테두리 강조 — 지도 핀 클릭 시에만 true */
   const [highlightMapSheetCard, setHighlightMapSheetCard] = useState(false);
   const [showResearchButton, setShowResearchButton] = useState(false);
-  const [mapFilteredStores, setMapFilteredStores] = useState<any[] | null>(null);
-  const allFetchedStoresRef = useRef<any[]>([]);
+  const [mapFilteredStores, setMapFilteredStores] = useState<StoreData[] | null>(null);
+  const allFetchedStoresRef = useRef<StoreData[]>([]);
   const fetchNearbyStoresRef = useRef<
     ((
       latitude: number,
@@ -1271,7 +1275,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   };
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
-  const storesWithCoordsRef = useRef<any[]>([]);
+  const storesWithCoordsRef = useRef<StoreData[]>([]);
   const rebuildStoreOverlaysRef = useRef<(() => void) | null>(null);
   const fitMapToStoresRef = useRef<(() => void) | null>(null);
   const focusStoreOnMapRef = useRef<(storeId: string) => void>(() => {});
@@ -1282,11 +1286,11 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const mapClusteringEnabledRef = useRef(false);
   /** 클러스터/spiderfy 레이아웃이 적용된 zoom — 같은 zoom에서는 pan만으로 재계산하지 않음 */
   const lastClusterLayoutZoomRef = useRef<number | null>(null);
-  const activeClusterExpansionRef = useRef<{ memberIds: string[]; centroid: any } | null>(null);
+  const activeClusterExpansionRef = useRef<{ memberIds: string[]; centroid: naver.maps.LatLng } | null>(null);
   const clusterExpansionSessionRef = useRef(0);
   const mapBootstrapFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rebuildStoreOverlaysTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const myLocationMarkerRef = useRef<any>(null);
+  const myLocationMarkerRef = useRef<naver.maps.Marker | null>(null);
   const currentCoordsRef = useRef(currentCoords);
   const skipNextFitMapRef = useRef(false);
   /** true면 center/fit/pan으로 뷰포트 변경 금지 (검색 지우기·재검색 등, rebuild마다 리셋되지 않음) */
@@ -1306,7 +1310,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   }, []);
   bumpMapFocusRef.current = bumpMapFocus;
 
-  const getMarkerPinContent = (marker: any): HTMLElement | null => {
+  const getMarkerPinContent = (marker: naver.maps.Marker): HTMLElement | null => {
     const icon = marker?.getIcon?.();
     return (icon?.content as HTMLElement) ?? null;
   };
@@ -1463,7 +1467,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   useEffect(() => {
     if (!isMapView || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
-    const naver = (window as any).naver;
+    const naver = window.naver;
     skipNextFitMapRef.current = true;
     requestAnimationFrame(() => {
       try {
@@ -1491,7 +1495,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       try {
         const { loadNaverMaps } = await import("@/lib/naver");
         await loadNaverMaps(localeRef.current);
-      } catch (error: any) {
+      } catch (error) {
         toast({
           title: "지도 서비스 경고",
           description:
@@ -1953,7 +1957,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         mergedRaw.sort((a, b) => a.distanceNum - b.distanceNum);
       }
       const seenIds = new Set<string>();
-      const allStores: any[] = [];
+      const allStores: StoreData[] = [];
       for (const s of mergedRaw) {
         if (seenIds.has(s.id)) continue;
         seenIds.add(s.id);
@@ -2225,7 +2229,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    const naver = (window as any).naver;
+    const naver = window.naver;
     const bounds = map.getBounds?.();
     if (!bounds) return;
 
@@ -2462,7 +2466,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
         if (isCancelled || !mapContainerRef.current) return;
 
-        const naver = (window as any).naver;
+        const naver = window.naver;
         if (!naver?.maps) return;
 
         const createStoreMarker = (store: StoreData) => {
@@ -2576,7 +2580,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           const list = storesWithCoordsRef.current.filter(
             (s: StoreData) => Number.isFinite(s.lat) && Number.isFinite(s.lon)
           );
-          const latLngs: any[] = list.map(
+          const latLngs: naver.maps.LatLng[] = list.map(
             (s: StoreData) => new naver.maps.LatLng(s.lat!, s.lon!)
           );
           // 검색·칩 필터 등: 현재 위치는 첫 접속·위치 새로고침 때만 bounds에 포함
@@ -2664,11 +2668,11 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             const el = root?.querySelector("[data-store-label]") as HTMLElement | null;
             if (!el) return;
             el.textContent =
-              mapPinLabelsRef.current[id] ?? storesWithCoordsRef.current.find((s: any) => s.id === id)?.name ?? "";
+              mapPinLabelsRef.current[id] ?? storesWithCoordsRef.current.find((s) => s.id === id)?.name ?? "";
           });
         };
 
-        const resetMarkerSpiderfy = (marker: any) => {
+        const resetMarkerSpiderfy = (marker: naver.maps.Marker) => {
           const root = getMarkerPinContent(marker);
           const wrapper = root?.querySelector("[data-pin-wrapper]") as HTMLElement | null;
           if (wrapper) {
@@ -2678,7 +2682,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           }
         };
 
-        const getMarkerSpiderfyOffset = (marker: any) => {
+        const getMarkerSpiderfyOffset = (marker: naver.maps.Marker) => {
           const root = getMarkerPinContent(marker);
           const wrapper = root?.querySelector("[data-pin-wrapper]") as HTMLElement | null;
           return {
@@ -2687,7 +2691,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           };
         };
 
-        const buildMarkerLabelRect = (marker: any, proj: any) => {
+        const buildMarkerLabelRect = (marker: naver.maps.Marker, proj: naver.maps.Projection) => {
           const pos = marker.getPosition();
           const pt = proj.fromCoordToOffset(pos);
           const root = getMarkerPinContent(marker);
@@ -2696,7 +2700,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           return measurePinLabelRect(pt.x, pt.y, text, offset);
         };
 
-        const morphMapView = (coord: any, zoom: number, onComplete?: () => void) => {
+        const morphMapView = (coord: naver.maps.LatLng, zoom: number, onComplete?: () => void) => {
           const prevZoom = map.getZoom();
           if (typeof map.morph === "function") {
             map.morph(coord, zoom);
@@ -2730,7 +2734,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           });
         };
 
-        const spreadClusterMarkers = (cluster: { id: string; marker: any }[]) => {
+        const spreadClusterMarkers = (cluster: { id: string; marker: naver.maps.Marker }[]) => {
           const count = cluster.length;
           if (count <= 1) {
             resetMarkerSpiderfy(cluster[0]?.marker);
@@ -2916,7 +2920,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
         focusStoreOnMapRef.current = focusStoreOnMap;
 
-        const expandCluster = (memberIds: string[], centroid: any) => {
+        const expandCluster = (memberIds: string[], centroid: naver.maps.LatLng) => {
           const sessionId = ++clusterExpansionSessionRef.current;
           activeClusterExpansionRef.current = { memberIds, centroid };
 
@@ -3259,7 +3263,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       applyInitialMapViewRef.current?.();
       return;
     }
-    const naver = (window as any).naver;
+    const naver = window.naver;
     if (!naver?.maps) return;
     const map = mapInstanceRef.current;
     map.setCenter(
@@ -3273,7 +3277,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
   useEffect(() => {
     if (!isMapView || !mapInstanceRef.current) return;
 
-    const naver = (window as any).naver;
+    const naver = window.naver;
     if (!naver?.maps) return;
     const map = mapInstanceRef.current;
 
@@ -3450,7 +3454,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     const scheduleFinish = () => {
       if (cancelled || mapSearchRestoreGenRef.current !== restoreGen) return;
       const map = mapInstanceRef.current;
-      const naver = (window as any).naver;
+      const naver = window.naver;
       if (map && naver?.maps?.Event) {
         let finished = false;
         const done = () => {
@@ -3482,7 +3486,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     if (!mapInstanceRef.current || !isMapView) return;
 
     const map = mapInstanceRef.current;
-    const naver = (window as any).naver;
+    const naver = window.naver;
 
     const run = () => {
       rebuildStoreOverlaysRef.current?.();

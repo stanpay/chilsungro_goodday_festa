@@ -16,9 +16,18 @@ const PROMPT_STORAGE_PREFIX = `pwa-prompt:${__APP_BUILD_ID__}`;
 const SESSION_KEY = `${PROMPT_STORAGE_PREFIX}:shown`;
 const DISMISS_KEY = `${PROMPT_STORAGE_PREFIX}:dismissed-until`;
 
+/** 표준에 없는 iOS Safari 전용 속성 */
+type IosNavigator = Navigator & { standalone?: boolean };
+
+/** 표준에 없는 Chromium 전용 설치 프롬프트 이벤트 */
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
 function isInStandaloneMode() {
   return (
-    ("standalone" in window.navigator && (window.navigator as any).standalone) ||
+    ("standalone" in window.navigator && (window.navigator as IosNavigator).standalone) ||
     window.matchMedia("(display-mode: standalone)").matches
   );
 }
@@ -51,7 +60,7 @@ const PwaInstallPrompt = () => {
   const { locale } = useAppLocale();
   const t = pwaInstallStrings(locale);
   const [step, setStep] = useState<Step>(null);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
   const [isSamsung, setIsSamsung] = useState(false);
   const swipeStartY = useRef<number | null>(null);
@@ -104,7 +113,7 @@ const PwaInstallPrompt = () => {
 
     const handler = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       setStep("popup");
       sessionStorage.setItem(SESSION_KEY, "1");
     };

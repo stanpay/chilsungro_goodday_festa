@@ -129,7 +129,7 @@ const Location = () => {
         handleLocationSelect(displayName, fullAddress, coordinates);
     };
     const handleCurrentLocation = async () => {
-        const isReactNative = (window as any).isReactNative === true;
+        const isReactNative = (window as Window & { isReactNative?: boolean }).isReactNative === true;
         if (!navigator.geolocation) {
             toast({
                 title: "위치 서비스 미지원",

@@ -1,6 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity, Alert, Platform, BackHandler, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
+import type {
+  ShouldStartLoadRequest,
+  WebViewErrorEvent,
+  WebViewHttpErrorEvent,
+  WebViewMessageEvent,
+  WebViewNavigation,
+  WebViewProgressEvent,
+} from 'react-native-webview/lib/WebViewTypes';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
@@ -216,7 +224,7 @@ export default function App() {
     }, 300);
   };
 
-  const handleLoadProgress = (event: any) => {
+  const handleLoadProgress = (event: WebViewProgressEvent) => {
     const progress = event.nativeEvent.progress;
     loadProgressRef.current = progress;
     
@@ -234,20 +242,20 @@ export default function App() {
     }
   };
 
-  const handleError = (syntheticEvent: any) => {
+  const handleError = (syntheticEvent: WebViewErrorEvent) => {
     const { nativeEvent } = syntheticEvent;
     setError('페이지를 불러오는 중 오류가 발생했습니다.');
     setLoading(false);
   };
 
-  const handleHttpError = (syntheticEvent: any) => {
+  const handleHttpError = (syntheticEvent: WebViewHttpErrorEvent) => {
     const { nativeEvent } = syntheticEvent;
     if (nativeEvent.statusCode >= 400) {
       setError(`서버 오류가 발생했습니다. (${nativeEvent.statusCode})`);
     }
   };
 
-  const handleNavigationStateChange = (navState: any) => {
+  const handleNavigationStateChange = (navState: WebViewNavigation) => {
     setCanGoBack(navState.canGoBack);
     
     // 페이지가 완전히 로드되었는지 확인
@@ -268,7 +276,7 @@ export default function App() {
   };
 
   // 네비게이션 요청 제어 (불필요한 리로드 방지)
-  const shouldStartLoadWithRequest = (request: any) => {
+  const shouldStartLoadWithRequest = (request: ShouldStartLoadRequest) => {
     const { url } = request;
     const currentUrl = WEB_URL;
     
@@ -322,17 +330,17 @@ export default function App() {
           accuracy: location.coords.accuracy,
         }
       };
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         error: 'POSITION_UNAVAILABLE',
-        message: error.message || '위치 정보를 가져올 수 없습니다.'
+        message: error instanceof Error ? error.message : '위치 정보를 가져올 수 없습니다.'
       };
     }
   };
 
   // WebView에서 메시지 수신 처리
-  const handleMessage = async (event: any) => {
+  const handleMessage = async (event: WebViewMessageEvent) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
       

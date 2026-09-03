@@ -52,7 +52,7 @@ export async function loadNaverMaps(preferredLanguage?: string, options?: {
 }): Promise<void> {
     if (typeof window === "undefined")
         throw new Error("Window is undefined");
-    const w = window as any;
+    const w = window;
     const withGeocoder = options?.geocoder === true;
     const clientId = getNaverMapClientId();
     const language = resolveNaverLanguage(preferredLanguage);
@@ -81,7 +81,7 @@ export async function loadNaverMaps(preferredLanguage?: string, options?: {
     }
     else {
         await new Promise<void>((resolve) => {
-            if ((window as any).naver?.maps) {
+            if (window.naver?.maps) {
                 resolve();
                 return;
             }
@@ -126,7 +126,10 @@ const emptySearch: NaverSearchResponse = {
     documents: [],
     meta: { total_count: 0, is_end: true },
 };
-function mapGeocodeAddresses(addresses: any[], query: string): NaverSearchResult[] {
+function mapGeocodeAddresses(
+    addresses: naver.maps.Service.GeocodeAddress[],
+    query: string,
+): NaverSearchResult[] {
     return addresses.map((addr) => ({
         place_name: addr.roadAddress || addr.jibunAddress || query,
         address_name: addr.jibunAddress || "",
@@ -201,19 +204,19 @@ async function searchPlaceViaKakao(query: string): Promise<NaverSearchResult[]> 
 }
 async function searchAddressViaJs(query: string, locale?: AppLocale): Promise<NaverSearchResult[]> {
     await loadNaverMaps(locale, { geocoder: true });
-    const naver = (window as any).naver;
-    if (!naver?.maps?.Service) {
+    const naverSdk = window.naver;
+    if (!naverSdk?.maps?.Service) {
         return [];
     }
     return new Promise((resolve) => {
         const timeoutId = window.setTimeout(() => resolve([]), 10000);
-        naver.maps.Service.geocode({ query: query.trim() }, (status: any, response: any) => {
+        naverSdk.maps.Service.geocode({ query: query.trim() }, (status, response) => {
             window.clearTimeout(timeoutId);
-            if (status !== naver.maps.Service.Status.OK) {
+            if (status !== naverSdk.maps.Service.Status.OK) {
                 resolve([]);
                 return;
             }
-            const addresses: any[] = response?.v2?.addresses ?? [];
+            const addresses = response?.v2?.addresses ?? [];
             resolve(mapGeocodeAddresses(addresses, query));
         });
     });
