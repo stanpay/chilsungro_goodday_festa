@@ -38,7 +38,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes, type MutableRefObject, type PointerEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   NEARBY_RADIUS_UNLIMITED_M,
   storesApi,
@@ -967,7 +966,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentLocation, setCurrentLocation] = useState("위치 가져오는 중...");
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-  const { isLoggedIn } = useAuth();
   const [isManualLocation, setIsManualLocation] = useState(false);
 
   const [stores, setStores] = useState<StoreData[]>([]);
@@ -1481,20 +1479,18 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     });
   }, [isMapView]);
 
+  // 이 초기화 effect는 마운트 시 1회만 실행된다.
+  // locale을 deps에 두면 언어 토글만으로 GPS를 다시 조회하게 되므로
+  // 최신 값은 ref로 읽는다.
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
+
   useEffect(() => {
-    const prevSessionRef = { current: null as any };
-    
-    const checkAuthAndInitLocation = async () => {
-      
-      // 로그인 상태 확인 (AuthContext에서 관리)
-
-      // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
-      prevSessionRef.current = isLoggedIn ? { user: { id: "user-001" } } : null;
-
+    const initLocation = async () => {
       // Naver Maps SDK 로드 (실패해도 GPS 위치 조회는 계속 진행)
       try {
         const { loadNaverMaps } = await import("@/lib/naver");
-        await loadNaverMaps(locale);
+        await loadNaverMaps(localeRef.current);
       } catch (error: any) {
         toast({
           title: "지도 서비스 경고",
@@ -1531,7 +1527,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
-                const formattedAddress = await getAddressFromCoords(latitude, longitude, locale);
+                const formattedAddress = await getAddressFromCoords(latitude, longitude, localeRef.current);
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
@@ -1560,7 +1556,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         if (!savedCoordinates) {
           try {
             const { searchAddress } = await import("@/lib/naver");
-            const searchResult = await searchAddress(savedLocation, locale);
+            const searchResult = await searchAddress(savedLocation, localeRef.current);
             
             if (searchResult.documents && searchResult.documents.length > 0) {
               const firstResult = searchResult.documents[0];
@@ -1581,7 +1577,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
-                const formattedAddress = await getAddressFromCoords(latitude, longitude, locale);
+                const formattedAddress = await getAddressFromCoords(latitude, longitude, localeRef.current);
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
@@ -1644,10 +1640,10 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     };
 
     const applyDetectedLocation = async (latitude: number, longitude: number) => {
-      const address = await getAddressFromCoords(latitude, longitude, locale);
+      const address = await getAddressFromCoords(latitude, longitude, localeRef.current);
       const displayAddress =
         address === "위치를 확인할 수 없음"
-          ? headerStrings(locale).locationUnknownGeo
+          ? headerStrings(localeRef.current).locationUnknownGeo
           : address;
 
       persistPrefetchedLocation(latitude, longitude, displayAddress);
@@ -1697,10 +1693,47 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       }
     };
 
-    checkAuthAndInitLocation();
+    initLocation();
 
     return () => {};
-  }, [toast, navigate, locale]);
+  }, [toast, navigate]);
+
+  // 언어를 바꿔도 좌표는 그대로다. GPS를 다시 조회하는 대신
+  // 이미 확보한 좌표로 표시용 주소만 다시 번역한다.
+  // 최초 진입은 위 초기화 effect가 올바른 언어로 처리하므로 건너뛴다.
+  const translatedLocaleRef = useRef(locale);
+  useEffect(() => {
+    if (translatedLocaleRef.current === locale) return;
+    translatedLocaleRef.current = locale;
+
+    if (!currentCoords) return;
+    const { latitude, longitude } = currentCoords;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const address = await getAddressFromCoords(latitude, longitude, locale);
+        if (cancelled) return;
+        const displayAddress =
+          address === "위치를 확인할 수 없음"
+            ? headerStrings(locale).locationUnknownGeo
+            : address;
+        setCurrentLocation(displayAddress);
+        if (isManualLocation) {
+          localStorage.setItem("selectedLocation", displayAddress);
+        } else {
+          persistPrefetchedLocation(latitude, longitude, displayAddress);
+        }
+      } catch {
+        // 재번역 실패 시 기존 표시를 그대로 둔다
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locale, currentCoords, isManualLocation]);
+
 
   const applyCoordinatesAsLocation = async (
     latitude: number,
