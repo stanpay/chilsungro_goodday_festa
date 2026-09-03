@@ -48,7 +48,7 @@ import {
 import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes, type MutableRefObject, type PointerEvent } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -76,50 +76,26 @@ import {
   headerStrings,
   isLocationFetchFailed,
   LOCATION_FETCH_FAILED_KO,
-  type AppLocale,
 } from "@/lib/locale";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { useTranslatedAddressLine } from "@/hooks/useKoreanDisplayText";
 import { cn } from "@/lib/utils";
 import { translateKoText } from "@/lib/koTranslate";
+import {
+  StoreFilterChipId,
+  BENEFIT_FILTER_CHIP_ORDER,
+  STORE_CATEGORY_CHIP_ORDER,
+  StoreAreaFilterChipId,
+  STORE_AREA_FILTER_CHIP_ORDER,
+  LegacyBenefitFilterChipId,
+  LEGACY_BENEFIT_FILTER_CHIP_ORDER,
+  imageFromStoreCategory,
+  categoryGroupCodeFromStoreCategory,
+  storeMatchesBenefitChipFilters,
+  storeMatchesAreaChipFilters,
+  storeMatchesCategoryChipFilters,
+} from "@/lib/storeFilters";
 
-type StoreFilterChipId =
-  | "all"
-  | "chilsungro"
-  | "localCurrency"
-  | "highOilSupport"
-  | "restaurant"
-  | "cafe"
-  | "shopping"
-  | "other";
-
-const BENEFIT_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
-  "all",
-  "chilsungro",
-  "localCurrency",
-  "highOilSupport",
-];
-
-const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
-  "all",
-  "restaurant",
-  "cafe",
-  "shopping",
-  "other",
-];
-
-type StoreAreaFilterChipId =
-  | "all"
-  | "areaChilsungro"
-  | "areaJungangro"
-  | "areaUndergroundMall";
-
-const STORE_AREA_FILTER_CHIP_ORDER: StoreAreaFilterChipId[] = [
-  "all",
-  "areaChilsungro",
-  "areaJungangro",
-  "areaUndergroundMall",
-];
 
 const MAP_MAX_ZOOM = 21;
 /** 지도뷰 첫 화면 기본 줌 */
@@ -291,128 +267,6 @@ function inferChainImageFromPlaceName(placeName: string): string | null {
   return null;
 }
 
-function categoryDefaultImage(place: {
-  place_name?: string;
-  category_group_code?: string;
-}): string {
-  const chain = inferChainImageFromPlaceName(place.place_name || "");
-  if (chain) return chain;
-  const g = place.category_group_code;
-  if (g === "MT1" || g === "CS2") return "shopping";
-  if (g === "CE7") return "cafe";
-  if (g === "FD6") return "restaurant";
-  return "other";
-}
-
-type StoreLikeForChip = {
-  image: string;
-  categoryGroupCode?: string;
-  categoryName?: string;
-  area?: string | null;
-  local_currency_available?: boolean;
-  high_oil_support_available?: boolean;
-  hasTravelConsumerCoupon?: boolean;
-};
-
-function storeHasHighOilSupport(store: StoreLikeForChip): boolean {
-  return store.high_oil_support_available === true;
-}
-
-function storeChipIsCafe(store: StoreLikeForChip): boolean {
-  if (store.categoryGroupCode === "CE7") return true;
-  const cafeImages = new Set(["starbucks", "mega", "pascucci", "twosome", "baskin"]);
-  if (cafeImages.has(store.image)) return true;
-  if (store.image === "cafe") return true;
-  return false;
-}
-
-function storeChipIsRestaurant(store: StoreLikeForChip): boolean {
-  if (storeChipIsCafe(store)) return false;
-  if (store.image === "restaurant") return true;
-  if (store.categoryGroupCode === "FD6") return true;
-  return false;
-}
-
-function storeChipIsShopping(store: StoreLikeForChip): boolean {
-  if (["MT1", "CS2"].includes(store.categoryGroupCode || "")) return true;
-  if (store.image === "shopping") return true;
-  return false;
-}
-
-function storeHasChilsungroCoupon(store: StoreLikeForChip): boolean {
-  return store.hasTravelConsumerCoupon === true;
-}
-
-function imageFromStoreCategory(category?: string | null): string {
-  if (!category) return "other";
-  if (category.includes("카페") || category.includes("디저트")) return "cafe";
-  if (category.includes("쇼핑")) return "shopping";
-  if (category.includes("음식")) return "restaurant";
-  return "other";
-}
-
-function categoryGroupCodeFromStoreCategory(category?: string | null): string {
-  if (!category) return "";
-  if (category.includes("카페") || category.includes("디저트")) return "CE7";
-  if (category.includes("쇼핑")) return "MT1";
-  if (category.includes("음식")) return "FD6";
-  return "";
-}
-
-function storeChipIsOther(store: StoreLikeForChip): boolean {
-  return (
-    !storeChipIsRestaurant(store) &&
-    !storeChipIsCafe(store) &&
-    !storeChipIsShopping(store)
-  );
-}
-
-function storeMatchesBenefitChipFilters(
-  store: StoreLikeForChip,
-  chips: ReadonlySet<LegacyBenefitFilterChipId>,
-  locale: AppLocale
-): boolean {
-  // openNow는 제거됨 — 혜택 칩만 매칭
-  if (chips.has("all")) return true;
-
-  const parts: boolean[] = [];
-  if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
-  if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
-  if (locale === "ko" && chips.has("highOilSupport")) {
-    parts.push(storeHasHighOilSupport(store));
-  }
-
-  return parts.length > 0 && parts.some(Boolean);
-}
-
-function storeMatchesAreaChipFilters(
-  store: StoreLikeForChip,
-  chips: ReadonlySet<StoreAreaFilterChipId>
-): boolean {
-  if (chips.has("all")) return true;
-
-  const parts: boolean[] = [];
-  if (chips.has("areaChilsungro")) parts.push(store.area === "칠성로");
-  if (chips.has("areaJungangro")) parts.push(store.area === "중앙로");
-  if (chips.has("areaUndergroundMall")) parts.push(store.area === "지하상가");
-
-  return parts.length > 0 && parts.some(Boolean);
-}
-
-function storeMatchesCategoryChipFilters(
-  store: StoreLikeForChip,
-  chips: ReadonlySet<StoreFilterChipId>
-): boolean {
-  if (chips.has("all")) return true;
-
-  const parts: boolean[] = [];
-  if (chips.has("restaurant")) parts.push(storeChipIsRestaurant(store));
-  if (chips.has("cafe")) parts.push(storeChipIsCafe(store));
-  if (chips.has("shopping")) parts.push(storeChipIsShopping(store));
-  if (chips.has("other")) parts.push(storeChipIsOther(store));
-
-  return parts.length > 0 && parts.some(Boolean);
-}
 
 function getFilterDropdownLabel<T extends string>(
   filterLabel: string,
@@ -437,15 +291,6 @@ function getFilterDropdownLabel<T extends string>(
   return `${filterLabel} - ${selected.join(", ")}`;
 }
 
-type LegacyBenefitFilterChipId = StoreFilterChipId | "openNow";
-
-const LEGACY_BENEFIT_FILTER_CHIP_ORDER: LegacyBenefitFilterChipId[] = [
-  "all",
-  "chilsungro",
-  "localCurrency",
-  "highOilSupport",
-  "openNow",
-];
 
 const FILTER_CHIP_ROW_VIEWPORT_CLASS =
   "w-full min-w-0 overflow-x-scroll overscroll-x-contain pl-4 pr-4 pointer-events-none [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
