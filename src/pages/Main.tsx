@@ -11,11 +11,9 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -49,7 +47,7 @@ import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes, type MutableRefObject, type PointerEvent } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -95,6 +93,14 @@ import {
   storeMatchesAreaChipFilters,
   storeMatchesCategoryChipFilters,
 } from "@/lib/storeFilters";
+import {
+  FILTER_CHIP_ROW_VIEWPORT_CLASS,
+  FILTER_CHIP_ROW_INNER_CLASS,
+  INITIAL_FILTER_CHIP_SCROLL_DRAG_STATE,
+  createFilterChipScrollDragHandlers,
+  type FilterChipScrollDragState,
+} from "@/lib/filterChipScroll";
+import { ChipButton, FilterDropdownChip } from "@/components/StoreFilterChips";
 
 
 const MAP_MAX_ZOOM = 21;
@@ -251,277 +257,7 @@ function sortStoresByName<T extends { name: string }>(stores: T[]): T[] {
   return [...stores].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
-function inferChainImageFromPlaceName(placeName: string): string | null {
-  const rules: [string, string][] = [
-    ["스타벅스", "starbucks"],
-    ["스타벅", "starbucks"],
-    ["베스킨", "baskin"],
-    ["메가커피", "mega"],
-    ["메가 MGC", "mega"],
-    ["파스쿠찌", "pascucci"],
-    ["투썸", "twosome"],
-  ];
-  for (const [kw, img] of rules) {
-    if (placeName.includes(kw)) return img;
-  }
-  return null;
-}
 
-
-function getFilterDropdownLabel<T extends string>(
-  filterLabel: string,
-  order: readonly T[],
-  activeChips: ReadonlySet<T>,
-  labelMap: Record<T, string>
-): string {
-  const allLabel = labelMap["all" as T];
-
-  if (activeChips.has("all" as T)) {
-    return `${filterLabel} - ${allLabel}`;
-  }
-
-  const selected = order
-    .filter((id) => id !== "all" && activeChips.has(id))
-    .map((id) => labelMap[id]);
-
-  if (selected.length === 0) {
-    return `${filterLabel} - ${allLabel}`;
-  }
-
-  return `${filterLabel} - ${selected.join(", ")}`;
-}
-
-
-const FILTER_CHIP_ROW_VIEWPORT_CLASS =
-  "w-full min-w-0 overflow-x-scroll overscroll-x-contain pl-4 pr-4 pointer-events-none [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-
-const FILTER_CHIP_ROW_INNER_CLASS =
-  "flex w-max flex-nowrap gap-2 pointer-events-auto touch-pan-x [&_button]:touch-pan-x";
-
-const FILTER_CHIP_SCROLL_DRAG_THRESHOLD_PX = 8;
-
-type FilterChipScrollDragState = {
-  tracking: boolean;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  dragged: boolean;
-};
-
-const INITIAL_FILTER_CHIP_SCROLL_DRAG_STATE: FilterChipScrollDragState = {
-  tracking: false,
-  pointerId: -1,
-  startX: 0,
-  startY: 0,
-  dragged: false,
-};
-
-function createFilterChipScrollDragHandlers(
-  dragRef: MutableRefObject<FilterChipScrollDragState>
-) {
-  const endPointer = (pointerId: number) => {
-    const state = dragRef.current;
-    if (pointerId !== state.pointerId) return;
-    state.tracking = false;
-    if (state.dragged) {
-      requestAnimationFrame(() => {
-        dragRef.current.dragged = false;
-      });
-    }
-  };
-
-  return {
-    onPointerDownCapture: (event: PointerEvent<HTMLDivElement>) => {
-      dragRef.current = {
-        tracking: true,
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        dragged: false,
-      };
-    },
-    onPointerMoveCapture: (event: PointerEvent<HTMLDivElement>) => {
-      const state = dragRef.current;
-      if (!state.tracking || event.pointerId !== state.pointerId) return;
-
-      const deltaX = Math.abs(event.clientX - state.startX);
-      const deltaY = Math.abs(event.clientY - state.startY);
-      if (deltaX > FILTER_CHIP_SCROLL_DRAG_THRESHOLD_PX && deltaX > deltaY) {
-        state.dragged = true;
-      }
-    },
-    onPointerUpCapture: (event: PointerEvent<HTMLDivElement>) => {
-      endPointer(event.pointerId);
-    },
-    onPointerCancelCapture: (event: PointerEvent<HTMLDivElement>) => {
-      endPointer(event.pointerId);
-    },
-  };
-}
-
-type FilterDropdownChipProps<T extends string> = {
-  filterLabel: string;
-  order: readonly T[];
-  activeChips: ReadonlySet<T>;
-  onApply: (next: Set<T>) => void;
-  labelMap: Record<T, string>;
-  ariaLabel: string;
-  scrollDragRef: MutableRefObject<FilterChipScrollDragState>;
-};
-
-const ChipButton = forwardRef<
-  HTMLButtonElement,
-  {
-    id: string;
-    active: boolean;
-    label: string;
-    onToggle?: () => void;
-    showChevron?: boolean;
-    primaryBorder?: boolean;
-  } & ButtonHTMLAttributes<HTMLButtonElement>
->(function ChipButton(
-  { id, active, label, onToggle, showChevron = false, primaryBorder = false, className, onClick, ...rest },
-  ref
-) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      aria-pressed={active}
-      onClick={(event) => {
-        onClick?.(event);
-        onToggle?.();
-      }}
-      className={cn(
-        "pointer-events-auto flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground shadow-sm"
-          : primaryBorder
-            ? "border-primary bg-card text-foreground hover:bg-muted/80 focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/20"
-            : "border-border bg-card text-foreground hover:bg-muted/80",
-        className
-      )}
-      {...rest}
-    >
-      {id === "openNow" && (
-        <span
-          className={cn(
-            "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-            active ? "bg-green-300" : "bg-green-500"
-          )}
-        />
-      )}
-      <span className="whitespace-nowrap text-xs">{label}</span>
-      {showChevron && <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />}
-    </button>
-  );
-});
-
-function FilterDropdownChip<T extends string>({
-  filterLabel,
-  order,
-  activeChips,
-  onApply,
-  labelMap,
-  ariaLabel,
-  scrollDragRef,
-}: FilterDropdownChipProps<T>) {
-  const { locale } = useAppLocale();
-  const t = mainStrings(locale);
-  const [open, setOpen] = useState(false);
-  const [draftChips, setDraftChips] = useState<Set<T>>(() => new Set(activeChips));
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const triggerLabel = getFilterDropdownLabel(filterLabel, order, activeChips, labelMap);
-
-  const closeMenu = () => {
-    setOpen(false);
-    triggerRef.current?.blur();
-  };
-
-  const toggleDraft = (id: T) => {
-    setDraftChips((prev) => {
-      if (id === "all") return new Set<T>(["all" as T]);
-
-      const next = new Set(prev);
-      next.delete("all" as T);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      if (next.size === 0) next.add("all" as T);
-      return next;
-    });
-  };
-
-  return (
-    <DropdownMenu
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) closeMenu();
-      }}
-    >
-      <DropdownMenuTrigger asChild>
-        <ChipButton
-          ref={triggerRef}
-          id={`filter-${filterLabel}`}
-          active={!(activeChips as ReadonlySet<string>).has("all")}
-          label={triggerLabel}
-          showChevron
-          primaryBorder
-          aria-label={ariaLabel}
-          aria-expanded={open}
-          className="pointer-events-auto"
-          onPointerDown={(event) => {
-            event.preventDefault();
-          }}
-          onPointerLeave={(event) => event.currentTarget.blur()}
-          onPointerCancel={(event) => event.currentTarget.blur()}
-          onPointerUp={(event) => event.currentTarget.blur()}
-          onClick={(event) => {
-            if (scrollDragRef.current.dragged) {
-              event.preventDefault();
-              event.stopPropagation();
-              return;
-            }
-            setOpen((prev) => {
-              if (!prev) setDraftChips(new Set(activeChips));
-              return !prev;
-            });
-          }}
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52 p-1.5">
-        {order.map((id) => (
-          <DropdownMenuItem
-            key={id}
-            onSelect={(event) => {
-              event.preventDefault();
-              toggleDraft(id);
-            }}
-            className="gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-          >
-            <Checkbox checked={draftChips.has(id)} className="pointer-events-none" tabIndex={-1} />
-            {labelMap[id]}
-          </DropdownMenuItem>
-        ))}
-        <div className="mt-1 border-t pt-1.5">
-          <Button
-            type="button"
-            className="h-9 w-full rounded-lg text-sm"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onClick={() => {
-              onApply(new Set(draftChips));
-              closeMenu();
-            }}
-          >
-            {t.filterConfirm}
-          </Button>
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 type MainProps = {
   /** 3단 가로 칩 행 필터 */
