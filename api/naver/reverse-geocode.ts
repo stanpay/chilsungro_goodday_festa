@@ -1,23 +1,9 @@
 import { fetchNaverUpstream } from "./_upstream.js";
 import { getNaverServerCredentials } from "./_credentials.js";
+import { guardGetRequest, sendUpstreamJson, type ApiRequest, type ApiResponse } from "../_http.js";
 
-type Req = { method?: string; query: Record<string, string | string[] | undefined> };
-type Res = {
-  setHeader: (k: string, v: string) => void;
-  status: (n: number) => { json: (b: unknown) => void; end: () => void; send: (b: string) => void };
-};
-
-export default async function handler(req: Req, res: Res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+export default async function handler(req: ApiRequest, res: ApiResponse) {
+  if (!guardGetRequest(req, res)) return;
 
   const coords = req.query.coords;
   if (!coords || typeof coords !== "string") {
@@ -46,6 +32,5 @@ export default async function handler(req: Req, res: Res) {
     creds
   );
 
-  res.setHeader("Content-Type", "application/json");
-  return res.status(status).send(body);
+  return sendUpstreamJson(res, status, body);
 }

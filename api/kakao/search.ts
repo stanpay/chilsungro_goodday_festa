@@ -1,23 +1,9 @@
 import { fetchKakaoKeywordSearch } from "./_upstream.js";
 import { getKakaoServerCredentials } from "./_credentials.js";
+import { guardGetRequest, sendUpstreamJson, type ApiRequest, type ApiResponse } from "../_http.js";
 
-type Req = { method?: string; query: Record<string, string | string[] | undefined> };
-type Res = {
-  setHeader: (k: string, v: string) => void;
-  status: (n: number) => { json: (b: unknown) => void; end: () => void; send: (b: string) => void };
-};
-
-export default async function handler(req: Req, res: Res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+export default async function handler(req: ApiRequest, res: ApiResponse) {
+  if (!guardGetRequest(req, res)) return;
 
   const query = req.query.query;
   if (!query || typeof query !== "string") {
@@ -29,18 +15,20 @@ export default async function handler(req: Req, res: Res) {
     return res.status(500).json({ error: "Kakao REST API key not configured" });
   }
 
-  const page = typeof req.query.page === "string" ? req.query.page : "1";
+  // size와 마찬가지로 page도 클램프한다 (카카오 키워드 검색 최대 45페이지)
+  const pageRaw = typeof req.query.page === "string" ? req.query.page : "1";
+  const page = Math.min(Math.max(parseInt(pageRaw, 10) || 1, 1), 45);
+
   const sizeRaw = typeof req.query.size === "string" ? req.query.size : "15";
   const size = Math.min(Math.max(parseInt(sizeRaw, 10) || 15, 1), 15);
 
   const upstreamParams = new URLSearchParams({
     query,
-    page,
+    page: String(page),
     size: String(size),
   });
 
   const { status, body } = await fetchKakaoKeywordSearch(upstreamParams, restApiKey);
 
-  res.setHeader("Content-Type", "application/json");
-  return res.status(status).send(body);
+  return sendUpstreamJson(res, status, body);
 }

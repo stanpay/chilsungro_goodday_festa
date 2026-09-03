@@ -1,28 +1,8 @@
-import { resolveRedirectTargetServer } from "./store-redirect/_resolve.js";
+import { resolveRedirectTargetServer, isAllowedEntryUrl } from "./store-redirect/_resolve.js";
+import { guardGetRequest, type ApiRequest, type ApiResponse } from "./_http.js";
 
-type Req = {
-  method?: string;
-  query: Record<string, string | string[] | undefined>;
-};
-type Res = {
-  setHeader: (k: string, v: string) => void;
-  status: (n: number) => {
-    json: (b: unknown) => void;
-    end: () => void;
-  };
-};
-
-export default async function handler(req: Req, res: Res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+export default async function handler(req: ApiRequest, res: ApiResponse) {
+  if (!guardGetRequest(req, res)) return;
 
   const rawUrl = req.query.url;
   if (!rawUrl || typeof rawUrl !== "string") {
@@ -40,12 +20,20 @@ export default async function handler(req: Req, res: Res) {
     return res.status(400).json({ error: "url must be http(s)" });
   }
 
+  // 이 엔드포인트는 매장 API redirect와 naver.me 해석에만 쓰인다.
+  // 호스트를 제한하지 않으면 서버가 임의 주소로 대신 요청을 보내는 통로가 된다.
+  if (!isAllowedEntryUrl(redirectUrl)) {
+    return res.status(400).json({ error: "url host is not allowed" });
+  }
+
   const stopAtNaverMe = req.query.stopAtNaverMe === "1";
 
   try {
     const target = await resolveRedirectTargetServer(redirectUrl, { stopAtNaverMe });
     return res.status(200).json({ target });
-  } catch {
+  } catch (error) {
+    // 실패를 조용히 삼키면 Vercel 로그에도 남지 않는다 (안내서 B-4)
+    console.error("[store-redirect-target] resolve failed", redirectUrl, error);
     return res.status(502).json({ error: "Failed to resolve redirect" });
   }
 }
