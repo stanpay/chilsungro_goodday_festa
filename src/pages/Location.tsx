@@ -1,9 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
+import type { KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, MapPin, Search, Loader2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
+
+/** Card/div 클릭 영역을 키보드로도 활성화할 수 있게 한다 */
+const activateOnKey =
+  (handler: () => void) => (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    handler();
+  };
 import { useToast } from "@/hooks/use-toast";
 import { searchAddress, NaverSearchResult as KakaoSearchResult } from "@/lib/naver";
 import { getAddressFromCoords } from "@/lib/geocoding";
@@ -207,7 +216,7 @@ const Location = () => {
               {isSearching && (<Loader2 className="w-4 h-4 ml-2 inline animate-spin"/>)}
             </h2>
             {!isSearching && (<div className="space-y-2">
-                {searchResults.length > 0 ? (searchResults.map((result, index) => (<Card key={`${result.place_name}-${index}`} className="p-4 cursor-pointer" onClick={() => handleSearchResultSelect(result)}>
+                {searchResults.length > 0 ? (searchResults.map((result, index) => (<Card key={`${result.place_name}-${index}`} className="p-4 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" role="button" tabIndex={0} onClick={() => handleSearchResultSelect(result)} onKeyDown={activateOnKey(() => handleSearchResultSelect(result))}>
                       <div>
                         <div className="flex items-center">
                           <MapPin className="w-4 h-4 mr-3 text-muted-foreground flex-shrink-0"/>
@@ -233,7 +242,9 @@ const Location = () => {
               {recentLocations.map((location, index) => (
                 <Card
                   key={`${location.name}-${index}`}
-                  className="p-4 cursor-pointer"
+                  className="p-4 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  role="button"
+                  tabIndex={0}
                   onClick={() =>
                     handleLocationSelect(
                       location.name,
@@ -243,6 +254,15 @@ const Location = () => {
                         : undefined,
                     )
                   }
+                  onKeyDown={activateOnKey(() =>
+                    handleLocationSelect(
+                      location.name,
+                      location.address,
+                      location.latitude != null && location.longitude != null
+                        ? { latitude: location.latitude, longitude: location.longitude }
+                        : undefined,
+                    )
+                  )}
                 >
                   <div>
                     <div className="flex items-center">
