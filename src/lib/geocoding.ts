@@ -78,14 +78,16 @@ export async function getAddressFromCoords(latitude: number, longitude: number, 
         if (fromProxy)
             return fromProxy;
     }
-    catch (error) {
+    catch {
+        // 실패 시 다음 폴백 경로로 넘어간다
     }
     try {
         const fromJs = await reverseGeocodeWithJs(latitude, longitude, locale);
         if (fromJs)
             return fromJs;
     }
-    catch (error) {
+    catch {
+        // 실패 시 다음 폴백 경로로 넘어간다
     }
     return UNKNOWN_ADDRESS;
 }

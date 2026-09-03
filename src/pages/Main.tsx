@@ -1350,7 +1350,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         selectedId != null && String(id) === String(selectedId);
       try {
         marker.setZIndex(isSelected ? 45 : 10);
-      } catch {}
+      } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
       const el = getMarkerPinContent(marker);
       if (!el) return;
       const balloon = el.querySelector("[data-pin-dot]") as HTMLElement | null;
@@ -1468,7 +1468,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     requestAnimationFrame(() => {
       try {
         naver?.maps?.Event?.trigger(map, "resize");
-      } catch {}
+      } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
       requestAnimationFrame(() => {
         if (mapOverlaysReadyRef.current) {
           rebuildStoreOverlaysRef.current?.();
@@ -2490,7 +2490,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           clusterMarkersRef.current.forEach((marker) => {
             try {
               marker.setMap(null);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
           clusterMarkersRef.current = [];
         };
@@ -2500,7 +2500,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           storeMarkersRef.current.forEach(({ marker }) => {
             try {
               marker.setMap(map);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
         };
 
@@ -2508,7 +2508,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           storeMarkersRef.current.forEach(({ marker }) => {
             try {
               marker.setMap(null);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
         };
 
@@ -2564,7 +2564,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           try {
             map.setCenter(center);
             map.setZoom(MAP_INITIAL_ZOOM);
-          } catch {}
+          } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           if (alignToCurrent) {
             alignMapToCurrentLocationRef.current = false;
           }
@@ -2646,7 +2646,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           storeMarkersRef.current.forEach(({ marker }) => {
             try {
               marker.setMap(null);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
           storeMarkersRef.current = [];
           clearClusterMarkers();
@@ -3034,7 +3034,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               const pt = proj.fromCoordToOffset(pos);
               px = pt.x;
               py = pt.y;
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
             const bounds = buildMarkerLabelRect(marker, proj);
             return { id, marker, pos, px, py, bounds };
           });
@@ -3201,6 +3201,8 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           setShowResearchButton(true);
         });
       } catch (error) {
+        // 지도 부트스트랩 실패를 조용히 삼키면 원인 추적이 불가능하다
+        console.error("[Main] 지도 초기화 실패", error);
       }
     };
 
@@ -3230,13 +3232,13 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       if (myLocationMarkerRef.current) {
         try {
           myLocationMarkerRef.current.setMap(null);
-        } catch {}
+        } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
         myLocationMarkerRef.current = null;
       }
       mapInstanceRef.current = null;
-      storeMarkersRef.current.forEach(({ marker }) => { try { marker.setMap(null); } catch {} });
+      storeMarkersRef.current.forEach(({ marker }) => { try { marker.setMap(null); } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ } });
       storeMarkersRef.current = [];
-      clusterMarkersRef.current.forEach((m) => { try { m.setMap(null); } catch {} });
+      clusterMarkersRef.current.forEach((m) => { try { m.setMap(null); } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ } });
       clusterMarkersRef.current = [];
       if (mapContainerRef.current) {
         mapContainerRef.current.innerHTML = "";
@@ -3279,7 +3281,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       if (myLocationMarkerRef.current) {
         try {
           myLocationMarkerRef.current.setMap(null);
-        } catch {}
+        } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
         myLocationMarkerRef.current = null;
       }
 

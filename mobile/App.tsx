@@ -393,6 +393,8 @@ export default function App() {
               })();
             `);
           } catch (error) {
+            // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+            console.warn('[WebView] 스토리지 데이터 전달 실패', error);
           }
         };
         loadStorageData();
@@ -406,6 +408,8 @@ export default function App() {
               await AsyncStorage.setItem(message.key, String(message.value));
             }
           } catch (error) {
+            // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+            console.warn('[WebView] 스토리지 저장 실패', error);
           }
         };
         saveStorageData();
@@ -423,11 +427,15 @@ export default function App() {
               })();
             `);
           } catch (error) {
+            // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+            console.warn('[WebView] 스토리지 조회 결과 전달 실패', error);
           }
         };
         getStorageData();
       }
     } catch (error) {
+      // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+      console.warn('[WebView] 메시지 처리 실패', error);
     }
   };
 

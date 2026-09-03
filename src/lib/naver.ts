@@ -237,7 +237,8 @@ export async function searchAddress(query: string, locale?: AppLocale): Promise<
                 };
             }
         }
-        catch (error) {
+        catch {
+            // 실패 시 다음 폴백 경로로 넘어간다
         }
     }
     if (!geocodingForbidden) {
@@ -251,7 +252,8 @@ export async function searchAddress(query: string, locale?: AppLocale): Promise<
                     };
                 }
             }
-            catch (error) {
+            catch {
+                // 실패 시 다음 폴백 경로로 넘어간다
             }
         }
     }

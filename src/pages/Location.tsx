@@ -45,7 +45,8 @@ const Location = () => {
             try {
                 setRecentLocations(JSON.parse(savedLocations));
             }
-            catch (error) {
+            catch {
+                // 저장값이 손상된 경우 최근 위치를 비워 둔다
             }
         }
     }, []);
