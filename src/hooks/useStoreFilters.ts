@@ -15,6 +15,27 @@ import {
   type StoreFilterChipId,
 } from "@/lib/storeFilters";
 
+/**
+ * 칩 선택 토글 규칙.
+ * "all"은 단독 선택이고, 나머지는 다중 선택이며, 모두 해제되면 "all"로 돌아간다.
+ * 구역·카테고리·(레거시가 아닌) 혜택 칩이 같은 규칙을 쓴다.
+ */
+function toggleChipSelection<T extends string>(
+  prev: ReadonlySet<T>,
+  id: T,
+  allId: T,
+): Set<T> {
+  if (id === allId) return new Set<T>([allId]);
+
+  const next = new Set(prev);
+  next.delete(allId);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+
+  if (next.size === 0) next.add(allId);
+  return next;
+}
+
 type UseStoreFiltersOptions = {
   locale: AppLocale;
   /** 3단 가로 칩 행(레거시 데모) — openNow 칩이 추가된다 */
@@ -57,17 +78,7 @@ export function useStoreFilters({ locale, legacyFilterUI }: UseStoreFiltersOptio
   }, [locale, legacyFilterUI]);
 
   const toggleAreaFilter = (id: StoreAreaFilterChipId) => {
-    setAreaFilterChips((prev) => {
-      if (id === "all") return new Set<StoreAreaFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
+    setAreaFilterChips((prev) => toggleChipSelection(prev, id, "all"));
   };
 
   const toggleBenefitFilter = (id: LegacyBenefitFilterChipId) => {
@@ -99,31 +110,14 @@ export function useStoreFilters({ locale, legacyFilterUI }: UseStoreFiltersOptio
         return next;
       }
 
+      // 레거시 UI가 아니면 openNow 칩 자체가 없다
       if (id === "openNow") return prev;
-      if (id === "all") return new Set<LegacyBenefitFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
+      return toggleChipSelection(prev, id, "all");
     });
   };
 
   const toggleCategoryFilter = (id: StoreFilterChipId) => {
-    setCategoryFilterChips((prev) => {
-      if (id === "all") return new Set<StoreFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
+    setCategoryFilterChips((prev) => toggleChipSelection(prev, id, "all"));
   };
 
   return {

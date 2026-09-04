@@ -5,6 +5,7 @@
  * React 상태에 의존하지 않고 좌표·DOM 측정값만 다룬다.
  */
 import { MAP_VIEW_SHEET_BOTTOM_NAV_PX } from "@/components/MapViewBottomSheet";
+import { distanceMeters } from "@/lib/geoDistance";
 
 export const MAP_SPIDERFY_MAX_RADIUS_PX = 96;
 const MAP_VIEW_PADDING = { top: 100, right: 48, bottom: 220, left: 48 };
@@ -170,18 +171,6 @@ function labelRectsOverlapForCluster(a: PinLabelRect, b: PinLabelRect, zoom: num
   const minW = zoom >= 16 ? 18 : 12;
   const minH = zoom >= 16 ? 12 : 8;
   return overlapW >= minW && overlapH >= minH;
-}
-
-function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function getMaxClusterDistanceM(zoom: number): number {

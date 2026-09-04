@@ -79,6 +79,7 @@ import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { useTranslatedAddressLine } from "@/hooks/useKoreanDisplayText";
 import { cn } from "@/lib/utils";
 import { translateKoText } from "@/lib/koTranslate";
+import { distanceMeters } from "@/lib/geoDistance";
 import {
   StoreFilterChipId,
   STORE_CATEGORY_CHIP_ORDER,
@@ -1078,20 +1079,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   };
 
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // 지구 반경 (km)
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) *
-        Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
   const enrichAndMergeStores = useCallback(async (batch: StoreData[], generation: number) => {
     const getStoreDataByPlaceId = async (
       store: StoreData
@@ -1169,7 +1156,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         const distanceNum =
           typeof store.distance_m === "number"
             ? store.distance_m
-            : calculateDistance(latitude, longitude, store.latitude, store.longitude) * 1000;
+            : distanceMeters(latitude, longitude, store.latitude, store.longitude);
         const image = imageFromStoreCategory(store.category);
         const { isOpen, todayHours, closedDayNote } = getStoreOpenStatus(image);
         return {
