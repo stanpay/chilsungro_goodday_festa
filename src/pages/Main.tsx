@@ -100,6 +100,7 @@ import {
 } from "@/lib/filterChipScroll";
 import { ChipButton, FilterDropdownChip } from "@/components/StoreFilterChips";
 import { useStoreFilters } from "@/hooks/useStoreFilters";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 
 
 const MAP_MAX_ZOOM = 21;
@@ -491,7 +492,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     input.blur();
   };
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const [showScrollToTop, setShowScrollToTop] = useState(false);
   const { locale, setLocale } = useAppLocale();
   const {
     benefitFilterChips,
@@ -725,24 +725,9 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     });
   }, [isMapView]);
 
-  useEffect(() => {
-    if (isMapView) {
-      setShowScrollToTop(false);
-      return;
-    }
-
-    const onScroll = () => {
-      setShowScrollToTop(window.scrollY > 300);
-    };
-
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [isMapView]);
-
-  const handleScrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
+  const { showScrollToTop, scrollToTop: handleScrollToTop } = useScrollToTop({
+    enabled: !isMapView,
+  });
 
   useEffect(() => {
     if (!isMapView || !mapInstanceRef.current) return;
