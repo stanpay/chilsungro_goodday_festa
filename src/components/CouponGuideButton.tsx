@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { SquareArrowOutUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { measureTextWidth } from "@/lib/measureTextWidth";
 
 const FONT_SIZE_CLASSES = ["text-2xl", "text-xl", "text-lg", "text-base", "text-sm"];
 const OVERFLOW_TOLERANCE_PX = 1;
@@ -23,23 +24,11 @@ export function CouponGuideButton({ label, onClick }: CouponGuideButtonProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    const measureTextWidth = (candidateFontSizeClass: string) => {
-      const probe = document.createElement("span");
-      probe.className = cn(
-        "whitespace-nowrap font-semibold !leading-none",
-        candidateFontSizeClass
+    const measureCandidate = (candidateFontSizeClass: string) =>
+      measureTextWidth(
+        label,
+        cn("whitespace-nowrap font-semibold !leading-none", candidateFontSizeClass)
       );
-      probe.textContent = label;
-      probe.style.position = "absolute";
-      probe.style.visibility = "hidden";
-      probe.style.pointerEvents = "none";
-      probe.style.left = "-9999px";
-      probe.style.top = "-9999px";
-      document.body.appendChild(probe);
-      const width = probe.scrollWidth;
-      probe.remove();
-      return width;
-    };
 
     const updateLayout = () => {
       const leadingWidth = leadingRef.current?.getBoundingClientRect().width ?? 0;
@@ -48,7 +37,7 @@ export function CouponGuideButton({ label, onClick }: CouponGuideButtonProps) {
 
       const measured = FONT_SIZE_CLASSES.map((candidateFontSizeClass) => ({
         fontSizeClass: candidateFontSizeClass,
-        width: measureTextWidth(candidateFontSizeClass),
+        width: measureCandidate(candidateFontSizeClass),
       }));
       const fitting = measured.find(({ width }) => width <= containerWidth + OVERFLOW_TOLERANCE_PX);
       const selected = fitting ?? measured[measured.length - 1];

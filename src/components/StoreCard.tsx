@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Coffee, MapPin, ShoppingBag, Store, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { measureTextWidth } from "@/lib/measureTextWidth";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
@@ -110,20 +111,8 @@ const StoreCard = ({
     const container = nameContainerRef.current;
     if (!container) return;
 
-    const measure = (fontSizeClass: string) => {
-      const probe = document.createElement("span");
-      probe.className = `${fontSizeClass} font-bold whitespace-nowrap`;
-      probe.textContent = displayName;
-      probe.style.position = "absolute";
-      probe.style.visibility = "hidden";
-      probe.style.pointerEvents = "none";
-      probe.style.left = "-9999px";
-      probe.style.top = "-9999px";
-      document.body.appendChild(probe);
-      const width = probe.scrollWidth;
-      probe.remove();
-      return width;
-    };
+    const measure = (fontSizeClass: string) =>
+      measureTextWidth(displayName, `${fontSizeClass} font-bold whitespace-nowrap`);
 
     const updateNameLayout = () => {
       const containerWidth = container.clientWidth - NAME_SAFE_RIGHT_PADDING_PX;
