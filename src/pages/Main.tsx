@@ -57,6 +57,7 @@ import {
 } from "@/api/stores";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
+import { resolveDisplayAddress, toDisplayAddress } from "@/lib/locationDisplay";
 import { JEJU_DOWNTOWN_COORDS } from "@/lib/naverGeocodeFallback";
 import { getBrowserPosition } from "@/lib/geolocation";
 import {
@@ -88,9 +89,9 @@ import {
   LegacyBenefitFilterChipId,
   imageFromStoreCategory,
   categoryGroupCodeFromStoreCategory,
-  storeMatchesBenefitChipFilters,
-  storeMatchesAreaChipFilters,
-  storeMatchesCategoryChipFilters,
+  storeMatchesAllChipFilters,
+  filterStoresByName,
+  type StoreChipSelection,
 } from "@/lib/storeFilters";
 import {
   FILTER_CHIP_ROW_VIEWPORT_CLASS,
@@ -910,11 +911,11 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     };
 
     const applyDetectedLocation = async (latitude: number, longitude: number) => {
-      const address = await getAddressFromCoords(latitude, longitude, localeRef.current);
-      const displayAddress =
-        address === "위치를 확인할 수 없음"
-          ? headerStrings(localeRef.current).locationUnknownGeo
-          : address;
+      const displayAddress = await resolveDisplayAddress(
+        latitude,
+        longitude,
+        localeRef.current,
+      );
 
       persistPrefetchedLocation(latitude, longitude, displayAddress);
       setIsManualLocation(false);
@@ -984,10 +985,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       try {
         const address = await getAddressFromCoords(latitude, longitude, locale);
         if (cancelled) return;
-        const displayAddress =
-          address === "위치를 확인할 수 없음"
-            ? headerStrings(locale).locationUnknownGeo
-            : address;
+        const displayAddress = toDisplayAddress(address, locale);
         setCurrentLocation(displayAddress);
         if (isManualLocation) {
           localStorage.setItem("selectedLocation", displayAddress);
@@ -1010,11 +1008,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     longitude: number,
     options?: { fetchStores?: boolean; skipMapFit?: boolean; toastMessage?: string }
   ) => {
-    const address = await getAddressFromCoords(latitude, longitude, locale);
-    const displayAddress =
-      address === "위치를 확인할 수 없음"
-        ? headerStrings(locale).locationUnknownGeo
-        : address;
+    const displayAddress = await resolveDisplayAddress(latitude, longitude, locale);
 
     persistPrefetchedLocation(latitude, longitude, displayAddress);
     setIsManualLocation(false);
@@ -1111,11 +1105,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     setShowLocationPermModal(false);
     setIsLoadingLocation(true);
     try {
-      const address = await getAddressFromCoords(latitude, longitude, locale);
-      const displayAddress =
-        address === "위치를 확인할 수 없음"
-          ? headerStrings(locale).locationUnknownGeo
-          : address;
+      const displayAddress = await resolveDisplayAddress(latitude, longitude, locale);
       persistPrefetchedLocation(latitude, longitude, displayAddress);
       setIsManualLocation(false);
       setCurrentLocation(displayAddress);
@@ -1343,57 +1333,34 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     );
   };
 
+  const chipSelection = useMemo<StoreChipSelection>(
+    () => ({
+      area: areaFilterChips,
+      benefit: benefitFilterChips,
+      category: categoryFilterChips,
+    }),
+    [areaFilterChips, benefitFilterChips, categoryFilterChips]
+  );
+
   const chipFilteredStores = useMemo(
-    () =>
-      stores.filter(
-        (store) =>
-          storeMatchesAreaChipFilters(store, areaFilterChips) &&
-          storeMatchesBenefitChipFilters(
-            store,
-            benefitFilterChips as ReadonlySet<StoreFilterChipId>,
-            locale
-          ) &&
-          storeMatchesCategoryChipFilters(store, categoryFilterChips)
-      ),
-    [stores, areaFilterChips, benefitFilterChips, categoryFilterChips, locale]
+    () => stores.filter((store) => storeMatchesAllChipFilters(store, chipSelection, locale)),
+    [stores, chipSelection, locale]
   );
 
   // 검색어로 필터링
-  const filteredStores = useMemo(() =>
-    searchQuery.trim()
-      ? stores.filter(store =>
-          store.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : stores,
+  const filteredStores = useMemo(
+    () => filterStoresByName(stores, searchQuery),
     [stores, searchQuery]
   );
 
-  const areaFilteredStores = useMemo(() =>
-    filteredStores.filter((store) => storeMatchesAreaChipFilters(store, areaFilterChips)),
-    [filteredStores, areaFilterChips]
+  // 검색 결과에 칩 필터까지 적용한 목록
+  const categoryFilteredStores = useMemo(
+    () =>
+      filteredStores.filter((store) => storeMatchesAllChipFilters(store, chipSelection, locale)),
+    [filteredStores, chipSelection, locale]
   );
 
-  const benefitFilteredStores = useMemo(() =>
-    areaFilteredStores.filter((store) =>
-      storeMatchesBenefitChipFilters(
-        store,
-        benefitFilterChips as ReadonlySet<StoreFilterChipId>,
-        locale
-      )
-    ),
-    [areaFilteredStores, benefitFilterChips, locale]
-  );
-
-  const categoryFilteredStores = useMemo(() =>
-    benefitFilteredStores.filter((store) => storeMatchesCategoryChipFilters(store, categoryFilterChips)),
-    [benefitFilteredStores, categoryFilterChips]
-  );
-
-  // 혜택·카테고리·구역 필터 적용 후 목록
-  const openStores = useMemo(() =>
-    categoryFilteredStores,
-    [categoryFilteredStores]
-  );
+  const openStores = categoryFilteredStores;
 
   const hasStoreCoords = (store: StoreData) =>
     Number.isFinite(store.lat) && Number.isFinite(store.lon);
@@ -1434,16 +1401,9 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     // 할인 정보 로딩 전에도 API 캐시(allFetchedStoresRef)로 즉시 필터링
     const cachedStores =
       allFetchedStoresRef.current.length > 0 ? allFetchedStoresRef.current : stores;
-    const searchFiltered = searchQuery.trim()
-      ? cachedStores.filter((store) =>
-          store.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : cachedStores;
-    const chipFiltered = searchFiltered.filter(
-      (store) =>
-        storeMatchesAreaChipFilters(store, areaFilterChips) &&
-        storeMatchesBenefitChipFilters(store, benefitFilterChips, locale) &&
-        storeMatchesCategoryChipFilters(store, categoryFilterChips)
+    const searchFiltered = filterStoresByName(cachedStores, searchQuery);
+    const chipFiltered = searchFiltered.filter((store) =>
+      storeMatchesAllChipFilters(store, chipSelection, locale)
     );
 
     // 재검색은 뷰포트 필터만 일시 적용 — currentCoords(현재 위치)는 변경하지 않음

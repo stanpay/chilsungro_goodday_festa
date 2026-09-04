@@ -163,3 +163,36 @@ export function storeMatchesCategoryChipFilters(
 
   return parts.length > 0 && parts.some(Boolean);
 }
+
+/** 현재 선택된 칩 3종 */
+export type StoreChipSelection = {
+  area: ReadonlySet<StoreAreaFilterChipId>;
+  benefit: ReadonlySet<LegacyBenefitFilterChipId>;
+  category: ReadonlySet<StoreFilterChipId>;
+};
+
+/**
+ * 구역·혜택·카테고리 칩을 모두 만족하는가.
+ * 같은 조합이 목록 memo와 지도 재검색에 각각 구현돼 있어 하나로 모았다.
+ */
+export function storeMatchesAllChipFilters(
+  store: StoreLikeForChip,
+  chips: StoreChipSelection,
+  locale: AppLocale,
+): boolean {
+  return (
+    storeMatchesAreaChipFilters(store, chips.area) &&
+    storeMatchesBenefitChipFilters(store, chips.benefit, locale) &&
+    storeMatchesCategoryChipFilters(store, chips.category)
+  );
+}
+
+/** 매장명 부분 일치 검색. 빈 질의면 원본을 그대로 돌려준다. */
+export function filterStoresByName<T extends { name: string }>(
+  stores: T[],
+  query: string,
+): T[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return stores;
+  return stores.filter((store) => store.name.toLowerCase().includes(normalized));
+}

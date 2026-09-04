@@ -15,7 +15,7 @@ const activateOnKey =
   };
 import { useToast } from "@/hooks/use-toast";
 import { searchAddress, NaverSearchResult as KakaoSearchResult } from "@/lib/naver";
-import { getAddressFromCoords } from "@/lib/geocoding";
+import { getAddressFromCoords, UNKNOWN_ADDRESS } from "@/lib/geocoding";
 import { getBrowserPosition } from "@/lib/geolocation";
 import {
   clearLocationPrefetchTimestamp,
@@ -144,7 +144,7 @@ const Location = () => {
         try {
             const { latitude, longitude } = await getBrowserPosition();
             const address = await getAddressFromCoords(latitude, longitude, locale);
-            const displayName = address !== "위치를 확인할 수 없음" ? address : "현재 위치";
+            const displayName = address !== UNKNOWN_ADDRESS ? address : "현재 위치";
             persistPrefetchedLocation(latitude, longitude, displayName);
             setIsLoadingLocation(false);
             navigate("/main");
