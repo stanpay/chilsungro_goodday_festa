@@ -63,6 +63,11 @@ coverage
 # 로컬 메모·에이전트 산출
 .todo
 
+# 적용 완료된 패치·버그리포트 등 산출물 (소스 아님)
+*.patch
+*.diff
+bugreport*.zip
+
 # Vercel CLI 로컬 링크(배포는 vercel.json + 대시보드로 충분)
 .vercel
 
@@ -75,4 +80,3 @@ supabase/migrations/
 supabase/functions/
 supabase/config.toml
 supabase/templates/
-.env*

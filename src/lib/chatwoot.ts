@@ -380,7 +380,9 @@ const isChatwootPanelOpen = () => {
 
 /** Chatwoot iframe 입력 autofocus 후 키보드를 내리기 위한 숨김 포커스 대상 */
 const ensureChatwootFocusSentinel = () => {
-  let sentinel = document.getElementById(CHATWOOT_FOCUS_SENTINEL_ID);
+  let sentinel = document.getElementById(
+    CHATWOOT_FOCUS_SENTINEL_ID,
+  ) as HTMLButtonElement | null;
   if (!sentinel) {
     sentinel = document.createElement("button");
     sentinel.id = CHATWOOT_FOCUS_SENTINEL_ID;
@@ -1093,8 +1095,8 @@ export const watchChatwootPanelState = () => {
   });
   window.addEventListener("popstate", onChatwootPopState);
   window.addEventListener("chatwoot:on-start-conversation", scheduleDismissChatwootKeyboard);
-  window.addEventListener("chatwoot:on-message", (event) => {
-    if (isContactChatwootMessage(event.detail)) {
+  window.addEventListener("chatwoot:on-message", (event: Event) => {
+    if (isContactChatwootMessage((event as CustomEvent).detail)) {
       scheduleDismissChatwootKeyboard();
     }
   });

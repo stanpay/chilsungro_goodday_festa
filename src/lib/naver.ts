@@ -3,7 +3,6 @@ import { buildGeocodeQueryVariants, getKnownCoordsForQuery, } from "@/lib/naverG
 import { normalizeGeocodeRestLanguage } from "@/lib/naverGeocodeLanguage";
 let naverLoaded = false;
 let naverGeocoderLoaded = false;
-export const NAVER_GEOCODE_SETUP_HINT = "네이버 클라우드 콘솔 > Maps > Application(stan) > 수정에서 Geocoding을 체크한 뒤 저장하세요. 사용량 화면에 'Geocoding' 행이 보여야 합니다. (Reverse Geocoding만 켜져 있으면 주소→좌표 검색은 403입니다)";
 function normalizeNaverLanguageTag(input?: string | null): string {
     const tag = (input ?? "").trim().toLowerCase().replace(/_/g, "-");
     if (tag.startsWith("ko"))
@@ -53,7 +52,7 @@ export async function loadNaverMaps(preferredLanguage?: string, options?: {
 }): Promise<void> {
     if (typeof window === "undefined")
         throw new Error("Window is undefined");
-    const w = window as any;
+    const w = window;
     const withGeocoder = options?.geocoder === true;
     const clientId = getNaverMapClientId();
     const language = resolveNaverLanguage(preferredLanguage);
@@ -82,7 +81,7 @@ export async function loadNaverMaps(preferredLanguage?: string, options?: {
     }
     else {
         await new Promise<void>((resolve) => {
-            if ((window as any).naver?.maps) {
+            if (window.naver?.maps) {
                 resolve();
                 return;
             }
@@ -127,7 +126,10 @@ const emptySearch: NaverSearchResponse = {
     documents: [],
     meta: { total_count: 0, is_end: true },
 };
-function mapGeocodeAddresses(addresses: any[], query: string): NaverSearchResult[] {
+function mapGeocodeAddresses(
+    addresses: naver.maps.Service.GeocodeAddress[],
+    query: string,
+): NaverSearchResult[] {
     return addresses.map((addr) => ({
         place_name: addr.roadAddress || addr.jibunAddress || query,
         address_name: addr.jibunAddress || "",
@@ -202,19 +204,19 @@ async function searchPlaceViaKakao(query: string): Promise<NaverSearchResult[]> 
 }
 async function searchAddressViaJs(query: string, locale?: AppLocale): Promise<NaverSearchResult[]> {
     await loadNaverMaps(locale, { geocoder: true });
-    const naver = (window as any).naver;
-    if (!naver?.maps?.Service) {
+    const naverSdk = window.naver;
+    if (!naverSdk?.maps?.Service) {
         return [];
     }
     return new Promise((resolve) => {
         const timeoutId = window.setTimeout(() => resolve([]), 10000);
-        naver.maps.Service.geocode({ query: query.trim() }, (status: any, response: any) => {
+        naverSdk.maps.Service.geocode({ query: query.trim() }, (status, response) => {
             window.clearTimeout(timeoutId);
-            if (status !== naver.maps.Service.Status.OK) {
+            if (status !== naverSdk.maps.Service.Status.OK) {
                 resolve([]);
                 return;
             }
-            const addresses: any[] = response?.v2?.addresses ?? [];
+            const addresses = response?.v2?.addresses ?? [];
             resolve(mapGeocodeAddresses(addresses, query));
         });
     });
@@ -238,7 +240,8 @@ export async function searchAddress(query: string, locale?: AppLocale): Promise<
                 };
             }
         }
-        catch (error) {
+        catch {
+            // 실패 시 다음 폴백 경로로 넘어간다
         }
     }
     if (!geocodingForbidden) {
@@ -252,7 +255,8 @@ export async function searchAddress(query: string, locale?: AppLocale): Promise<
                     };
                 }
             }
-            catch (error) {
+            catch {
+                // 실패 시 다음 폴백 경로로 넘어간다
             }
         }
     }

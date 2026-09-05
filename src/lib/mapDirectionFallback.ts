@@ -3,8 +3,6 @@ import { isInStandaloneMode, openExternalUrl } from "@/lib/pwa";
 
 export const NAVER_MAP_FALLBACK_EVENT = "naver-map:fallback";
 
-/** @deprecated NAVER_MAP_FALLBACK_EVENT 사용 */
-export const NAVER_MAP_ANDROID_FALLBACK_EVENT = NAVER_MAP_FALLBACK_EVENT;
 
 export type NaverMapFallbackPlatform = "ios" | "android";
 
@@ -23,8 +21,6 @@ export type NaverMapFallbackDetail = {
   webFallbackUrl?: string;
 };
 
-/** @deprecated NaverMapFallbackDetail 사용 */
-export type NaverMapAndroidFallbackDetail = NaverMapFallbackDetail;
 
 export const NAVER_MAP_IOS_STORE_URL =
   "https://apps.apple.com/kr/app/naver-map-navigation/id311867728";
@@ -72,8 +68,6 @@ export function getNaverMapFallbackCopy(locale?: AppLocale) {
   return COPY[key] ?? COPY.ko;
 }
 
-/** @deprecated getNaverMapFallbackCopy 사용 */
-export const getNaverMapAndroidFallbackCopy = getNaverMapFallbackCopy;
 
 export function promptNaverMapFallback(detail: NaverMapFallbackDetail): void {
   window.dispatchEvent(
@@ -83,10 +77,6 @@ export function promptNaverMapFallback(detail: NaverMapFallbackDetail): void {
   );
 }
 
-/** @deprecated promptNaverMapFallback 사용 */
-export function promptNaverMapAndroidFallback(webFallbackUrl: string): void {
-  promptNaverMapFallback({ platform: "android", webFallbackUrl });
-}
 
 export function openNaverMapIosStore(): void {
   window.location.href = NAVER_MAP_IOS_STORE_URL;

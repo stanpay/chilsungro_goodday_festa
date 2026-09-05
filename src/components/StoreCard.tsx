@@ -1,12 +1,13 @@
 import { Card } from "@/components/ui/card";
 import { Coffee, MapPin, ShoppingBag, Store, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { measureTextWidth } from "@/lib/measureTextWidth";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
 import { openStoreRedirect } from "@/lib/storeRedirect";
 
 interface StoreCardProps {
@@ -110,20 +111,8 @@ const StoreCard = ({
     const container = nameContainerRef.current;
     if (!container) return;
 
-    const measure = (fontSizeClass: string) => {
-      const probe = document.createElement("span");
-      probe.className = `${fontSizeClass} font-bold whitespace-nowrap`;
-      probe.textContent = displayName;
-      probe.style.position = "absolute";
-      probe.style.visibility = "hidden";
-      probe.style.pointerEvents = "none";
-      probe.style.left = "-9999px";
-      probe.style.top = "-9999px";
-      document.body.appendChild(probe);
-      const width = probe.scrollWidth;
-      probe.remove();
-      return width;
-    };
+    const measure = (fontSizeClass: string) =>
+      measureTextWidth(displayName, `${fontSizeClass} font-bold whitespace-nowrap`);
 
     const updateNameLayout = () => {
       const containerWidth = container.clientWidth - NAME_SAFE_RIGHT_PADDING_PX;
@@ -256,11 +245,23 @@ const StoreCard = ({
   const chipClassName =
     "inline-flex items-center px-1.5 py-1 rounded text-[11px] font-medium leading-none whitespace-nowrap shrink-0";
 
+  // div onClick만으로는 키보드·스크린리더로 카드를 열 수 없다
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    handleClick();
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled || undefined}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className={cn(
-        "relative h-full",
+        "relative h-full rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         disabled && "opacity-50 cursor-not-allowed"
       )}
     >
@@ -285,6 +286,7 @@ const StoreCard = ({
                 src={photoUrl}
                 alt=""
                 aria-hidden="true"
+                loading="lazy"
                 decoding="async"
                 className="absolute inset-0 h-full w-full object-cover"
                 onError={() => setPhotoFailed(true)}
@@ -422,4 +424,6 @@ const StoreCard = ({
   );
 };
 
-export default StoreCard;
+// 목록 리렌더 시 카드 전체가 다시 그려지는 것을 막는다.
+// Main.tsx는 콜백 prop 없이 {...store}만 전달하므로 memo만으로 효과가 있다.
+export default memo(StoreCard);

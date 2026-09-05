@@ -194,6 +194,8 @@ const NavigatePage = () => {
           <img
             src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
             alt={directionsAlt}
+            loading="lazy"
+            decoding="async"
             className="w-full object-contain"
           />
         </button>
@@ -220,6 +222,8 @@ const NavigatePage = () => {
           <img
             src={couponGuideBannerImage}
             alt={couponGuideBannerAlt}
+            loading="lazy"
+            decoding="async"
             className="w-full object-contain"
           />
         </button>

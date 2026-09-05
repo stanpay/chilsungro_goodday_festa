@@ -545,20 +545,6 @@ export function parseNmapSchemeUrl(url: string): ParsedNmapSchemeUrl | null {
   };
 }
 
-/** nmap/intent 스킴 → 공식 HTTPS 네이버지도 URL */
-export function buildNaverMapWebUrlFromScheme(
-  schemeUrl: string,
-  context?: NaverMapFallbackContext,
-): string | undefined {
-  if (!isNativeMapSchemeUrl(schemeUrl)) return undefined;
-
-  const result = computeNaverMapWebUrl(schemeUrl, context);
-  if (result.startsWith("http") && !isNaverMapSearchUrl(result)) {
-    return result;
-  }
-  return undefined;
-}
-
 function buildNaverMapMarkerDeepLinks(input: {
   lat: number;
   lon: number;
@@ -606,47 +592,6 @@ export function openNaverMapMarker(input: {
     targetUrl: nmapUrl,
     context: { lat, lon, name },
     webFallbackUrl: httpTarget,
-  };
-
-  if (isAndroid) {
-    tryOpenDeepLink(nmapUrl, { fallback, intentUrl });
-    return;
-  }
-
-  if (isIOS) {
-    tryOpenDeepLink(nmapUrl, { fallback });
-    return;
-  }
-
-  openNaverMapWebFallback(
-    buildNaverMapWebFallbackUrl(fallback.targetUrl, fallback.context),
-  );
-}
-
-/**
- * 네이버지도 앱 딥링크로 매장 위치를 연다.
- * - 데스크톱: HTTPS 웹 지도 새 탭
- * - Android: PWA nmap / 모바일 웹 intent (실패·Play Store 복귀 시 팝업)
- * - iOS: nmap (PWA·웹 동일, 실패 시 팝업)
- */
-export function openNaverMapsApp(input: MapDirectionInput): void {
-  const { name, lat, lon } = input;
-  const { isIOS, isAndroid } = getMobileEnv();
-
-  if (!hasValidCoords(lat, lon) || lat == null || lon == null) {
-    openNaverMapWebFallback(buildNaverMapOpenUrl({ name }));
-    return;
-  }
-
-  const appName = getNaverMapAppName();
-  const nmapUrl = `nmap://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}`;
-  const intentUrl =
-    `intent://map?lat=${lat}&lng=${lon}&zoom=16&appname=${appName}` +
-    `#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
-    `category=android.intent.category.BROWSABLE;package=${NAVER_MAP_ANDROID_PACKAGE};end`;
-  const fallback: NaverMapDeepLinkFallback = {
-    targetUrl: nmapUrl,
-    context: { lat, lon, name },
   };
 
   if (isAndroid) {

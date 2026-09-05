@@ -2,7 +2,31 @@ import type { AppLocale } from "@/lib/locale";
 import { loadNaverMaps } from "@/lib/naver";
 export const UNKNOWN_ADDRESS = "위치를 확인할 수 없음";
 const REVERSE_GEOCODE_ORDERS = "roadaddr,addr,admcode";
-function formatReverseGeocodeItem(item: any): string {
+/** 네이버 리버스 지오코딩 응답 항목 (필요한 필드만 선언) */
+interface ReverseGeocodeRegionName {
+    name?: string;
+}
+interface ReverseGeocodeItem {
+    name?: string;
+    region?: {
+        area1?: ReverseGeocodeRegionName;
+        area2?: ReverseGeocodeRegionName;
+        area3?: ReverseGeocodeRegionName;
+        area4?: ReverseGeocodeRegionName;
+    };
+    land?: {
+        name?: string;
+        number1?: string;
+        number2?: string;
+    };
+}
+interface ReverseGeocodeResponse {
+    results?: ReverseGeocodeItem[];
+    v2?: { results?: ReverseGeocodeItem[] };
+    result?: { results?: ReverseGeocodeItem[] };
+}
+
+function formatReverseGeocodeItem(item: ReverseGeocodeItem): string {
     const region = item?.region ?? {};
     const land = item?.land ?? {};
     const area2 = region.area2?.name ?? "";
@@ -21,8 +45,8 @@ function formatReverseGeocodeItem(item: any): string {
     const lot = number1 ? `${number1}${number2}` : "";
     return [area2, area3, lot].filter(Boolean).join(" ").trim();
 }
-function pickAddressFromReverseResponse(response: any): string | null {
-    const results: any[] = response?.results ??
+function pickAddressFromReverseResponse(response: ReverseGeocodeResponse): string | null {
+    const results: ReverseGeocodeItem[] = response?.results ??
         response?.v2?.results ??
         response?.result?.results ??
         [];
@@ -54,17 +78,17 @@ async function reverseGeocodeWithNaverProxy(latitude: number, longitude: number)
 }
 async function reverseGeocodeWithJs(latitude: number, longitude: number, locale?: AppLocale): Promise<string | null> {
     await loadNaverMaps(locale, { geocoder: true });
-    const naver = (window as any).naver;
-    if (!naver?.maps?.Service)
+    const naverSdk = window.naver;
+    if (!naverSdk?.maps?.Service)
         return null;
     return new Promise((resolve) => {
         const timeoutId = window.setTimeout(() => resolve(null), 10000);
-        naver.maps.Service.reverseGeocode({
-            coords: new naver.maps.LatLng(latitude, longitude),
+        naverSdk.maps.Service.reverseGeocode({
+            coords: new naverSdk.maps.LatLng(latitude, longitude),
             orders: REVERSE_GEOCODE_ORDERS,
-        }, (status: any, response: any) => {
+        }, (status, response) => {
             window.clearTimeout(timeoutId);
-            if (status !== naver.maps.Service.Status.OK) {
+            if (status !== naverSdk.maps.Service.Status.OK) {
                 resolve(null);
                 return;
             }
@@ -78,14 +102,16 @@ export async function getAddressFromCoords(latitude: number, longitude: number, 
         if (fromProxy)
             return fromProxy;
     }
-    catch (error) {
+    catch {
+        // 실패 시 다음 폴백 경로로 넘어간다
     }
     try {
         const fromJs = await reverseGeocodeWithJs(latitude, longitude, locale);
         if (fromJs)
             return fromJs;
     }
-    catch (error) {
+    catch {
+        // 실패 시 다음 폴백 경로로 넘어간다
     }
     return UNKNOWN_ADDRESS;
 }

@@ -156,7 +156,7 @@ export default function ZoomablePosterImage({
       drag: {
         filterTaps: true,
         from: () => [0, 0],
-        enabled: () => scaleRef.current > MIN_SCALE,
+        enabled: scale > MIN_SCALE,
       },
       pinch: {
         scaleBounds: { min: MIN_SCALE, max: MAX_SCALE },

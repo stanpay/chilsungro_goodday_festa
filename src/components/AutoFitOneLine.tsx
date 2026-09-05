@@ -48,7 +48,7 @@ export function AutoFitOneLine({
     update();
     document.fonts?.ready.then(update);
 
-    if (!("ResizeObserver" in window)) {
+    if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", update);
       return () => window.removeEventListener("resize", update);
     }

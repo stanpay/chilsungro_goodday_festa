@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 같은 브랜치에 새 푸시가 오면 이전 실행은 취소한다
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 빌드
+        run: npm run build
+
+      # 백로그를 정리해 타입 오류 0건, ESLint 오류 0건이 되었으므로 블로킹으로 둔다.
+      # 경고(미사용 변수·exhaustive-deps 등)는 아직 남아 있어 실패시키지 않는다.
+      # 경고까지 막으려면 lint 스크립트에 --max-warnings=0을 붙이면 된다.
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 린트
+        run: npm run lint

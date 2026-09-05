@@ -1,6 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity, Alert, Platform, BackHandler } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity, Alert, Platform, BackHandler, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
+import type {
+  ShouldStartLoadRequest,
+  WebViewErrorEvent,
+  WebViewHttpErrorEvent,
+  WebViewMessageEvent,
+  WebViewNavigation,
+  WebViewProgressEvent,
+} from 'react-native-webview/lib/WebViewTypes';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
@@ -23,6 +31,32 @@ const getWebUrl = () => {
 };
 
 const WEB_URL = getWebUrl();
+
+/**
+ * URL에서 출처(scheme://host:port)만 추출한다.
+ * React Native의 URL 폴리필은 .origin을 신뢰할 수 없어 문자열로 파싱한다.
+ */
+const originOf = (url: string): string | null => {
+  const match = /^([a-z][a-z0-9+.-]*:\/\/[^/?#]+)/i.exec(url);
+  return match ? match[1].toLowerCase() : null;
+};
+
+const WEB_ORIGIN = originOf(WEB_URL);
+
+/**
+ * WebView 안에서 렌더링을 허용할 출처.
+ * 임의 출처를 열면 주입된 네이티브 브리지(위치 요청·스토리지 read/write)가
+ * 악성 페이지에 그대로 노출된다.
+ */
+const ORIGIN_WHITELIST = WEB_ORIGIN ? [WEB_ORIGIN] : ['https://*'];
+
+/** WebView 안에서 계속 처리할 URL인가 (그 외는 OS 기본 앱으로 넘긴다) */
+const isInAppUrl = (url: string): boolean => {
+  if (url === 'about:blank') return true;
+  if (url.startsWith('data:') || url.startsWith('blob:')) return true;
+  if (!WEB_ORIGIN) return false;
+  return originOf(url) === WEB_ORIGIN;
+};
 
 // 모바일 User-Agent 설정 (카카오 OAuth가 모바일 환경으로 인식하도록)
 const getMobileUserAgent = () => {
@@ -190,7 +224,7 @@ export default function App() {
     }, 300);
   };
 
-  const handleLoadProgress = (event: any) => {
+  const handleLoadProgress = (event: WebViewProgressEvent) => {
     const progress = event.nativeEvent.progress;
     loadProgressRef.current = progress;
     
@@ -208,20 +242,20 @@ export default function App() {
     }
   };
 
-  const handleError = (syntheticEvent: any) => {
+  const handleError = (syntheticEvent: WebViewErrorEvent) => {
     const { nativeEvent } = syntheticEvent;
     setError('페이지를 불러오는 중 오류가 발생했습니다.');
     setLoading(false);
   };
 
-  const handleHttpError = (syntheticEvent: any) => {
+  const handleHttpError = (syntheticEvent: WebViewHttpErrorEvent) => {
     const { nativeEvent } = syntheticEvent;
     if (nativeEvent.statusCode >= 400) {
       setError(`서버 오류가 발생했습니다. (${nativeEvent.statusCode})`);
     }
   };
 
-  const handleNavigationStateChange = (navState: any) => {
+  const handleNavigationStateChange = (navState: WebViewNavigation) => {
     setCanGoBack(navState.canGoBack);
     
     // 페이지가 완전히 로드되었는지 확인
@@ -242,7 +276,7 @@ export default function App() {
   };
 
   // 네비게이션 요청 제어 (불필요한 리로드 방지)
-  const shouldStartLoadWithRequest = (request: any) => {
+  const shouldStartLoadWithRequest = (request: ShouldStartLoadRequest) => {
     const { url } = request;
     const currentUrl = WEB_URL;
     
@@ -256,8 +290,16 @@ export default function App() {
       return false;
     }
     
-    // 모든 다른 요청은 허용 (OAuth 리다이렉트 등)
-    return true;
+    // 자체 도메인만 WebView 안에서 처리한다
+    if (isInAppUrl(url)) {
+      return true;
+    }
+
+    // 외부 링크(네이버 지도·지도 앱 스킴·앱스토어 등)는 OS 기본 앱으로 넘긴다
+    Linking.openURL(url).catch(() => {
+      // 처리할 수 있는 앱이 없으면 무시한다
+    });
+    return false;
   };
 
   // 위치 정보 가져오기 함수
@@ -288,17 +330,17 @@ export default function App() {
           accuracy: location.coords.accuracy,
         }
       };
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         error: 'POSITION_UNAVAILABLE',
-        message: error.message || '위치 정보를 가져올 수 없습니다.'
+        message: error instanceof Error ? error.message : '위치 정보를 가져올 수 없습니다.'
       };
     }
   };
 
   // WebView에서 메시지 수신 처리
-  const handleMessage = async (event: any) => {
+  const handleMessage = async (event: WebViewMessageEvent) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
       
@@ -359,6 +401,8 @@ export default function App() {
               })();
             `);
           } catch (error) {
+            // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+            console.warn('[WebView] 스토리지 데이터 전달 실패', error);
           }
         };
         loadStorageData();
@@ -372,6 +416,8 @@ export default function App() {
               await AsyncStorage.setItem(message.key, String(message.value));
             }
           } catch (error) {
+            // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+            console.warn('[WebView] 스토리지 저장 실패', error);
           }
         };
         saveStorageData();
@@ -384,16 +430,20 @@ export default function App() {
             webViewRef.current?.injectJavaScript(`
               (function() {
                 if (window.receiveStorageValue) {
-                  window.receiveStorageValue('${message.key}', ${JSON.stringify(value)});
+                  window.receiveStorageValue(${JSON.stringify(message.key)}, ${JSON.stringify(value)});
                 }
               })();
             `);
           } catch (error) {
+            // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+            console.warn('[WebView] 스토리지 조회 결과 전달 실패', error);
           }
         };
         getStorageData();
       }
     } catch (error) {
+      // 스토리지 브리지 실패를 삼키면 원인 추적이 불가능하다
+      console.warn('[WebView] 메시지 처리 실패', error);
     }
   };
 
@@ -796,7 +846,7 @@ export default function App() {
         mediaPlaybackRequiresUserAction={false}
         // 무한 로딩 방지를 위한 추가 설정
         incognito={false}
-        originWhitelist={['*']}
+        originWhitelist={ORIGIN_WHITELIST}
       />
       {loading && (
         <View style={styles.loadingContainer}>

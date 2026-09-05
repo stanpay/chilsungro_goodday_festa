@@ -14,12 +14,22 @@ document.addEventListener("dragstart", (event) => {
         return;
     event.preventDefault();
 });
-document.addEventListener("gesturestart", (event) => event.preventDefault());
-document.addEventListener("gesturechange", (event) => event.preventDefault());
-document.addEventListener("gestureend", (event) => event.preventDefault());
+// 핀치 줌 차단은 지도 영역에만 적용한다.
+// 문서 전체에 걸면 본문 확대가 막혀 접근성 기준(WCAG 1.4.4)에 어긋난다.
+const preventGestureInsideMap = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(".map-container")) {
+        event.preventDefault();
+    }
+};
+document.addEventListener("gesturestart", preventGestureInsideMap);
+document.addEventListener("gesturechange", preventGestureInsideMap);
+document.addEventListener("gestureend", preventGestureInsideMap);
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
         navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+            // 등록 실패를 삼키면 오프라인 동작 이상을 추적할 수 없다
+            console.error("[SW] 서비스워커 등록 실패", error);
         });
     });
 }

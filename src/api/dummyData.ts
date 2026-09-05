@@ -1,10 +1,5 @@
 // 더미 데이터 - API 완성 전까지 사용
 
-export const DUMMY_USER = {
-  id: "user-001",
-  email: "test@jejuone.com",
-};
-
 export const DUMMY_STORES = [
   {
     id: "store-001",

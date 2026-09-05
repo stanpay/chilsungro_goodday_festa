@@ -11,11 +11,9 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -23,9 +21,23 @@ import {
 import StoreCard from "@/components/StoreCard";
 import StoreCardSkeleton from "@/components/StoreCardSkeleton";
 import MapViewBottomSheet, {
-  MAP_VIEW_SHEET_BOTTOM_NAV_PX,
   MAP_VIEW_SHEET_PEEK_HEIGHT,
 } from "@/components/MapViewBottomSheet";
+import {
+  MAP_SPIDERFY_MAX_RADIUS_PX,
+  PIN_LABEL_FONT_SIZE_PX,
+  PIN_LABEL_LINE_HEIGHT,
+  PIN_CLUSTER_SIZE_PX,
+  PIN_CLUSTER_FONT_SIZE_PX,
+  PIN_CLUSTER_BORDER_PX,
+  ClusterPinItem,
+  getPinLabelText,
+  measurePinLabelRect,
+  groupPinsForClustering,
+  pinLabelRectsOverlap,
+  panMapPinAboveSheet,
+  buildMyLocationPinElement,
+} from "@/lib/mapPins";
 import {
   updateChatwootBubblePosition,
   CHATWOOT_LAUNCHER_RIGHT,
@@ -34,11 +46,10 @@ import {
 import MainPromoBanner from "@/components/MainPromoBanner";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import BottomNav from "@/components/BottomNav";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, type ButtonHTMLAttributes, type MutableRefObject, type PointerEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   NEARBY_RADIUS_UNLIMITED_M,
   storesApi,
@@ -46,6 +57,7 @@ import {
 } from "@/api/stores";
 import { getStoreOpenStatus, type DayHours } from "@/api/storeDetails";
 import { getAddressFromCoords } from "@/lib/geocoding";
+import { resolveDisplayAddress, toDisplayAddress } from "@/lib/locationDisplay";
 import { JEJU_DOWNTOWN_COORDS } from "@/lib/naverGeocodeFallback";
 import { getBrowserPosition } from "@/lib/geolocation";
 import {
@@ -63,50 +75,35 @@ import {
   headerStrings,
   isLocationFetchFailed,
   LOCATION_FETCH_FAILED_KO,
-  type AppLocale,
 } from "@/lib/locale";
 import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { useTranslatedAddressLine } from "@/hooks/useKoreanDisplayText";
 import { cn } from "@/lib/utils";
 import { translateKoText } from "@/lib/koTranslate";
+import { distanceMeters } from "@/lib/geoDistance";
+import {
+  StoreFilterChipId,
+  STORE_CATEGORY_CHIP_ORDER,
+  StoreAreaFilterChipId,
+  STORE_AREA_FILTER_CHIP_ORDER,
+  LegacyBenefitFilterChipId,
+  imageFromStoreCategory,
+  categoryGroupCodeFromStoreCategory,
+  storeMatchesAllChipFilters,
+  filterStoresByName,
+  type StoreChipSelection,
+} from "@/lib/storeFilters";
+import {
+  FILTER_CHIP_ROW_VIEWPORT_CLASS,
+  FILTER_CHIP_ROW_INNER_CLASS,
+  INITIAL_FILTER_CHIP_SCROLL_DRAG_STATE,
+  createFilterChipScrollDragHandlers,
+  type FilterChipScrollDragState,
+} from "@/lib/filterChipScroll";
+import { ChipButton, FilterDropdownChip } from "@/components/StoreFilterChips";
+import { useStoreFilters } from "@/hooks/useStoreFilters";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 
-type StoreFilterChipId =
-  | "all"
-  | "chilsungro"
-  | "localCurrency"
-  | "highOilSupport"
-  | "restaurant"
-  | "cafe"
-  | "shopping"
-  | "other";
-
-const BENEFIT_FILTER_CHIP_ORDER: StoreFilterChipId[] = [
-  "all",
-  "chilsungro",
-  "localCurrency",
-  "highOilSupport",
-];
-
-const STORE_CATEGORY_CHIP_ORDER: StoreFilterChipId[] = [
-  "all",
-  "restaurant",
-  "cafe",
-  "shopping",
-  "other",
-];
-
-type StoreAreaFilterChipId =
-  | "all"
-  | "areaChilsungro"
-  | "areaJungangro"
-  | "areaUndergroundMall";
-
-const STORE_AREA_FILTER_CHIP_ORDER: StoreAreaFilterChipId[] = [
-  "all",
-  "areaChilsungro",
-  "areaJungangro",
-  "areaUndergroundMall",
-];
 
 const MAP_MAX_ZOOM = 21;
 /** 지도뷰 첫 화면 기본 줌 */
@@ -258,701 +255,11 @@ async function enrichStoreWithDiscount(
     };
   }
 }
-const MAP_SPIDERFY_MAX_RADIUS_PX = 96;
-const MAP_VIEW_PADDING = { top: 100, right: 48, bottom: 220, left: 48 };
-/** 선택 매장 핀 — UI 경계(재검색 버튼·시트 핸들)와의 여백 */
-const MAP_PIN_FOCUS_BAND_GAP_PX = 8;
-/** 0=밴드 상단, 1=밴드 하단 — 핀 시각 중심 목표 (시트 쪽으로 치우침) */
-const MAP_PIN_FOCUS_BAND_POSITION = 0.72;
-const PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX = 16;
-
-type MapPinFocusBand = {
-  top: number;
-  bottom: number;
-  targetY: number;
-};
-
-function measureMapPinFocusBand(
-  mapEl: HTMLElement | null,
-  researchButtonEl: HTMLElement | null,
-  sheetHeightPx: number
-): MapPinFocusBand {
-  const mapRect = mapEl?.getBoundingClientRect();
-  const viewportH = window.visualViewport?.height ?? window.innerHeight;
-
-  if (!mapRect?.height) {
-    const mapHeight = mapEl?.clientHeight ?? 600;
-    const fallbackBottom =
-      mapHeight -
-      (MAP_VIEW_SHEET_BOTTOM_NAV_PX + sheetHeightPx + MAP_PIN_FOCUS_BAND_GAP_PX);
-    const fallbackTop = MAP_VIEW_PADDING.top;
-    const fallbackBandBottom = Math.max(fallbackTop, fallbackBottom);
-    return {
-      top: fallbackTop,
-      bottom: fallbackBandBottom,
-      targetY:
-        fallbackTop +
-        (fallbackBandBottom - fallbackTop) * MAP_PIN_FOCUS_BAND_POSITION,
-    };
-  }
-
-  const mapTop = mapRect.top;
-  const mapHeight = mapRect.height;
-
-  let bandTop = MAP_VIEW_PADDING.top;
-  if (researchButtonEl) {
-    const boundaryRect = researchButtonEl.getBoundingClientRect();
-    bandTop = Math.max(
-      bandTop,
-      boundaryRect.bottom - mapTop + MAP_PIN_FOCUS_BAND_GAP_PX
-    );
-  }
-
-  const sheetTopInViewport =
-    viewportH - MAP_VIEW_SHEET_BOTTOM_NAV_PX - sheetHeightPx;
-  const bandBottom = Math.min(
-    mapHeight - MAP_PIN_FOCUS_BAND_GAP_PX,
-    sheetTopInViewport - mapTop - MAP_PIN_FOCUS_BAND_GAP_PX
-  );
-
-  const clampedBottom = Math.max(bandTop + 20, bandBottom);
-  const targetY =
-    bandTop + (clampedBottom - bandTop) * MAP_PIN_FOCUS_BAND_POSITION;
-
-  return {
-    top: bandTop,
-    bottom: clampedBottom,
-    targetY: Math.max(bandTop, Math.min(clampedBottom, targetY)),
-  };
-}
-
-function panMapPinToTargetY(
-  map: { getSize?: () => { height: number }; panBy: (offset: unknown) => void },
-  naver: { maps: { Point: new (x: number, y: number) => unknown } },
-  targetVisualCenterY: number,
-  anchorOffsetBelowVisualCenterPx = PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX
-) {
-  const mapSize = map.getSize?.();
-  if (!mapSize) return;
-  const anchorTargetY = targetVisualCenterY + anchorOffsetBelowVisualCenterPx;
-  const deltaY = mapSize.height / 2 - anchorTargetY;
-  if (Math.abs(deltaY) > 0.5) {
-    map.panBy(new naver.maps.Point(0, deltaY));
-  }
-}
-const PIN_LABEL_GAP_PX = 4;
-const PIN_TAIL_HEIGHT_PX = 8;
-const PIN_BALLOON_PADDING_X = 16;
-const PIN_BALLOON_PADDING_Y = 8;
-const PIN_LABEL_FONT_SIZE_PX = 11;
-const PIN_LABEL_FONT = `700 ${PIN_LABEL_FONT_SIZE_PX}px system-ui, -apple-system, sans-serif`;
-const PIN_LABEL_LINE_HEIGHT = 1.35;
-const PIN_CLUSTER_SIZE_PX = 30;
-const PIN_CLUSTER_FONT_SIZE_PX = 11;
-const PIN_CLUSTER_BORDER_PX = 2;
-
-type PinLabelRect = { left: number; top: number; right: number; bottom: number };
-
-let pinLabelMeasureCtx: CanvasRenderingContext2D | null = null;
-
-function measurePinLabelTextWidth(text: string): number {
-  if (!pinLabelMeasureCtx) {
-    const canvas = document.createElement("canvas");
-    pinLabelMeasureCtx = canvas.getContext("2d")!;
-    pinLabelMeasureCtx.font = PIN_LABEL_FONT;
-  }
-  return Math.ceil(pinLabelMeasureCtx.measureText(text).width);
-}
-
-function getPinLabelText(markerContent: HTMLElement | null): string {
-  return markerContent?.querySelector("[data-store-label]")?.textContent ?? "";
-}
-
-function measurePinLabelRect(
-  anchorX: number,
-  anchorY: number,
-  labelText: string,
-  spiderfyOffset = { x: 0, y: 0 }
-): PinLabelRect {
-  const width = Math.max(measurePinLabelTextWidth(labelText) + PIN_BALLOON_PADDING_X, 22);
-  const height = Math.ceil(PIN_LABEL_FONT_SIZE_PX * PIN_LABEL_LINE_HEIGHT) + PIN_BALLOON_PADDING_Y;
-  const x = anchorX + spiderfyOffset.x;
-  const y = anchorY + spiderfyOffset.y;
-  return {
-    left: x - width / 2,
-    top: y - PIN_TAIL_HEIGHT_PX - height,
-    right: x + width / 2,
-    bottom: y,
-  };
-}
-
-function computePinAnchorOffsetBelowVisualCenter(
-  marker: any,
-  proj: any,
-  spiderfyOffset = { x: 0, y: 0 }
-): number {
-  try {
-    const pos = marker.getPosition();
-    const pt = proj.fromCoordToOffset(pos);
-    const icon = marker?.getIcon?.();
-    const root = (icon?.content as HTMLElement) ?? null;
-    const text = getPinLabelText(root);
-    const bounds = measurePinLabelRect(pt.x, pt.y, text, spiderfyOffset);
-    return (bounds.bottom - bounds.top) / 2;
-  } catch {
-    return PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX;
-  }
-}
-
-function labelRectsOverlap(a: PinLabelRect, b: PinLabelRect, gap = PIN_LABEL_GAP_PX): boolean {
-  return !(
-    a.right + gap < b.left ||
-    a.left - gap > b.right ||
-    a.bottom + gap < b.top ||
-    a.top - gap > b.bottom
-  );
-}
-
-function labelRectsOverlapForCluster(a: PinLabelRect, b: PinLabelRect, zoom: number): boolean {
-  if (!labelRectsOverlap(a, b, 0)) return false;
-  const overlapW = Math.min(a.right, b.right) - Math.max(a.left, b.left);
-  const overlapH = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-  // minW/minH = "이만큼 이상 겹쳐야 같은 클러스터" → 값이 클수록 묶임이 어려워져 클러스터 개수↑
-  // v5 타일 기준: 줌 16≈100m, 줌 15≈300m 확대비율. 줌 15도 일반 구간과 동일 기준으로 묶는다.
-  const minW = zoom >= 16 ? 18 : 12;
-  const minH = zoom >= 16 ? 12 : 8;
-  return overlapW >= minW && overlapH >= minH;
-}
-
-function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function getMaxClusterDistanceM(zoom: number): number {
-  // v5 타일 확대비율: 줌 16≈100m, 줌 15≈300m, 줌 13~14≈500m~1km.
-  // 줌이 커질수록(확대) 화면상 같은 픽셀이 더 작은 실거리를 덮으므로 묶는 최대 거리도 단조 감소.
-  if (zoom >= 18) return 20;
-  if (zoom >= 16) return 40;
-  if (zoom >= 15) return 100; // 300m 확대비율 구간
-  if (zoom >= 13) return 160;
-  return 280;
-}
-
-type ClusterPinItem = {
-  id: string;
-  marker: any;
-  bounds: PinLabelRect;
-  pos: { lat: () => number; lng: () => number };
-};
-
-function groupPinsForClustering(items: ClusterPinItem[], zoom: number): ClusterPinItem[][] {
-  const n = items.length;
-  if (n === 0) return [];
-  const maxDistM = getMaxClusterDistanceM(zoom);
-  const parent = Array.from({ length: n }, (_, i) => i);
-  const find = (i: number): number => {
-    if (parent[i] !== i) parent[i] = find(parent[i]);
-    return parent[i];
-  };
-  const union = (a: number, b: number) => {
-    const ra = find(a);
-    const rb = find(b);
-    if (ra !== rb) parent[rb] = ra;
-  };
-
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      if (!labelRectsOverlapForCluster(items[i].bounds, items[j].bounds, zoom)) continue;
-      const distM = distanceMeters(
-        items[i].pos.lat(),
-        items[i].pos.lng(),
-        items[j].pos.lat(),
-        items[j].pos.lng()
-      );
-      if (distM <= maxDistM) union(i, j);
-    }
-  }
-
-  const groups = new Map<number, ClusterPinItem[]>();
-  items.forEach((item, index) => {
-    const root = find(index);
-    if (!groups.has(root)) groups.set(root, []);
-    groups.get(root)!.push(item);
-  });
-  return [...groups.values()];
-}
-
-function pinLabelRectsOverlap(rects: PinLabelRect[]): boolean {
-  for (let i = 0; i < rects.length; i++) {
-    for (let j = i + 1; j < rects.length; j++) {
-      if (labelRectsOverlap(rects[i], rects[j])) return true;
-    }
-  }
-  return false;
-}
-
-function panMapPinAboveSheet(
-  map: { getSize?: () => { height: number }; panBy: (offset: unknown) => void; getProjection?: () => any },
-  naver: { maps: { Point: new (x: number, y: number) => unknown } },
-  mapEl: HTMLElement | null,
-  researchButtonEl: HTMLElement | null,
-  sheetHeightPx: number,
-  selectedMarker?: any
-) {
-  const band = measureMapPinFocusBand(
-    mapEl,
-    researchButtonEl,
-    sheetHeightPx
-  );
-  let anchorOffset = PIN_ANCHOR_BELOW_VISUAL_CENTER_FALLBACK_PX;
-  const proj = map.getProjection?.();
-  if (proj && selectedMarker) {
-    anchorOffset = computePinAnchorOffsetBelowVisualCenter(selectedMarker, proj);
-  }
-  panMapPinToTargetY(map, naver, band.targetY, anchorOffset);
-}
-
-function pinLabelRectsFitInView(
-  rects: PinLabelRect[],
-  viewWidth: number,
-  viewHeight: number,
-  padding = MAP_VIEW_PADDING
-): boolean {
-  if (rects.length === 0) return true;
-  const minX = padding.left;
-  const minY = padding.top;
-  const maxX = viewWidth - padding.right;
-  const maxY = viewHeight - padding.bottom;
-  return rects.every(
-    (rect) => rect.left >= minX && rect.top >= minY && rect.right <= maxX && rect.bottom <= maxY
-  );
-}
-
 function sortStoresByName<T extends { name: string }>(stores: T[]): T[] {
   return [...stores].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
-function buildMyLocationPinElement(title: string): HTMLDivElement {
-  const root = document.createElement("div");
-  root.style.cssText = "position:absolute;width:0;height:0;pointer-events:none;";
-  root.title = title;
-  const dot = document.createElement("div");
-  dot.style.cssText =
-    "position:absolute;width:13px;height:13px;transform:translate(-50%,-50%);border-radius:9999px;background:#22c55e;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);";
-  root.appendChild(dot);
-  return root;
-}
 
-function inferChainImageFromPlaceName(placeName: string): string | null {
-  const rules: [string, string][] = [
-    ["스타벅스", "starbucks"],
-    ["스타벅", "starbucks"],
-    ["베스킨", "baskin"],
-    ["메가커피", "mega"],
-    ["메가 MGC", "mega"],
-    ["파스쿠찌", "pascucci"],
-    ["투썸", "twosome"],
-  ];
-  for (const [kw, img] of rules) {
-    if (placeName.includes(kw)) return img;
-  }
-  return null;
-}
-
-function categoryDefaultImage(place: {
-  place_name?: string;
-  category_group_code?: string;
-}): string {
-  const chain = inferChainImageFromPlaceName(place.place_name || "");
-  if (chain) return chain;
-  const g = place.category_group_code;
-  if (g === "MT1" || g === "CS2") return "shopping";
-  if (g === "CE7") return "cafe";
-  if (g === "FD6") return "restaurant";
-  return "other";
-}
-
-type StoreLikeForChip = {
-  image: string;
-  categoryGroupCode?: string;
-  categoryName?: string;
-  area?: string | null;
-  local_currency_available?: boolean;
-  high_oil_support_available?: boolean;
-  hasTravelConsumerCoupon?: boolean;
-};
-
-function storeHasHighOilSupport(store: StoreLikeForChip): boolean {
-  return store.high_oil_support_available === true;
-}
-
-function storeChipIsCafe(store: StoreLikeForChip): boolean {
-  if (store.categoryGroupCode === "CE7") return true;
-  const cafeImages = new Set(["starbucks", "mega", "pascucci", "twosome", "baskin"]);
-  if (cafeImages.has(store.image)) return true;
-  if (store.image === "cafe") return true;
-  return false;
-}
-
-function storeChipIsRestaurant(store: StoreLikeForChip): boolean {
-  if (storeChipIsCafe(store)) return false;
-  if (store.image === "restaurant") return true;
-  if (store.categoryGroupCode === "FD6") return true;
-  return false;
-}
-
-function storeChipIsShopping(store: StoreLikeForChip): boolean {
-  if (["MT1", "CS2"].includes(store.categoryGroupCode || "")) return true;
-  if (store.image === "shopping") return true;
-  return false;
-}
-
-function storeHasChilsungroCoupon(store: StoreLikeForChip): boolean {
-  return store.hasTravelConsumerCoupon === true;
-}
-
-function imageFromStoreCategory(category?: string | null): string {
-  if (!category) return "other";
-  if (category.includes("카페") || category.includes("디저트")) return "cafe";
-  if (category.includes("쇼핑")) return "shopping";
-  if (category.includes("음식")) return "restaurant";
-  return "other";
-}
-
-function categoryGroupCodeFromStoreCategory(category?: string | null): string {
-  if (!category) return "";
-  if (category.includes("카페") || category.includes("디저트")) return "CE7";
-  if (category.includes("쇼핑")) return "MT1";
-  if (category.includes("음식")) return "FD6";
-  return "";
-}
-
-function storeChipIsOther(store: StoreLikeForChip): boolean {
-  return (
-    !storeChipIsRestaurant(store) &&
-    !storeChipIsCafe(store) &&
-    !storeChipIsShopping(store)
-  );
-}
-
-function storeMatchesBenefitChipFilters(
-  store: StoreLikeForChip,
-  chips: ReadonlySet<StoreFilterChipId>,
-  locale: AppLocale
-): boolean {
-  // openNow는 제거됨 — 혜택 칩만 매칭
-  if (chips.has("all")) return true;
-
-  const parts: boolean[] = [];
-  if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
-  if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
-  if (locale === "ko" && chips.has("highOilSupport")) {
-    parts.push(storeHasHighOilSupport(store));
-  }
-
-  return parts.length > 0 && parts.some(Boolean);
-}
-
-function storeMatchesAreaChipFilters(
-  store: StoreLikeForChip,
-  chips: ReadonlySet<StoreAreaFilterChipId>
-): boolean {
-  if (chips.has("all")) return true;
-
-  const parts: boolean[] = [];
-  if (chips.has("areaChilsungro")) parts.push(store.area === "칠성로");
-  if (chips.has("areaJungangro")) parts.push(store.area === "중앙로");
-  if (chips.has("areaUndergroundMall")) parts.push(store.area === "지하상가");
-
-  return parts.length > 0 && parts.some(Boolean);
-}
-
-function storeMatchesCategoryChipFilters(
-  store: StoreLikeForChip,
-  chips: ReadonlySet<StoreFilterChipId>
-): boolean {
-  if (chips.has("all")) return true;
-
-  const parts: boolean[] = [];
-  if (chips.has("restaurant")) parts.push(storeChipIsRestaurant(store));
-  if (chips.has("cafe")) parts.push(storeChipIsCafe(store));
-  if (chips.has("shopping")) parts.push(storeChipIsShopping(store));
-  if (chips.has("other")) parts.push(storeChipIsOther(store));
-
-  return parts.length > 0 && parts.some(Boolean);
-}
-
-function getFilterDropdownLabel<T extends string>(
-  filterLabel: string,
-  order: readonly T[],
-  activeChips: ReadonlySet<T>,
-  labelMap: Record<T, string>
-): string {
-  const allLabel = labelMap["all" as T];
-
-  if (activeChips.has("all" as T)) {
-    return `${filterLabel} - ${allLabel}`;
-  }
-
-  const selected = order
-    .filter((id) => id !== "all" && activeChips.has(id))
-    .map((id) => labelMap[id]);
-
-  if (selected.length === 0) {
-    return `${filterLabel} - ${allLabel}`;
-  }
-
-  return `${filterLabel} - ${selected.join(", ")}`;
-}
-
-type LegacyBenefitFilterChipId = StoreFilterChipId | "openNow";
-
-const LEGACY_BENEFIT_FILTER_CHIP_ORDER: LegacyBenefitFilterChipId[] = [
-  "all",
-  "chilsungro",
-  "localCurrency",
-  "highOilSupport",
-  "openNow",
-];
-
-const FILTER_CHIP_ROW_VIEWPORT_CLASS =
-  "w-full min-w-0 overflow-x-scroll overscroll-x-contain pl-4 pr-4 pointer-events-none [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-
-const FILTER_CHIP_ROW_INNER_CLASS =
-  "flex w-max flex-nowrap gap-2 pointer-events-auto touch-pan-x [&_button]:touch-pan-x";
-
-const FILTER_CHIP_SCROLL_DRAG_THRESHOLD_PX = 8;
-
-type FilterChipScrollDragState = {
-  tracking: boolean;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  dragged: boolean;
-};
-
-const INITIAL_FILTER_CHIP_SCROLL_DRAG_STATE: FilterChipScrollDragState = {
-  tracking: false,
-  pointerId: -1,
-  startX: 0,
-  startY: 0,
-  dragged: false,
-};
-
-function createFilterChipScrollDragHandlers(
-  dragRef: MutableRefObject<FilterChipScrollDragState>
-) {
-  const endPointer = (pointerId: number) => {
-    const state = dragRef.current;
-    if (pointerId !== state.pointerId) return;
-    state.tracking = false;
-    if (state.dragged) {
-      requestAnimationFrame(() => {
-        dragRef.current.dragged = false;
-      });
-    }
-  };
-
-  return {
-    onPointerDownCapture: (event: PointerEvent<HTMLDivElement>) => {
-      dragRef.current = {
-        tracking: true,
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        dragged: false,
-      };
-    },
-    onPointerMoveCapture: (event: PointerEvent<HTMLDivElement>) => {
-      const state = dragRef.current;
-      if (!state.tracking || event.pointerId !== state.pointerId) return;
-
-      const deltaX = Math.abs(event.clientX - state.startX);
-      const deltaY = Math.abs(event.clientY - state.startY);
-      if (deltaX > FILTER_CHIP_SCROLL_DRAG_THRESHOLD_PX && deltaX > deltaY) {
-        state.dragged = true;
-      }
-    },
-    onPointerUpCapture: (event: PointerEvent<HTMLDivElement>) => {
-      endPointer(event.pointerId);
-    },
-    onPointerCancelCapture: (event: PointerEvent<HTMLDivElement>) => {
-      endPointer(event.pointerId);
-    },
-  };
-}
-
-type FilterDropdownChipProps<T extends string> = {
-  filterLabel: string;
-  order: readonly T[];
-  activeChips: ReadonlySet<T>;
-  onApply: (next: Set<T>) => void;
-  labelMap: Record<T, string>;
-  ariaLabel: string;
-  scrollDragRef: MutableRefObject<FilterChipScrollDragState>;
-};
-
-const ChipButton = forwardRef<
-  HTMLButtonElement,
-  {
-    id: string;
-    active: boolean;
-    label: string;
-    onToggle?: () => void;
-    showChevron?: boolean;
-    primaryBorder?: boolean;
-  } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick">
->(function ChipButton(
-  { id, active, label, onToggle, showChevron = false, primaryBorder = false, className, onClick, ...rest },
-  ref
-) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      aria-pressed={active}
-      onClick={(event) => {
-        onClick?.(event);
-        onToggle?.();
-      }}
-      className={cn(
-        "pointer-events-auto flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground shadow-sm"
-          : primaryBorder
-            ? "border-primary bg-card text-foreground hover:bg-muted/80 focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/20"
-            : "border-border bg-card text-foreground hover:bg-muted/80",
-        className
-      )}
-      {...rest}
-    >
-      {id === "openNow" && (
-        <span
-          className={cn(
-            "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-            active ? "bg-green-300" : "bg-green-500"
-          )}
-        />
-      )}
-      <span className="whitespace-nowrap text-xs">{label}</span>
-      {showChevron && <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />}
-    </button>
-  );
-});
-
-function FilterDropdownChip<T extends string>({
-  filterLabel,
-  order,
-  activeChips,
-  onApply,
-  labelMap,
-  ariaLabel,
-  scrollDragRef,
-}: FilterDropdownChipProps<T>) {
-  const { locale } = useAppLocale();
-  const t = mainStrings(locale);
-  const [open, setOpen] = useState(false);
-  const [draftChips, setDraftChips] = useState<Set<T>>(() => new Set(activeChips));
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const triggerLabel = getFilterDropdownLabel(filterLabel, order, activeChips, labelMap);
-
-  const closeMenu = () => {
-    setOpen(false);
-    triggerRef.current?.blur();
-  };
-
-  const toggleDraft = (id: T) => {
-    setDraftChips((prev) => {
-      if (id === "all") return new Set<T>(["all" as T]);
-
-      const next = new Set(prev);
-      next.delete("all" as T);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      if (next.size === 0) next.add("all" as T);
-      return next;
-    });
-  };
-
-  return (
-    <DropdownMenu
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) closeMenu();
-      }}
-    >
-      <DropdownMenuTrigger asChild>
-        <ChipButton
-          ref={triggerRef}
-          id={`filter-${filterLabel}`}
-          active={!activeChips.has("all")}
-          label={triggerLabel}
-          showChevron
-          primaryBorder
-          aria-label={ariaLabel}
-          aria-expanded={open}
-          className="pointer-events-auto"
-          onPointerDown={(event) => {
-            event.preventDefault();
-          }}
-          onPointerLeave={(event) => event.currentTarget.blur()}
-          onPointerCancel={(event) => event.currentTarget.blur()}
-          onPointerUp={(event) => event.currentTarget.blur()}
-          onClick={(event) => {
-            if (scrollDragRef.current.dragged) {
-              event.preventDefault();
-              event.stopPropagation();
-              return;
-            }
-            setOpen((prev) => {
-              if (!prev) setDraftChips(new Set(activeChips));
-              return !prev;
-            });
-          }}
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52 p-1.5">
-        {order.map((id) => (
-          <DropdownMenuItem
-            key={id}
-            onSelect={(event) => {
-              event.preventDefault();
-              toggleDraft(id);
-            }}
-            className="gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-          >
-            <Checkbox checked={draftChips.has(id)} className="pointer-events-none" tabIndex={-1} />
-            {labelMap[id]}
-          </DropdownMenuItem>
-        ))}
-        <div className="mt-1 border-t pt-1.5">
-          <Button
-            type="button"
-            className="h-9 w-full rounded-lg text-sm"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onClick={() => {
-              onApply(new Set(draftChips));
-              closeMenu();
-            }}
-          >
-            {t.filterConfirm}
-          </Button>
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 type MainProps = {
   /** 3단 가로 칩 행 필터 */
@@ -967,7 +274,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentLocation, setCurrentLocation] = useState("위치 가져오는 중...");
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-  const { isLoggedIn } = useAuth();
   const [isManualLocation, setIsManualLocation] = useState(false);
 
   const [stores, setStores] = useState<StoreData[]>([]);
@@ -1188,41 +494,19 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     input.blur();
   };
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const [showScrollToTop, setShowScrollToTop] = useState(false);
-  const [benefitFilterChips, setBenefitFilterChips] = useState<Set<LegacyBenefitFilterChipId>>(
-    () =>
-      new Set<LegacyBenefitFilterChipId>(
-        legacyFilterUI ? ["all", "openNow"] : ["all"]
-      )
-  );
-  const [areaFilterChips, setAreaFilterChips] = useState<Set<StoreAreaFilterChipId>>(
-    () => new Set<StoreAreaFilterChipId>(["all"])
-  );
-  const [categoryFilterChips, setCategoryFilterChips] = useState<Set<StoreFilterChipId>>(
-    () => new Set<StoreFilterChipId>(["all"])
-  );
   const { locale, setLocale } = useAppLocale();
-
-  useEffect(() => {
-    if (locale === "ko") return;
-    setBenefitFilterChips((prev) => {
-      if (!prev.has("highOilSupport")) return prev;
-      const next = new Set(prev);
-      next.delete("highOilSupport");
-      return next;
-    });
-  }, [locale]);
-
-  const benefitFilterChipOrder = useMemo((): readonly LegacyBenefitFilterChipId[] => {
-    if (legacyFilterUI) {
-      return locale === "ko"
-        ? LEGACY_BENEFIT_FILTER_CHIP_ORDER
-        : LEGACY_BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
-    }
-    return locale === "ko"
-      ? BENEFIT_FILTER_CHIP_ORDER
-      : BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
-  }, [locale, legacyFilterUI]);
+  const {
+    benefitFilterChips,
+    setBenefitFilterChips,
+    areaFilterChips,
+    setAreaFilterChips,
+    categoryFilterChips,
+    setCategoryFilterChips,
+    benefitFilterChipOrder,
+    toggleAreaFilter,
+    toggleBenefitFilter,
+    toggleCategoryFilter,
+  } = useStoreFilters({ locale, legacyFilterUI });
   const [showLocationPermModal, setShowLocationPermModal] = useState(false);
   const isMapView = searchParams.get("map") === "1";
   const isMapViewRef = useRef(isMapView);
@@ -1233,16 +517,16 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   mapSearchAwaitingRestoreRef.current = mapSearchAwaitingRestore;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapResearchButtonRef = useRef<HTMLButtonElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const storeMarkersRef = useRef<{ id: string; marker: any }[]>([]);
-  const clusterMarkersRef = useRef<any[]>([]);
+  const mapInstanceRef = useRef<naver.maps.Map | null>(null);
+  const storeMarkersRef = useRef<{ id: string; marker: naver.maps.Marker }[]>([]);
+  const clusterMarkersRef = useRef<naver.maps.Marker[]>([]);
   const selectStoreOnMapRef = useRef<(id: string) => void>(() => {});
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null);
   /** 바텀시트 카드 테두리 강조 — 지도 핀 클릭 시에만 true */
   const [highlightMapSheetCard, setHighlightMapSheetCard] = useState(false);
   const [showResearchButton, setShowResearchButton] = useState(false);
-  const [mapFilteredStores, setMapFilteredStores] = useState<any[] | null>(null);
-  const allFetchedStoresRef = useRef<any[]>([]);
+  const [mapFilteredStores, setMapFilteredStores] = useState<StoreData[] | null>(null);
+  const allFetchedStoresRef = useRef<StoreData[]>([]);
   const fetchNearbyStoresRef = useRef<
     ((
       latitude: number,
@@ -1273,7 +557,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   };
   const [mapPinLabels, setMapPinLabels] = useState<Record<string, string>>({});
   const mapPinLabelsRef = useRef<Record<string, string>>({});
-  const storesWithCoordsRef = useRef<any[]>([]);
+  const storesWithCoordsRef = useRef<StoreData[]>([]);
   const rebuildStoreOverlaysRef = useRef<(() => void) | null>(null);
   const fitMapToStoresRef = useRef<(() => void) | null>(null);
   const focusStoreOnMapRef = useRef<(storeId: string) => void>(() => {});
@@ -1284,11 +568,11 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   const mapClusteringEnabledRef = useRef(false);
   /** 클러스터/spiderfy 레이아웃이 적용된 zoom — 같은 zoom에서는 pan만으로 재계산하지 않음 */
   const lastClusterLayoutZoomRef = useRef<number | null>(null);
-  const activeClusterExpansionRef = useRef<{ memberIds: string[]; centroid: any } | null>(null);
+  const activeClusterExpansionRef = useRef<{ memberIds: string[]; centroid: naver.maps.LatLng } | null>(null);
   const clusterExpansionSessionRef = useRef(0);
   const mapBootstrapFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rebuildStoreOverlaysTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const myLocationMarkerRef = useRef<any>(null);
+  const myLocationMarkerRef = useRef<naver.maps.Marker | null>(null);
   const currentCoordsRef = useRef(currentCoords);
   const skipNextFitMapRef = useRef(false);
   /** true면 center/fit/pan으로 뷰포트 변경 금지 (검색 지우기·재검색 등, rebuild마다 리셋되지 않음) */
@@ -1308,7 +592,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   }, []);
   bumpMapFocusRef.current = bumpMapFocus;
 
-  const getMarkerPinContent = (marker: any): HTMLElement | null => {
+  const getMarkerPinContent = (marker: naver.maps.Marker): HTMLElement | null => {
     const icon = marker?.getIcon?.();
     return (icon?.content as HTMLElement) ?? null;
   };
@@ -1352,7 +636,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         selectedId != null && String(id) === String(selectedId);
       try {
         marker.setZIndex(isSelected ? 45 : 10);
-      } catch {}
+      } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
       const el = getMarkerPinContent(marker);
       if (!el) return;
       const balloon = el.querySelector("[data-pin-dot]") as HTMLElement | null;
@@ -1443,34 +727,19 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     });
   }, [isMapView]);
 
-  useEffect(() => {
-    if (isMapView) {
-      setShowScrollToTop(false);
-      return;
-    }
-
-    const onScroll = () => {
-      setShowScrollToTop(window.scrollY > 300);
-    };
-
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [isMapView]);
-
-  const handleScrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
+  const { showScrollToTop, scrollToTop: handleScrollToTop } = useScrollToTop({
+    enabled: !isMapView,
+  });
 
   useEffect(() => {
     if (!isMapView || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
-    const naver = (window as any).naver;
+    const naver = window.naver;
     skipNextFitMapRef.current = true;
     requestAnimationFrame(() => {
       try {
         naver?.maps?.Event?.trigger(map, "resize");
-      } catch {}
+      } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
       requestAnimationFrame(() => {
         if (mapOverlaysReadyRef.current) {
           rebuildStoreOverlaysRef.current?.();
@@ -1481,21 +750,19 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     });
   }, [isMapView]);
 
+  // 이 초기화 effect는 마운트 시 1회만 실행된다.
+  // locale을 deps에 두면 언어 토글만으로 GPS를 다시 조회하게 되므로
+  // 최신 값은 ref로 읽는다.
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
+
   useEffect(() => {
-    const prevSessionRef = { current: null as any };
-    
-    const checkAuthAndInitLocation = async () => {
-      
-      // 로그인 상태 확인 (AuthContext에서 관리)
-
-      // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
-      prevSessionRef.current = isLoggedIn ? { user: { id: "user-001" } } : null;
-
+    const initLocation = async () => {
       // Naver Maps SDK 로드 (실패해도 GPS 위치 조회는 계속 진행)
       try {
         const { loadNaverMaps } = await import("@/lib/naver");
-        await loadNaverMaps(locale);
-      } catch (error: any) {
+        await loadNaverMaps(localeRef.current);
+      } catch (error) {
         toast({
           title: "지도 서비스 경고",
           description:
@@ -1531,7 +798,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
-                const formattedAddress = await getAddressFromCoords(latitude, longitude, locale);
+                const formattedAddress = await getAddressFromCoords(latitude, longitude, localeRef.current);
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
@@ -1560,7 +827,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         if (!savedCoordinates) {
           try {
             const { searchAddress } = await import("@/lib/naver");
-            const searchResult = await searchAddress(savedLocation, locale);
+            const searchResult = await searchAddress(savedLocation, localeRef.current);
             
             if (searchResult.documents && searchResult.documents.length > 0) {
               const firstResult = searchResult.documents[0];
@@ -1581,7 +848,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
               
               // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
               try {
-                const formattedAddress = await getAddressFromCoords(latitude, longitude, locale);
+                const formattedAddress = await getAddressFromCoords(latitude, longitude, localeRef.current);
                 setCurrentLocation(formattedAddress);
                 localStorage.setItem("selectedLocation", formattedAddress);
               } catch (error) {
@@ -1644,11 +911,11 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     };
 
     const applyDetectedLocation = async (latitude: number, longitude: number) => {
-      const address = await getAddressFromCoords(latitude, longitude, locale);
-      const displayAddress =
-        address === "위치를 확인할 수 없음"
-          ? headerStrings(locale).locationUnknownGeo
-          : address;
+      const displayAddress = await resolveDisplayAddress(
+        latitude,
+        longitude,
+        localeRef.current,
+      );
 
       persistPrefetchedLocation(latitude, longitude, displayAddress);
       setIsManualLocation(false);
@@ -1697,21 +964,51 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
       }
     };
 
-    checkAuthAndInitLocation();
+    initLocation();
 
     return () => {};
-  }, [toast, navigate, locale]);
+  }, [toast, navigate]);
+
+  // 언어를 바꿔도 좌표는 그대로다. GPS를 다시 조회하는 대신
+  // 이미 확보한 좌표로 표시용 주소만 다시 번역한다.
+  // 최초 진입은 위 초기화 effect가 올바른 언어로 처리하므로 건너뛴다.
+  const translatedLocaleRef = useRef(locale);
+  useEffect(() => {
+    if (translatedLocaleRef.current === locale) return;
+    translatedLocaleRef.current = locale;
+
+    if (!currentCoords) return;
+    const { latitude, longitude } = currentCoords;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const address = await getAddressFromCoords(latitude, longitude, locale);
+        if (cancelled) return;
+        const displayAddress = toDisplayAddress(address, locale);
+        setCurrentLocation(displayAddress);
+        if (isManualLocation) {
+          localStorage.setItem("selectedLocation", displayAddress);
+        } else {
+          persistPrefetchedLocation(latitude, longitude, displayAddress);
+        }
+      } catch {
+        // 재번역 실패 시 기존 표시를 그대로 둔다
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locale, currentCoords, isManualLocation]);
+
 
   const applyCoordinatesAsLocation = async (
     latitude: number,
     longitude: number,
     options?: { fetchStores?: boolean; skipMapFit?: boolean; toastMessage?: string }
   ) => {
-    const address = await getAddressFromCoords(latitude, longitude, locale);
-    const displayAddress =
-      address === "위치를 확인할 수 없음"
-        ? headerStrings(locale).locationUnknownGeo
-        : address;
+    const displayAddress = await resolveDisplayAddress(latitude, longitude, locale);
 
     persistPrefetchedLocation(latitude, longitude, displayAddress);
     setIsManualLocation(false);
@@ -1776,20 +1073,6 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
   };
 
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // 지구 반경 (km)
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) *
-        Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
   const enrichAndMergeStores = useCallback(async (batch: StoreData[], generation: number) => {
     const getStoreDataByPlaceId = async (
       store: StoreData
@@ -1822,11 +1105,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
     setShowLocationPermModal(false);
     setIsLoadingLocation(true);
     try {
-      const address = await getAddressFromCoords(latitude, longitude, locale);
-      const displayAddress =
-        address === "위치를 확인할 수 없음"
-          ? headerStrings(locale).locationUnknownGeo
-          : address;
+      const displayAddress = await resolveDisplayAddress(latitude, longitude, locale);
       persistPrefetchedLocation(latitude, longitude, displayAddress);
       setIsManualLocation(false);
       setCurrentLocation(displayAddress);
@@ -1867,7 +1146,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         const distanceNum =
           typeof store.distance_m === "number"
             ? store.distance_m
-            : calculateDistance(latitude, longitude, store.latitude, store.longitude) * 1000;
+            : distanceMeters(latitude, longitude, store.latitude, store.longitude);
         const image = imageFromStoreCategory(store.category);
         const { isOpen, todayHours, closedDayNote } = getStoreOpenStatus(image);
         return {
@@ -1920,7 +1199,7 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
         mergedRaw.sort((a, b) => a.distanceNum - b.distanceNum);
       }
       const seenIds = new Set<string>();
-      const allStores: any[] = [];
+      const allStores: StoreData[] = [];
       for (const s of mergedRaw) {
         if (seenIds.has(s.id)) continue;
         seenIds.add(s.id);
@@ -2002,75 +1281,6 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
   openNow: t.chipOpenNow,
 };
 
-  const toggleAreaFilter = (id: StoreAreaFilterChipId) => {
-    setAreaFilterChips((prev) => {
-      if (id === "all") return new Set<StoreAreaFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
-  };
-
-  const toggleBenefitFilter = (id: LegacyBenefitFilterChipId) => {
-    setBenefitFilterChips((prev) => {
-      if (legacyFilterUI) {
-        const next = new Set(prev);
-
-        if (id === "openNow") {
-          if (next.has("openNow")) next.delete("openNow");
-          else next.add("openNow");
-          return next;
-        }
-
-        if (id === "all") {
-          const hasOpenNow = next.has("openNow");
-          next.clear();
-          next.add("all");
-          if (hasOpenNow) next.add("openNow");
-          return next;
-        }
-
-        next.delete("all");
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-
-        const selectedBenefitChips = new Set([...next].filter((c) => c !== "openNow"));
-        if (selectedBenefitChips.size === 0) next.add("all");
-
-        return next;
-      }
-
-      if (id === "openNow") return prev;
-      if (id === "all") return new Set<LegacyBenefitFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
-  };
-
-  const toggleCategoryFilter = (id: StoreFilterChipId) => {
-    setCategoryFilterChips((prev) => {
-      if (id === "all") return new Set<StoreFilterChipId>(["all"]);
-
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-
-      if (next.size === 0) next.add("all");
-      return next;
-    });
-  };
 
   const renderFilterDropdown = <T extends string>(
     filterLabel: string,
@@ -2123,57 +1333,34 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     );
   };
 
+  const chipSelection = useMemo<StoreChipSelection>(
+    () => ({
+      area: areaFilterChips,
+      benefit: benefitFilterChips,
+      category: categoryFilterChips,
+    }),
+    [areaFilterChips, benefitFilterChips, categoryFilterChips]
+  );
+
   const chipFilteredStores = useMemo(
-    () =>
-      stores.filter(
-        (store) =>
-          storeMatchesAreaChipFilters(store, areaFilterChips) &&
-          storeMatchesBenefitChipFilters(
-            store,
-            benefitFilterChips as ReadonlySet<StoreFilterChipId>,
-            locale
-          ) &&
-          storeMatchesCategoryChipFilters(store, categoryFilterChips)
-      ),
-    [stores, areaFilterChips, benefitFilterChips, categoryFilterChips, locale]
+    () => stores.filter((store) => storeMatchesAllChipFilters(store, chipSelection, locale)),
+    [stores, chipSelection, locale]
   );
 
   // 검색어로 필터링
-  const filteredStores = useMemo(() =>
-    searchQuery.trim()
-      ? stores.filter(store =>
-          store.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : stores,
+  const filteredStores = useMemo(
+    () => filterStoresByName(stores, searchQuery),
     [stores, searchQuery]
   );
 
-  const areaFilteredStores = useMemo(() =>
-    filteredStores.filter((store) => storeMatchesAreaChipFilters(store, areaFilterChips)),
-    [filteredStores, areaFilterChips]
+  // 검색 결과에 칩 필터까지 적용한 목록
+  const categoryFilteredStores = useMemo(
+    () =>
+      filteredStores.filter((store) => storeMatchesAllChipFilters(store, chipSelection, locale)),
+    [filteredStores, chipSelection, locale]
   );
 
-  const benefitFilteredStores = useMemo(() =>
-    areaFilteredStores.filter((store) =>
-      storeMatchesBenefitChipFilters(
-        store,
-        benefitFilterChips as ReadonlySet<StoreFilterChipId>,
-        locale
-      )
-    ),
-    [areaFilteredStores, benefitFilterChips, locale]
-  );
-
-  const categoryFilteredStores = useMemo(() =>
-    benefitFilteredStores.filter((store) => storeMatchesCategoryChipFilters(store, categoryFilterChips)),
-    [benefitFilteredStores, categoryFilterChips]
-  );
-
-  // 혜택·카테고리·구역 필터 적용 후 목록
-  const openStores = useMemo(() =>
-    categoryFilteredStores,
-    [categoryFilteredStores]
-  );
+  const openStores = categoryFilteredStores;
 
   const hasStoreCoords = (store: StoreData) =>
     Number.isFinite(store.lat) && Number.isFinite(store.lon);
@@ -2192,7 +1379,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    const naver = (window as any).naver;
+    const naver = window.naver;
     const bounds = map.getBounds?.();
     if (!bounds) return;
 
@@ -2214,16 +1401,9 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     // 할인 정보 로딩 전에도 API 캐시(allFetchedStoresRef)로 즉시 필터링
     const cachedStores =
       allFetchedStoresRef.current.length > 0 ? allFetchedStoresRef.current : stores;
-    const searchFiltered = searchQuery.trim()
-      ? cachedStores.filter((store) =>
-          store.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : cachedStores;
-    const chipFiltered = searchFiltered.filter(
-      (store) =>
-        storeMatchesAreaChipFilters(store, areaFilterChips) &&
-        storeMatchesBenefitChipFilters(store, benefitFilterChips, locale) &&
-        storeMatchesCategoryChipFilters(store, categoryFilterChips)
+    const searchFiltered = filterStoresByName(cachedStores, searchQuery);
+    const chipFiltered = searchFiltered.filter((store) =>
+      storeMatchesAllChipFilters(store, chipSelection, locale)
     );
 
     // 재검색은 뷰포트 필터만 일시 적용 — currentCoords(현재 위치)는 변경하지 않음
@@ -2429,7 +1609,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
         if (isCancelled || !mapContainerRef.current) return;
 
-        const naver = (window as any).naver;
+        const naver = window.naver;
         if (!naver?.maps) return;
 
         const createStoreMarker = (store: StoreData) => {
@@ -2457,7 +1637,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           clusterMarkersRef.current.forEach((marker) => {
             try {
               marker.setMap(null);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
           clusterMarkersRef.current = [];
         };
@@ -2467,7 +1647,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           storeMarkersRef.current.forEach(({ marker }) => {
             try {
               marker.setMap(map);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
         };
 
@@ -2475,7 +1655,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           storeMarkersRef.current.forEach(({ marker }) => {
             try {
               marker.setMap(null);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
         };
 
@@ -2531,7 +1711,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           try {
             map.setCenter(center);
             map.setZoom(MAP_INITIAL_ZOOM);
-          } catch {}
+          } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           if (alignToCurrent) {
             alignMapToCurrentLocationRef.current = false;
           }
@@ -2543,7 +1723,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           const list = storesWithCoordsRef.current.filter(
             (s: StoreData) => Number.isFinite(s.lat) && Number.isFinite(s.lon)
           );
-          const latLngs: any[] = list.map(
+          const latLngs: naver.maps.LatLng[] = list.map(
             (s: StoreData) => new naver.maps.LatLng(s.lat!, s.lon!)
           );
           // 검색·칩 필터 등: 현재 위치는 첫 접속·위치 새로고침 때만 bounds에 포함
@@ -2613,7 +1793,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           storeMarkersRef.current.forEach(({ marker }) => {
             try {
               marker.setMap(null);
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
           });
           storeMarkersRef.current = [];
           clearClusterMarkers();
@@ -2631,11 +1811,11 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
             const el = root?.querySelector("[data-store-label]") as HTMLElement | null;
             if (!el) return;
             el.textContent =
-              mapPinLabelsRef.current[id] ?? storesWithCoordsRef.current.find((s: any) => s.id === id)?.name ?? "";
+              mapPinLabelsRef.current[id] ?? storesWithCoordsRef.current.find((s) => s.id === id)?.name ?? "";
           });
         };
 
-        const resetMarkerSpiderfy = (marker: any) => {
+        const resetMarkerSpiderfy = (marker: naver.maps.Marker) => {
           const root = getMarkerPinContent(marker);
           const wrapper = root?.querySelector("[data-pin-wrapper]") as HTMLElement | null;
           if (wrapper) {
@@ -2645,7 +1825,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           }
         };
 
-        const getMarkerSpiderfyOffset = (marker: any) => {
+        const getMarkerSpiderfyOffset = (marker: naver.maps.Marker) => {
           const root = getMarkerPinContent(marker);
           const wrapper = root?.querySelector("[data-pin-wrapper]") as HTMLElement | null;
           return {
@@ -2654,7 +1834,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           };
         };
 
-        const buildMarkerLabelRect = (marker: any, proj: any) => {
+        const buildMarkerLabelRect = (marker: naver.maps.Marker, proj: naver.maps.Projection) => {
           const pos = marker.getPosition();
           const pt = proj.fromCoordToOffset(pos);
           const root = getMarkerPinContent(marker);
@@ -2663,7 +1843,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           return measurePinLabelRect(pt.x, pt.y, text, offset);
         };
 
-        const morphMapView = (coord: any, zoom: number, onComplete?: () => void) => {
+        const morphMapView = (coord: naver.maps.LatLng, zoom: number, onComplete?: () => void) => {
           const prevZoom = map.getZoom();
           if (typeof map.morph === "function") {
             map.morph(coord, zoom);
@@ -2697,7 +1877,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           });
         };
 
-        const spreadClusterMarkers = (cluster: { id: string; marker: any }[]) => {
+        const spreadClusterMarkers = (cluster: { id: string; marker: naver.maps.Marker }[]) => {
           const count = cluster.length;
           if (count <= 1) {
             resetMarkerSpiderfy(cluster[0]?.marker);
@@ -2883,7 +2063,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
         focusStoreOnMapRef.current = focusStoreOnMap;
 
-        const expandCluster = (memberIds: string[], centroid: any) => {
+        const expandCluster = (memberIds: string[], centroid: naver.maps.LatLng) => {
           const sessionId = ++clusterExpansionSessionRef.current;
           activeClusterExpansionRef.current = { memberIds, centroid };
 
@@ -3001,7 +2181,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
               const pt = proj.fromCoordToOffset(pos);
               px = pt.x;
               py = pt.y;
-            } catch {}
+            } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
             const bounds = buildMarkerLabelRect(marker, proj);
             return { id, marker, pos, px, py, bounds };
           });
@@ -3168,6 +2348,8 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
           setShowResearchButton(true);
         });
       } catch (error) {
+        // 지도 부트스트랩 실패를 조용히 삼키면 원인 추적이 불가능하다
+        console.error("[Main] 지도 초기화 실패", error);
       }
     };
 
@@ -3197,13 +2379,13 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       if (myLocationMarkerRef.current) {
         try {
           myLocationMarkerRef.current.setMap(null);
-        } catch {}
+        } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
         myLocationMarkerRef.current = null;
       }
       mapInstanceRef.current = null;
-      storeMarkersRef.current.forEach(({ marker }) => { try { marker.setMap(null); } catch {} });
+      storeMarkersRef.current.forEach(({ marker }) => { try { marker.setMap(null); } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ } });
       storeMarkersRef.current = [];
-      clusterMarkersRef.current.forEach((m) => { try { m.setMap(null); } catch {} });
+      clusterMarkersRef.current.forEach((m) => { try { m.setMap(null); } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ } });
       clusterMarkersRef.current = [];
       if (mapContainerRef.current) {
         mapContainerRef.current.innerHTML = "";
@@ -3224,7 +2406,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       applyInitialMapViewRef.current?.();
       return;
     }
-    const naver = (window as any).naver;
+    const naver = window.naver;
     if (!naver?.maps) return;
     const map = mapInstanceRef.current;
     map.setCenter(
@@ -3238,7 +2420,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
   useEffect(() => {
     if (!isMapView || !mapInstanceRef.current) return;
 
-    const naver = (window as any).naver;
+    const naver = window.naver;
     if (!naver?.maps) return;
     const map = mapInstanceRef.current;
 
@@ -3246,7 +2428,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
       if (myLocationMarkerRef.current) {
         try {
           myLocationMarkerRef.current.setMap(null);
-        } catch {}
+        } catch { /* 지도 SDK가 이미 정리됐을 수 있어 무시한다 */ }
         myLocationMarkerRef.current = null;
       }
 
@@ -3415,7 +2597,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     const scheduleFinish = () => {
       if (cancelled || mapSearchRestoreGenRef.current !== restoreGen) return;
       const map = mapInstanceRef.current;
-      const naver = (window as any).naver;
+      const naver = window.naver;
       if (map && naver?.maps?.Event) {
         let finished = false;
         const done = () => {
@@ -3447,7 +2629,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
     if (!mapInstanceRef.current || !isMapView) return;
 
     const map = mapInstanceRef.current;
-    const naver = (window as any).naver;
+    const naver = window.naver;
 
     const run = () => {
       rebuildStoreOverlaysRef.current?.();
@@ -3771,7 +2953,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                     benefitFilterChipOrder,
                     benefitFilterChips,
                     (next) => setBenefitFilterChips(next),
-                    chipLabelMap,
+                    legacyBenefitChipLabelMap,
                     t.benefitFilterToolbarAria
                   )}
                   {renderFilterDropdown(
@@ -3810,7 +2992,7 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
                       benefitFilterChipOrder,
                       benefitFilterChips,
                       (next) => setBenefitFilterChips(next),
-                      chipLabelMap,
+                      legacyBenefitChipLabelMap,
                       t.benefitFilterToolbarAria
                     )}
                     {renderFilterDropdown(

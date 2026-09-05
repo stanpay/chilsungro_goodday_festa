@@ -287,9 +287,6 @@ const KO_LOCATION_SYSTEM = {
 /** GPS 등 위치 조회 실패 시 `currentLocation`에 저장 (표시는 `resolveLocationDisplay`로 로케일 변환) */
 export const LOCATION_FETCH_FAILED_KO = KO_LOCATION_SYSTEM.locationFetchFailed;
 
-/** @deprecated `LOCATION_FETCH_FAILED_KO` 사용 */
-export const LOCATION_UNAVAILABLE_KO = KO_LOCATION_SYSTEM.locationUnavailable;
-
 type HeaderCopy = {
   initialFetching: string;
   checkingLocation: string;

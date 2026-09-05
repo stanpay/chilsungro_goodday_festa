@@ -1,4 +1,4 @@
-const CACHE_NAME = "stan-v2";
+const CACHE_NAME = "stan-v3";
 const PRECACHE_URLS = ["/favicon.png", "/pwa-icon-144.png", "/pwa-icon-192.png", "/pwa-icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -20,8 +20,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
-  // 외부 API 요청(카카오, 토스 등)은 캐시하지 않음
-  if (!url.origin.includes(self.location.origin)) return;
+  // 타 출처 요청은 캐시하지 않음 (includes는 stan.ai.kr.evil.com 같은 호스트를 통과시켜 엄격 비교 사용)
+  if (url.origin !== self.location.origin) return;
+  // 카카오/네이버 프록시는 동일 출처 /api/* 경로라 위 검사를 통과한다.
+  // cache-first로 받으면 검색·지오코딩·길안내 응답이 영구 고정되므로 제외한다.
+  if (url.pathname.startsWith("/api/")) return;
 
   if (event.request.mode === "navigate" || url.pathname === "/manifest.json") {
     event.respondWith(fetch(event.request));

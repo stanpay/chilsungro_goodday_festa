@@ -124,6 +124,8 @@ async function handleNaverApi(req: IncomingMessage, res: ServerResponse, env: Re
         return true;
     }
     catch (error) {
+        // 개발 서버 프록시 실패를 삼키면 원인 추적이 불가능하다
+        console.error("[dev-api] upstream 요청 실패", error);
         sendJson(res, 502, JSON.stringify({ error: "Upstream request failed" }));
         return true;
     }

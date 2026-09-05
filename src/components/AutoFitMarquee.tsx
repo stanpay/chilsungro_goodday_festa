@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ElementType } from "react";
 import { cn } from "@/lib/utils";
+import { measureTextWidth } from "@/lib/measureTextWidth";
 
 type AutoFitMarqueeProps = {
   as?: ElementType;
@@ -30,20 +31,11 @@ export function AutoFitMarquee({
     const container = containerRef.current;
     if (!container) return;
 
-    const measureTextWidth = (candidateFontSizeClass: string) => {
-      const probe = document.createElement("span");
-      probe.className = cn("whitespace-nowrap text-left", textClassName, candidateFontSizeClass);
-      probe.textContent = text;
-      probe.style.position = "absolute";
-      probe.style.visibility = "hidden";
-      probe.style.pointerEvents = "none";
-      probe.style.left = "-9999px";
-      probe.style.top = "-9999px";
-      document.body.appendChild(probe);
-      const width = probe.scrollWidth;
-      probe.remove();
-      return width;
-    };
+    const measureCandidate = (candidateFontSizeClass: string) =>
+      measureTextWidth(
+        text,
+        cn("whitespace-nowrap text-left", textClassName, candidateFontSizeClass)
+      );
 
     const updateLayout = () => {
       const containerWidth = container.clientWidth - SAFE_RIGHT_PADDING_PX;
@@ -51,7 +43,7 @@ export function AutoFitMarquee({
 
       const measured = fontSizeClasses.map((candidateFontSizeClass) => ({
         fontSizeClass: candidateFontSizeClass,
-        width: measureTextWidth(candidateFontSizeClass),
+        width: measureCandidate(candidateFontSizeClass),
       }));
       const fitting = measured.find(({ width }) => width <= containerWidth + OVERFLOW_TOLERANCE_PX);
       const selected = fitting ?? measured[measured.length - 1];
@@ -66,7 +58,7 @@ export function AutoFitMarquee({
     updateLayout();
     document.fonts?.ready.then(updateLayout);
 
-    if (!("ResizeObserver" in window)) {
+    if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", updateLayout);
       return () => window.removeEventListener("resize", updateLayout);
     }
