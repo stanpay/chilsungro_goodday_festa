@@ -110,26 +110,25 @@ export function resolveNaverMapFallbackWebUrl(
   return "https://map.naver.com/";
 }
 
-const EARTH_RADIUS_M = 6378137;
-
 const NAVER_MAP_ANDROID_PACKAGE = "com.nhn.android.nmap";
 const NAVER_MAP_WEB_ZOOM = 18;
 
 /**
- * 데스크탑 웹 전용 — EPSG:3857 entry/address URL (마커 표시).
- * https://map.naver.com/p/entry/address/{x},{y},{label}?c={zoom},0,0,0,dh
+ * 데스크탑 웹 전용 — 좌표 + title 핀.
+ * https://map.naver.com/?lng={lon}&lat={lat}&title={label}
  */
 export function buildNaverMapCoordEntryUrl(
   lon: number,
   lat: number,
   label?: string,
 ): string {
-  const { x, y } = wgs84ToWebMercator(lon, lat);
-  const displayLabel = label?.trim() || `${lat},${lon}`;
-  return (
-    `https://map.naver.com/p/entry/address/${x},${y},` +
-    `${encodeURIComponent(displayLabel)}?c=${NAVER_MAP_WEB_ZOOM.toFixed(2)},0,0,0,dh`
-  );
+  const params = new URLSearchParams({
+    lng: String(lon),
+    lat: String(lat),
+  });
+  const title = label?.trim() || `${lat},${lon}`;
+  params.set("title", title);
+  return `https://map.naver.com/?${params.toString()}`;
 }
 
 /**
@@ -198,14 +197,6 @@ function hasValidCoords(lat?: number, lon?: number): boolean {
     lon >= -180 &&
     lon <= 180
   );
-}
-
-/** WGS84(위도·경도) → Web Mercator(EPSG:3857), 단위 m */
-function wgs84ToWebMercator(lon: number, lat: number): { x: number; y: number } {
-  const x = (EARTH_RADIUS_M * lon * Math.PI) / 180;
-  const latRad = (lat * Math.PI) / 180;
-  const y = EARTH_RADIUS_M * Math.log(Math.tan(Math.PI / 4 + latRad / 2));
-  return { x, y };
 }
 
 function toFallbackDetail(
@@ -481,7 +472,7 @@ export function openNaverMapWebFallback(url: string): void {
 
 /**
  * 카드 등에서 네이버 지도를 열 때 사용 (공식 /p/ 웹 URL).
- * - lat/lon 있음: entry/address 좌표 핀 (매장명은 라벨만, 검색 아님)
+ * - lat/lon 있음: 좌표 핀 (데스크톱은 title, 모바일은 lat/lng/zoom)
  * - lat/lon 없음 + name: 장소명 검색
  */
 export function buildNaverMapOpenUrl(input: MapDirectionInput): string {
