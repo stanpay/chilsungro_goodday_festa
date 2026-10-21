@@ -55,9 +55,13 @@ const CHILSEONGRO_FESTA_MAP_NAME: LocalizedText = {
 };
 const CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL = "https://naver.me/xpjja0mM";
 
-/** 팝업용 포스터 — 모바일 표시에 맞게 리사이즈·WebP (원본 PNG 대비 ~98% 용량 절감) */
-const JEJU_TRAVELER_CENTER_COUPON_POSTER =
-  "/banners/jeju-traveler-center-coupon-poster.webp";
+/** 팝업용 포스터 — 언어별 원본 JPG */
+const JEJU_TRAVELER_CENTER_COUPON_POSTER: Record<AppLocale, string> = {
+  ko: "/banners/jeju-traveler-center-coupon-poster-ko.jpg",
+  en: "/banners/jeju-traveler-center-coupon-poster-en.jpg",
+  zh: "/banners/jeju-traveler-center-coupon-poster-zh.jpg",
+  ja: "/banners/jeju-traveler-center-coupon-poster-ja.jpg",
+};
 const CHILSEONGRO_GOOD_DAY_FESTA_POSTER =
   "/banners/chilseongro-good-day-festa-poster.webp";
 const EVENT_VENUE_MAP_POPUP = "/banners/event-venue-map-popup.jpeg";
@@ -70,12 +74,12 @@ export function getActiveBannerPopupImageUrls(locale: AppLocale): string[] {
   return Array.from(new Set(urls));
 }
 
-/** 캐러셀 배너 — 1600×670 WebP (원본 PNG 대비 ~95% 용량 절감) */
+/** 캐러셀 배너 — 언어별 원본 JPG */
 const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
-  ko: "/banners/travel-center-ko.webp",
-  en: "/banners/travel-center-en.webp",
-  zh: "/banners/travel-center-zh.webp",
-  ja: "/banners/travel-center-ja.webp",
+  ko: "/banners/travel-center-ko.jpg",
+  en: "/banners/travel-center-en.jpg",
+  zh: "/banners/travel-center-zh.jpg",
+  ja: "/banners/travel-center-ja.jpg",
 };
 
 /** 팝업 길안내 CTA — 모바일 다이얼로그 폭에 맞게 리사이즈·WebP */
@@ -99,7 +103,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
     {
       id: "travel-center",
       imageUrl: TRAVEL_CENTER_IMAGE[locale],
-      popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
+      popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER[locale],
       naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
       naverMapLat: TRAVEL_CENTER_LAT,
       naverMapLon: TRAVEL_CENTER_LON,
@@ -116,7 +120,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
     {
       id: "coupon-ko",
       imageUrl: "/banners/coupon-ko.webp",
-      popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER,
+      popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER[locale],
       naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
       naverMapLat: TRAVEL_CENTER_LAT,
       naverMapLon: TRAVEL_CENTER_LON,
