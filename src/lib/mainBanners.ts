@@ -74,12 +74,12 @@ export function getActiveBannerPopupImageUrls(locale: AppLocale): string[] {
   return Array.from(new Set(urls));
 }
 
-/** 캐러셀 배너 — 언어별 원본 JPG */
+/** 캐러셀 배너 — 언어별 원본 PNG */
 const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
-  ko: "/banners/travel-center-ko.jpg",
-  en: "/banners/travel-center-en.jpg",
-  zh: "/banners/travel-center-zh.jpg",
-  ja: "/banners/travel-center-ja.jpg",
+  ko: "/banners/travel-center-ko.png",
+  en: "/banners/travel-center-en.png",
+  zh: "/banners/travel-center-zh.png",
+  ja: "/banners/travel-center-ja.png",
 };
 
 /** 팝업 길안내 CTA — 모바일 다이얼로그 폭에 맞게 리사이즈·WebP */
