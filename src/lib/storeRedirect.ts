@@ -46,7 +46,11 @@ function isStoreApiRedirectUrl(url: string): boolean {
 }
 
 function shouldOpenRedirectUrlDirectlyOnDesktop(url: string): boolean {
-  return isNaverMeUrl(url) || isStoreApiRedirectUrl(url);
+  return (
+    isNaverMeUrl(url) ||
+    isStoreApiRedirectUrl(url) ||
+    parsePlaceIdFromNaverUrl(url) != null
+  );
 }
 
 function buildDesktopRegeneratedUrl(
@@ -68,7 +72,7 @@ function buildDesktopRegeneratedUrl(
   return buildNaverMapOpenUrl({ name: context.name });
 }
 
-/** 데스크톱: naver.me(또는 API redirect→naver.me)면 해당 URL만, 없으면 context로 재생성 후 단일 window.open */
+/** 데스크톱: naver.me·네이버 place URL이면 해당 URL만, 없으면 context로 재생성 후 단일 window.open */
 async function openDesktopStoreRedirect(
   redirectUrl: string,
   context?: StoreRedirectContext,
@@ -86,10 +90,9 @@ async function openDesktopStoreRedirect(
     }
   }
 
-  const targetUrl =
-    isNaverMeUrl(resolved) || shouldOpenRedirectUrlDirectlyOnDesktop(resolved)
-      ? resolved
-      : buildDesktopRegeneratedUrl(context) ?? resolved;
+  const targetUrl = shouldOpenRedirectUrlDirectlyOnDesktop(resolved)
+    ? resolved
+    : buildDesktopRegeneratedUrl(context) ?? resolved;
 
   openNaverMapWebFallback(targetUrl);
 }
