@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import ZoomablePosterImage from "@/components/ZoomablePosterImage";
 
-const AUTO_SLIDE_MS = 1500;
+const AUTO_SLIDE_MS = 3000;
 
 function preloadImage(url: string) {
   const img = new Image();
