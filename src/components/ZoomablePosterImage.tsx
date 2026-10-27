@@ -170,9 +170,12 @@ export default function ZoomablePosterImage({
   const contentWidth = baseSize ? baseSize.width * scale : undefined;
   const contentHeight = baseSize ? baseSize.height * scale : undefined;
   const isZoomed = scale > MIN_SCALE;
-  const viewportHeight = baseSize
-    ? `min(${baseSize.height}px, 80dvh)`
-    : undefined;
+  // 확대 전: 높이 고정 없이 전체 포스터를 흘려 보내고 다이얼로그가 스크롤.
+  // 확대 후: 뷰포트를 고정하고 내부에서 팬/스크롤.
+  const viewportHeight =
+    isZoomed && baseSize
+      ? `min(${baseSize.height}px, 80dvh)`
+      : undefined;
 
   return (
     <div
@@ -192,11 +195,13 @@ export default function ZoomablePosterImage({
           ref={scrollRef}
           {...bind()}
           className={cn(
-            "w-full overscroll-contain [-webkit-overflow-scrolling:touch]",
-            isZoomed ? "overflow-auto" : "overflow-hidden",
+            "w-full [-webkit-overflow-scrolling:touch]",
+            isZoomed
+              ? "overflow-auto overscroll-contain"
+              : "overflow-visible",
           )}
           style={{
-            touchAction: isZoomed ? "none" : "pan-x pan-y pinch-zoom",
+            touchAction: isZoomed ? "none" : "pan-y pinch-zoom",
             height: viewportHeight,
           }}
         >

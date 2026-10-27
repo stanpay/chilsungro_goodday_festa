@@ -55,12 +55,12 @@ const CHILSEONGRO_FESTA_MAP_NAME: LocalizedText = {
 };
 const CHILSEONGRO_GOOD_DAY_FESTA_MAP_URL = "https://naver.me/xpjja0mM";
 
-/** 팝업용 포스터 — 언어별 원본 JPG */
+/** 팝업용 포스터 — 언어별 WebP */
 const JEJU_TRAVELER_CENTER_COUPON_POSTER: Record<AppLocale, string> = {
-  ko: "/banners/jeju-traveler-center-coupon-poster-ko.jpg",
-  en: "/banners/jeju-traveler-center-coupon-poster-en.jpg",
-  zh: "/banners/jeju-traveler-center-coupon-poster-zh.jpg",
-  ja: "/banners/jeju-traveler-center-coupon-poster-ja.jpg",
+  ko: "/banners/jeju-traveler-center-coupon-poster-ko.webp",
+  en: "/banners/jeju-traveler-center-coupon-poster-en.webp",
+  zh: "/banners/jeju-traveler-center-coupon-poster-zh.webp",
+  ja: "/banners/jeju-traveler-center-coupon-poster-ja.webp",
 };
 const CHILSEONGRO_GOOD_DAY_FESTA_POSTER =
   "/banners/chilseongro-good-day-festa-poster.webp";

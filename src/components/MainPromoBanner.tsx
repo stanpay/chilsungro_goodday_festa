@@ -276,39 +276,41 @@ export default function MainPromoBanner({
           if (!open) setSelectedBanner(null);
         }}
       >
-        <DialogContent className="w-[calc(100%-2rem)] max-w-md gap-0 overflow-hidden rounded-2xl p-0">
+        <DialogContent className="flex max-h-[min(92dvh,920px)] w-[calc(100%-2rem)] max-w-md flex-col gap-0 overflow-hidden rounded-2xl p-0">
           <DialogTitle className="sr-only">{selectedBannerAlt}</DialogTitle>
           <DialogDescription className="sr-only">
             {selectedBannerAlt}
           </DialogDescription>
-          <div className="flex max-h-[min(92dvh,920px)] flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="h-10 shrink-0 bg-background" aria-hidden="true" />
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="flex flex-col gap-3 px-4 pb-4">
-                {showNaverMapDirections ? (
-                  <button
-                    type="button"
-                    className="block w-full shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    aria-label={directionsAlt}
-                    onClick={() =>
-                      openNaverMapDirections({
-                        lat: selectedBanner?.naverMapLat,
-                        lon: selectedBanner?.naverMapLon,
-                        name: getBannerText(selectedBanner?.naverMapName, locale),
-                        placeId: selectedBanner?.naverMapPlaceId,
-                        url:
-                          selectedBanner?.naverMapWebUrl ??
-                          selectedBanner?.naverMapUrl,
-                      })
-                    }
-                  >
-                    <img
-                      src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
-                      alt={directionsAlt}
-                      className="w-full object-contain"
-                    />
-                  </button>
-                ) : null}
+            {showNaverMapDirections ? (
+              <div className="shrink-0 bg-background px-4">
+                <button
+                  type="button"
+                  className="block w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  aria-label={directionsAlt}
+                  onClick={() =>
+                    openNaverMapDirections({
+                      lat: selectedBanner?.naverMapLat,
+                      lon: selectedBanner?.naverMapLon,
+                      name: getBannerText(selectedBanner?.naverMapName, locale),
+                      placeId: selectedBanner?.naverMapPlaceId,
+                      url:
+                        selectedBanner?.naverMapWebUrl ??
+                        selectedBanner?.naverMapUrl,
+                    })
+                  }
+                >
+                  <img
+                    src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
+                    alt={directionsAlt}
+                    className="w-full object-contain"
+                  />
+                </button>
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="px-4 pb-4 pt-3">
                 {selectedPopupImageUrl ? (
                   <ZoomablePosterImage
                     src={selectedPopupImageUrl}
