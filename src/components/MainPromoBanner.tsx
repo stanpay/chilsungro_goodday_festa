@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   getActiveBannerPopupImageUrls,
+  getActiveBannerStoreRedirectIds,
   getBannerText,
   getMainBanners,
   NAVER_MAP_DIRECTIONS_ALT,
@@ -23,7 +24,10 @@ import {
 import { storesApi } from "@/api/stores";
 import type { AppLocale } from "@/lib/locale";
 import { openNaverMapDirections } from "@/lib/mapDirectionLinks";
-import { openStoreRedirect } from "@/lib/storeRedirect";
+import {
+  openStoreRedirect,
+  prefetchStoreRedirects,
+} from "@/lib/storeRedirect";
 import { cn } from "@/lib/utils";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import ZoomablePosterImage from "@/components/ZoomablePosterImage";
@@ -164,6 +168,13 @@ export default function MainPromoBanner({
   useEffect(() => {
     const firstUrl = banners[0]?.imageUrl;
     if (firstUrl) preloadImage(firstUrl);
+
+    // 매장 카드와 동일 — redirect 체인을 미리 풀어 클릭 시 즉시 지도 오픈
+    prefetchStoreRedirects(
+      getActiveBannerStoreRedirectIds(locale).map((storeId) =>
+        storesApi.getStoreRedirectUrl(storeId),
+      ),
+    );
 
     const deferSecondaryAssets = () => {
       getActiveBannerPopupImageUrls(locale).forEach(preloadImage);

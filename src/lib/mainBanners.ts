@@ -119,6 +119,14 @@ export function getActiveBannerPopupImageUrls(locale: AppLocale): string[] {
   return Array.from(new Set(urls));
 }
 
+/** 매장 카드형 배너 storeId 목록 — redirect prefetch용 */
+export function getActiveBannerStoreRedirectIds(locale: AppLocale): number[] {
+  const ids = getMainBanners(locale)
+    .map((banner) => banner.storeRedirect?.storeId)
+    .filter((id): id is number => typeof id === "number");
+  return Array.from(new Set(ids));
+}
+
 /** 캐러셀 배너 — 언어별 원본 PNG */
 const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
   ko: "/banners/travel-center-ko.png",
