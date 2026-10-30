@@ -20,8 +20,10 @@ import {
   NAVER_MAP_DIRECTIONS_IMAGE,
   type MainBanner,
 } from "@/lib/mainBanners";
+import { storesApi } from "@/api/stores";
 import type { AppLocale } from "@/lib/locale";
 import { openNaverMapDirections } from "@/lib/mapDirectionLinks";
+import { openStoreRedirect } from "@/lib/storeRedirect";
 import { cn } from "@/lib/utils";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
 import ZoomablePosterImage from "@/components/ZoomablePosterImage";
@@ -79,6 +81,15 @@ function BannerSlide({
 
   const handleClick = () => {
     if (skippedClick.current) return;
+    if (banner.storeRedirect) {
+      const { storeId, lat, lon, name } = banner.storeRedirect;
+      openStoreRedirect(storesApi.getStoreRedirectUrl(storeId), {
+        lat,
+        lon,
+        name: getBannerText(name, locale),
+      });
+      return;
+    }
     if (banner.popupImageUrl) preloadImage(banner.popupImageUrl);
     onOpen();
   };

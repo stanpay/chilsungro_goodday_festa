@@ -8,6 +8,16 @@ export type MainBanner = {
   imageUrl?: string;
   /** 팝업 하단 이미지 URL (캐러셀 배너와 별도 — mainBanners.ts에서 지정) */
   popupImageUrl?: string;
+  /**
+   * 매장 카드와 동일 — 클릭 시 팝업 없이 `/redirect/{storeId}` 네이버 지도 이동
+   * (있으면 popup보다 우선)
+   */
+  storeRedirect?: {
+    storeId: number;
+    lat: number;
+    lon: number;
+    name: LocalizedText;
+  };
   /** 길안내 — 네이버 place ID (있으면 앱 스킴 최우선) */
   naverMapPlaceId?: string;
   /** 길안내 — place ID 없을 때 nmap://place?lat=&lng= 용 */
@@ -29,6 +39,41 @@ export type MainBanner = {
   variant?: "primary" | "accent" | "muted";
   /** 팝업에서 길안내 CTA를 숨긴다 */
   hideNaverMapDirections?: boolean;
+};
+
+/** API nearby 기준 — 매장 카드와 동일한 redirect 대상 */
+const STORE_COVERNAT = {
+  storeId: 76,
+  lat: 33.5143379,
+  lon: 126.5251028,
+  name: {
+    ko: "커버낫 제주점",
+    en: "Covernat Jeju",
+    zh: "Covernat济州店",
+    ja: "カバーナット済州店",
+  } satisfies LocalizedText,
+};
+const STORE_MATIN_KIM = {
+  storeId: 77,
+  lat: 33.5156625,
+  lon: 126.5252695,
+  name: {
+    ko: "마뗑킴 하고하우스 제주점",
+    en: "Matin Kim HAGO:HAUS Jeju",
+    zh: "Matin Kim HAGO:HAUS济州店",
+    ja: "マーティンキム HAGO:HAUS済州店",
+  } satisfies LocalizedText,
+};
+const STORE_TRAVELER_CENTER = {
+  storeId: 436,
+  lat: 33.5143324,
+  lon: 126.5248371,
+  name: {
+    ko: "제주여행자센터",
+    en: "Jeju Traveler Center",
+    zh: "济州旅行者中心",
+    ja: "済州旅行者センター",
+  } satisfies LocalizedText,
 };
 
 const TRAVEL_CENTER_PLACE_ID = "2031464673";
@@ -141,7 +186,40 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
         ja: "済州旅行者センタークーポンイベント",
       },
     },
-    // 3·4·5번 배너 비활성화 (칠성로 굿데이 페스타 1·2, 행사장 배치도)
+    {
+      id: "hago-haus-matin-kim",
+      imageUrl: "/banners/hago-haus-matin-kim.webp",
+      storeRedirect: STORE_MATIN_KIM,
+      imageAlt: {
+        ko: "HAGO:HAUS JEJU Matin Kim TAX FREE",
+        en: "HAGO:HAUS JEJU Matin Kim TAX FREE",
+        zh: "HAGO:HAUS JEJU Matin Kim TAX FREE",
+        ja: "HAGO:HAUS JEJU Matin Kim TAX FREE",
+      },
+    },
+    {
+      id: "covernat",
+      imageUrl: "/banners/covernat.webp",
+      storeRedirect: STORE_COVERNAT,
+      imageAlt: {
+        ko: "Covernat TAX FREE",
+        en: "Covernat TAX FREE",
+        zh: "Covernat TAX FREE",
+        ja: "Covernat TAX FREE",
+      },
+    },
+    {
+      id: "ad-inquiry",
+      imageUrl: "/banners/ad-inquiry.webp",
+      storeRedirect: STORE_TRAVELER_CENTER,
+      imageAlt: {
+        ko: "광고문의",
+        en: "Advertising inquiry",
+        zh: "广告咨询",
+        ja: "広告のお問い合わせ",
+      },
+    },
+    // 칠성로 굿데이 페스타 1·2, 행사장 배치도 비활성화
     // {
     //   id: "chilseongro-good-day-festa-1",
     //   imageUrl: "/banners/chilseongro-good-day-festa-1.webp",
