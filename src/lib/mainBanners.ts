@@ -82,6 +82,14 @@ const TRAVEL_CENTER_IMAGE: Record<AppLocale, string> = {
   ja: "/banners/travel-center-ja.png",
 };
 
+/** 2번 캐러셀 배너(쿠폰) — 언어별 WebP */
+const COUPON_IMAGE: Record<AppLocale, string> = {
+  ko: "/banners/coupon-ko.webp",
+  en: "/banners/coupon-en.webp",
+  zh: "/banners/coupon-zh.webp",
+  ja: "/banners/coupon-ja.webp",
+};
+
 /** 팝업 길안내 CTA — 모바일 다이얼로그 폭에 맞게 리사이즈·WebP */
 export const NAVER_MAP_DIRECTIONS_IMAGE: Record<AppLocale, string> = {
   ko: "/banners/naver-map-directions-ko.webp",
@@ -118,8 +126,8 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       href: TRAVEL_CENTER_WEB_URL,
     },
     {
-      id: "coupon-ko",
-      imageUrl: "/banners/coupon-ko.webp",
+      id: "coupon",
+      imageUrl: COUPON_IMAGE[locale],
       popupImageUrl: JEJU_TRAVELER_CENTER_COUPON_POSTER[locale],
       naverMapPlaceId: TRAVEL_CENTER_PLACE_ID,
       naverMapLat: TRAVEL_CENTER_LAT,
