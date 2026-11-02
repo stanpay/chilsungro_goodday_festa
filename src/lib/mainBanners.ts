@@ -39,6 +39,8 @@ export type MainBanner = {
   variant?: "primary" | "accent" | "muted";
   /** 팝업에서 길안내 CTA를 숨긴다 */
   hideNaverMapDirections?: boolean;
+  /** 캐러셀 배너 왼쪽 상단 광고표시 */
+  isAd?: boolean;
 };
 
 /** API nearby 기준 — 매장 카드와 동일한 redirect 대상 */
@@ -198,6 +200,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       id: "hago-haus-matin-kim",
       imageUrl: "/banners/hago-haus-matin-kim.webp",
       storeRedirect: STORE_MATIN_KIM,
+      isAd: true,
       imageAlt: {
         ko: "HAGO:HAUS JEJU Matin Kim TAX FREE",
         en: "HAGO:HAUS JEJU Matin Kim TAX FREE",
@@ -209,6 +212,7 @@ export function getMainBanners(locale: AppLocale): MainBanner[] {
       id: "covernat",
       imageUrl: "/banners/covernat.webp",
       storeRedirect: STORE_COVERNAT,
+      isAd: true,
       imageAlt: {
         ko: "Covernat TAX FREE",
         en: "Covernat TAX FREE",

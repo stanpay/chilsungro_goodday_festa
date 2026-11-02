@@ -98,8 +98,15 @@ function BannerSlide({
     onOpen();
   };
 
+  const adLabel = banner.isAd ? (
+    <span className="pointer-events-none absolute left-2 top-2 z-10 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white">
+      {locale === "ko" ? "광고" : "AD"}
+    </span>
+  ) : null;
+
   const content = banner.imageUrl ? (
     <div className="relative h-full w-full bg-card">
+      {adLabel}
       <img
         src={banner.imageUrl}
         alt={imageAlt}
