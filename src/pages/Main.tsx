@@ -80,7 +80,7 @@ import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { useTranslatedAddressLine } from "@/hooks/useKoreanDisplayText";
 import { cn } from "@/lib/utils";
 import { translateKoText } from "@/lib/koTranslate";
-import { distanceMeters } from "@/lib/geoDistance";
+import { distanceMeters, filterCoordsForMapFit } from "@/lib/geoDistance";
 import {
   StoreFilterChipId,
   STORE_CATEGORY_CHIP_ORDER,
@@ -1720,25 +1720,39 @@ const legacyBenefitChipLabelMap: Record<LegacyBenefitFilterChipId, string> = {
 
         const fitMapToStores = () => {
           if (skipInitialMapFitRef.current || preserveMapViewportRef.current) return;
-          const list = storesWithCoordsRef.current.filter(
-            (s: StoreData) => Number.isFinite(s.lat) && Number.isFinite(s.lon)
+          const list = filterCoordsForMapFit(
+            storesWithCoordsRef.current.filter(
+              (s: StoreData) => Number.isFinite(s.lat) && Number.isFinite(s.lon)
+            ).map((s: StoreData) => ({ lat: s.lat!, lon: s.lon! }))
           );
           const latLngs: naver.maps.LatLng[] = list.map(
-            (s: StoreData) => new naver.maps.LatLng(s.lat!, s.lon!)
+            (s) => new naver.maps.LatLng(s.lat, s.lon)
           );
           // 검색·칩 필터 등: 현재 위치는 첫 접속·위치 새로고침 때만 bounds에 포함
+          // 매장 군집에서 너무 멀면(서울 GPS + 제주 매장 등) 전국 뷰가 되므로 제외
           const fitSearchResultsOnly = searchQueryRef.current.trim().length > 0;
+          const current = currentCoordsRef.current;
           const includeCurrentInFit =
             alignMapToCurrentLocationRef.current &&
             !fitSearchResultsOnly &&
-            currentCoordsRef.current;
-          if (includeCurrentInFit) {
-            latLngs.push(
-              new naver.maps.LatLng(
-                currentCoordsRef.current.latitude,
-                currentCoordsRef.current.longitude
-              )
-            );
+            !!current;
+          if (includeCurrentInFit && current) {
+            const nearCluster =
+              list.length === 0 ||
+              filterCoordsForMapFit(
+                [
+                  ...list,
+                  { lat: current.latitude, lon: current.longitude },
+                ],
+              ).some(
+                (p) =>
+                  p.lat === current.latitude && p.lon === current.longitude,
+              );
+            if (nearCluster) {
+              latLngs.push(
+                new naver.maps.LatLng(current.latitude, current.longitude)
+              );
+            }
           }
           if (latLngs.length === 0) {
             map.setCenter(jejuDowntownCenter);

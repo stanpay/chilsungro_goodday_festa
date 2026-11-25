@@ -61,6 +61,30 @@ function normalizeNearbyResponse(payload: unknown): NearbyStore[] {
 /** API는 radius 필수. 서울·해외에서도 제주 매장이 잡히도록 사실상 무제한(약 1만 km). */
 export const NEARBY_RADIUS_UNLIMITED_M = 10_000_000;
 
+/**
+ * API에 잘못된 GPS가 올라온 매장 좌표 보정.
+ * 제주신협(221): 서울 좌표 → 중앙지하상가 (Plus Code 8Q58GG7F+7V)
+ * https://maps.app.goo.gl/55kXVQZdEo7Hpjw66
+ */
+const NEARBY_STORE_COORD_OVERRIDES: Record<
+  number,
+  { latitude: number; longitude: number }
+> = {
+  221: { latitude: 33.5131281, longitude: 126.5246281 },
+};
+
+function applyNearbyStoreCoordOverrides(stores: NearbyStore[]): NearbyStore[] {
+  return stores.map((store) => {
+    const override = NEARBY_STORE_COORD_OVERRIDES[store.id];
+    if (!override) return store;
+    return {
+      ...store,
+      latitude: override.latitude,
+      longitude: override.longitude,
+    };
+  });
+}
+
 export const storesApi = {
   getNearbyStores: async (
     latitude: number,
@@ -70,7 +94,7 @@ export const storesApi = {
     const payload = await fetchJson<unknown>(
       `/nearby/${latitude}/${longitude}?radius=${radius}`
     );
-    return normalizeNearbyResponse(payload);
+    return applyNearbyStoreCoordOverrides(normalizeNearbyResponse(payload));
   },
 
   getStoreRedirectUrl: (storeId: string | number): string =>
