@@ -2,12 +2,6 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { GA_MEASUREMENT_ID, isAnalyticsEnabled } from "@/lib/analytics";
 
-declare global {
-  interface Window {
-    gtag?: (...args: unknown[]) => void;
-  }
-}
-
 const AnalyticsPageTracker = () => {
   const location = useLocation();
 

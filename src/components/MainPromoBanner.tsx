@@ -22,6 +22,7 @@ import {
   type MainBanner,
 } from "@/lib/mainBanners";
 import { storesApi } from "@/api/stores";
+import { trackCtaClick } from "@/lib/analytics";
 import type { AppLocale } from "@/lib/locale";
 import { openNaverMapDirections } from "@/lib/mapDirectionLinks";
 import {
@@ -85,7 +86,15 @@ function BannerSlide({
 
   const handleClick = () => {
     if (skippedClick.current) return;
+
+    const ctaName = title || imageAlt || banner.id;
     if (banner.storeRedirect) {
+      trackCtaClick({
+        cta_id: banner.id,
+        cta_name: ctaName,
+        cta_location: "main_promo_banner",
+        cta_type: "store_redirect",
+      });
       const { storeId, lat, lon, name } = banner.storeRedirect;
       openStoreRedirect(storesApi.getStoreRedirectUrl(storeId), {
         lat,
@@ -94,6 +103,13 @@ function BannerSlide({
       });
       return;
     }
+
+    trackCtaClick({
+      cta_id: banner.id,
+      cta_name: ctaName,
+      cta_location: "main_promo_banner",
+      cta_type: banner.popupImageUrl ? "popup" : "banner",
+    });
     if (banner.popupImageUrl) preloadImage(banner.popupImageUrl);
     onOpen();
   };
@@ -318,7 +334,15 @@ export default function MainPromoBanner({
                   type="button"
                   className="block w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   aria-label={directionsAlt}
-                  onClick={() =>
+                  onClick={() => {
+                    if (selectedBanner) {
+                      trackCtaClick({
+                        cta_id: `${selectedBanner.id}_directions`,
+                        cta_name: directionsAlt,
+                        cta_location: "main_promo_banner_popup",
+                        cta_type: "naver_map_directions",
+                      });
+                    }
                     openNaverMapDirections({
                       lat: selectedBanner?.naverMapLat,
                       lon: selectedBanner?.naverMapLon,
@@ -327,8 +351,8 @@ export default function MainPromoBanner({
                       url:
                         selectedBanner?.naverMapWebUrl ??
                         selectedBanner?.naverMapUrl,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <img
                     src={NAVER_MAP_DIRECTIONS_IMAGE[locale]}
