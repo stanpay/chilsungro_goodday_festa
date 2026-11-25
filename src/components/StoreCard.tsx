@@ -6,6 +6,7 @@ import { useAppLocale } from "@/contexts/AppLocaleContext";
 import { parkingSizeLabel, storeCardStrings } from "@/lib/locale";
 import { useTranslatedKoreanText } from "@/hooks/useKoreanDisplayText";
 import { AutoFitMarquee } from "@/components/AutoFitMarquee";
+import { isHighOilSupportVisible } from "@/lib/storeFilters";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { openStoreRedirect } from "@/lib/storeRedirect";
@@ -194,10 +195,12 @@ const StoreCard = ({
     local_currency_discount_rate != null && local_currency_discount_rate > 0
       ? sc.localCurrencyDiscount(local_currency_discount_rate)
       : sc.localCurrency;
+  const showHighOilSupportChip =
+    isHighOilSupportVisible(locale) && high_oil_support_available;
   const showChipsRow =
     showLocalCurrencyChip ||
     hasTravelConsumerCoupon ||
-    (locale === "ko" && high_oil_support_available) ||
+    showHighOilSupportChip ||
     showParkingChip;
 
   useLayoutEffect(() => {
@@ -236,7 +239,7 @@ const StoreCard = ({
     hasTravelConsumerCoupon,
     showLocalCurrencyChip,
     localCurrencyText,
-    high_oil_support_available,
+    showHighOilSupportChip,
     showParkingChip,
     parkingText,
     locale,
@@ -392,7 +395,7 @@ const StoreCard = ({
                           {localCurrencyText}
                         </span>
                       )}
-                      {locale === "ko" && high_oil_support_available && (
+                      {showHighOilSupportChip && (
                         <span
                           className={cn(
                             chipClassName,

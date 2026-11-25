@@ -64,8 +64,20 @@ export type StoreLikeForChip = {
   hasTravelConsumerCoupon?: boolean;
 };
 
+/**
+ * 고유가 지원금 사업 기한 만료.
+ * DB oil_subsidy가 true로 남아 있어도 카드·필터에 노출하지 않는다.
+ */
+export const HIGH_OIL_SUPPORT_PROGRAM_ACTIVE = false;
+
+export function isHighOilSupportVisible(locale: AppLocale): boolean {
+  return HIGH_OIL_SUPPORT_PROGRAM_ACTIVE && locale === "ko";
+}
+
 function storeHasHighOilSupport(store: StoreLikeForChip): boolean {
-  return store.high_oil_support_available === true;
+  return (
+    HIGH_OIL_SUPPORT_PROGRAM_ACTIVE && store.high_oil_support_available === true
+  );
 }
 
 function storeChipIsCafe(store: StoreLikeForChip): boolean {
@@ -128,7 +140,7 @@ export function storeMatchesBenefitChipFilters(
   const parts: boolean[] = [];
   if (chips.has("chilsungro")) parts.push(storeHasChilsungroCoupon(store));
   if (chips.has("localCurrency")) parts.push(!!store.local_currency_available);
-  if (locale === "ko" && chips.has("highOilSupport")) {
+  if (isHighOilSupportVisible(locale) && chips.has("highOilSupport")) {
     parts.push(storeHasHighOilSupport(store));
   }
 

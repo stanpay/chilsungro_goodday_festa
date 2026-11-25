@@ -87,6 +87,7 @@ import {
   StoreAreaFilterChipId,
   STORE_AREA_FILTER_CHIP_ORDER,
   LegacyBenefitFilterChipId,
+  HIGH_OIL_SUPPORT_PROGRAM_ACTIVE,
   imageFromStoreCategory,
   categoryGroupCodeFromStoreCategory,
   storeMatchesAllChipFilters,
@@ -1173,7 +1174,8 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
           closedDayNote: store.business_hours_today || closedDayNote,
           local_currency_available: store.localpay,
           local_currency_discount_rate: null,
-          high_oil_support_available: store.oil_subsidy,
+          high_oil_support_available:
+            HIGH_OIL_SUPPORT_PROGRAM_ACTIVE && store.oil_subsidy,
           parking_available: false,
           free_parking: false,
           parking_size: null,
@@ -1185,7 +1187,8 @@ const Main = ({ legacyFilterUI = false, threeDropdownFilterUI = false }: MainPro
             parking_available: false,
             free_parking: false,
             parking_size: null,
-            high_oil_support_available: store.oil_subsidy,
+            high_oil_support_available:
+              HIGH_OIL_SUPPORT_PROGRAM_ACTIVE && store.oil_subsidy,
           },
         };
       };

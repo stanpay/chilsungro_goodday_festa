@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AppLocale } from "@/lib/locale";
 import {
   BENEFIT_FILTER_CHIP_ORDER,
+  isHighOilSupportVisible,
   LEGACY_BENEFIT_FILTER_CHIP_ORDER,
   type LegacyBenefitFilterChipId,
   type StoreAreaFilterChipId,
@@ -57,24 +58,25 @@ export function useStoreFilters({ locale, legacyFilterUI }: UseStoreFiltersOptio
   );
 
   useEffect(() => {
-    if (locale === "ko") return;
+    if (isHighOilSupportVisible(locale)) return;
     setBenefitFilterChips((prev) => {
       if (!prev.has("highOilSupport")) return prev;
       const next = new Set(prev);
       next.delete("highOilSupport");
+      if (next.size === 0) next.add("all");
       return next;
     });
   }, [locale]);
 
   const benefitFilterChipOrder = useMemo((): readonly LegacyBenefitFilterChipId[] => {
+    const showHighOil = isHighOilSupportVisible(locale);
+    const withoutHighOil = <T extends string>(order: readonly T[]) =>
+      showHighOil ? order : order.filter((id) => id !== "highOilSupport");
+
     if (legacyFilterUI) {
-      return locale === "ko"
-        ? LEGACY_BENEFIT_FILTER_CHIP_ORDER
-        : LEGACY_BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
+      return withoutHighOil(LEGACY_BENEFIT_FILTER_CHIP_ORDER);
     }
-    return locale === "ko"
-      ? BENEFIT_FILTER_CHIP_ORDER
-      : BENEFIT_FILTER_CHIP_ORDER.filter((id) => id !== "highOilSupport");
+    return withoutHighOil(BENEFIT_FILTER_CHIP_ORDER);
   }, [locale, legacyFilterUI]);
 
   const toggleAreaFilter = (id: StoreAreaFilterChipId) => {
